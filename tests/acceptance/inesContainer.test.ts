@@ -2,11 +2,15 @@ import { createHash } from "node:crypto";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect } from "vitest";
-import { artifactInspectionResultSchema } from "../../src/domain/artifactInspection.js";
+import {
+  artifactInspectionOutputSchema,
+  artifactInspectionResultSchema,
+} from "../../src/domain/artifactInspection.js";
 import {
   artifactInventoryResultSchema,
   artifactExtractionResultSchema,
 } from "../../src/domain/artifactGraph.js";
+import { analysisViewResultSchema } from "../../src/domain/analysisView/analysisView.js";
 import { parseEvidence } from "../../src/domain/evidence.js";
 import { cliTest } from "../support/cli/cliFixture.js";
 import { createTestTempDirectory } from "../fixtures/temporaryDirectory.js";
@@ -100,6 +104,61 @@ cliTest(
       JSON.stringify(inspected.structuredContent),
     ).not.toBe(true);
     expect(inventoryFrom(inspected.structuredContent)).toEqual(inventory);
+    const typed = artifactInspectionOutputSchema.parse(
+      parseEvidence(inspected.structuredContent).normalized_result,
+    );
+    expect(typed.substeps[0]?.evidence.normalized_result).toMatchObject({
+      ines: inventory.ines,
+    });
+    const withInventory = (normalized_result: unknown) => ({
+      ...typed,
+      substeps: typed.substeps.map((substep) => ({
+        ...substep,
+        evidence: { ...substep.evidence, normalized_result },
+      })),
+    });
+    expect(
+      artifactInspectionOutputSchema.safeParse(
+        withInventory({ ...inventory, ines: undefined }),
+      ).success,
+    ).toBe(false);
+    const withoutInes = { ...inventory };
+    delete withoutInes.ines;
+    expect(
+      artifactInspectionOutputSchema.safeParse(withInventory(withoutInes))
+        .success,
+    ).toBe(true);
+
+    const summary = await call("inspect_artifact", { detail: "summary" });
+    expect(summary.isError, JSON.stringify(summary.structuredContent)).not.toBe(
+      true,
+    );
+    const view = analysisViewResultSchema.parse(
+      parseEvidence(summary.structuredContent).normalized_result,
+    );
+    expect(view.kind).toBe("summary");
+    const regions = await call("inspect_analysis_view", {
+      source: {
+        kind: "retained-evidence",
+        evidence_id: view.parent_evidence_id,
+      },
+      view: {
+        kind: "inventory",
+        collection: "occurrences",
+        logical_paths: ["prg/000.bin"],
+      },
+    });
+    expect(regions.isError, JSON.stringify(regions.structuredContent)).not.toBe(
+      true,
+    );
+    expect(
+      parseEvidence(regions.structuredContent).normalized_result,
+    ).toMatchObject({
+      kind: "inventory",
+      items: inventory.occurrences.filter(
+        (item) => item.logical_path === "prg/000.bin",
+      ),
+    });
     const extracted = await call("extract_artifact", {});
     expect(
       extracted.isError,
