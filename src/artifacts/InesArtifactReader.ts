@@ -45,13 +45,14 @@ export class InesArtifactReader implements ArtifactReader {
     const prefix = Buffer.alloc(16);
     const { bytesRead } = await this.source.handle.read(prefix, 0, 16, 0);
     abortIfNeeded(signal);
+    // Concurrent source changes take precedence over malformed header diagnostics.
+    await this.#verifySource();
     const parsed = parseInesLayout(
       prefix.subarray(0, bytesRead),
       this.source.initial.size,
     );
     if (!parsed.ok) throw new ArtifactReaderFailure("format", parsed.error);
     this.#layout = parsed.value;
-    await this.#verifySource();
     this.#entries.clear();
     for (const region of parsed.value.regions) {
       abortIfNeeded(signal);

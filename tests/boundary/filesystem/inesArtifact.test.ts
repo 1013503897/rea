@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { lstat, open, readFile, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { parseBinaryTarget } from "../../../src/application/BinaryTargetResolver.js";
 import { createTestTempDirectory } from "../../fixtures/temporaryDirectory.js";
 import { inesFixture } from "../../fixtures/ines.js";
@@ -227,6 +227,43 @@ it.each(["before", "during"])(
         });
       }
     } finally {
+      await reader.close();
+      await handle.close();
+    }
+  },
+);
+
+it.each(["truncated", "overwritten"])(
+  "reports a header %s during admission as an integrity failure",
+  async (change) => {
+    const root = await createTestTempDirectory("rea-ines-header-race-");
+    const path = join(root, "source.nes");
+    await writeFile(path, inesFixture());
+    const handle = await open(path, "r");
+    const reader = new InesArtifactReader(path, {
+      handle,
+      initial: await handle.stat(),
+    });
+    const originalRead = handle.read.bind(handle);
+    // Mutate the actual file after pre-read validation, at the read boundary.
+    const read = vi
+      .spyOn(handle, "read")
+      .mockImplementationOnce(async (...args) => {
+        const changed =
+          change === "truncated"
+            ? Buffer.alloc(0)
+            : Buffer.alloc(inesFixture().length);
+        await writeFile(path, changed);
+        return originalRead(...args);
+      });
+    try {
+      await expect(
+        reader.entries()[Symbol.asyncIterator]().next(),
+      ).rejects.toMatchObject({
+        reason: "integrity",
+      });
+    } finally {
+      read.mockRestore();
       await reader.close();
       await handle.close();
     }
