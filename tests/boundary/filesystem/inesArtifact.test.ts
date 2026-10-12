@@ -28,15 +28,31 @@ import {
 const sha256 = (bytes: Buffer) =>
   createHash("sha256").update(bytes).digest("hex");
 
-it("routes iNES bytes as an archive independently of the file suffix", async () => {
-  const root = await createTestTempDirectory("rea-ines-target-");
-  const path = join(root, "cartridge.data");
-  await writeFile(path, inesFixture());
-  const target = await parseBinaryTarget(path);
-  if (!target.ok) throw target.error;
-  expect(target.value).toMatchObject({ kind: "archive", format: "ines" });
-});
+it.each(["data", "hop", "HOP"])(
+  "routes iNES bytes as an archive with a .%s suffix",
+  async (suffix) => {
+    const root = await createTestTempDirectory("rea-ines-target-");
+    const path = join(root, `cartridge.${suffix}`);
+    await writeFile(path, inesFixture());
+    const target = await parseBinaryTarget(path);
+    if (!target.ok) throw target.error;
+    expect(target.value).toMatchObject({ kind: "archive", format: "ines" });
+  },
+);
 
+it("honors explicit database selection before parsing NES-signature bytes", async () => {
+  const root = await createTestTempDirectory("rea-ines-database-");
+  for (const bytes of [inesFixture(), Buffer.from("NES\x1a")]) {
+    const path = join(root, "selected.hop");
+    await writeFile(path, bytes);
+    expect(
+      await parseBinaryTarget(path, { targetKind: "database" }),
+    ).toMatchObject({
+      ok: true,
+      value: { kind: "database", format: "analysis-database" },
+    });
+  }
+});
 it.each([true, false])(
   "inventories and reconstructs all bytes with trainer=%s",
   async (trainer) => {

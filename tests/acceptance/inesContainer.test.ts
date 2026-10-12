@@ -45,7 +45,7 @@ cliTest(
   "classic iNES has the same complete byte inventory through compiled CLI and stdio MCP",
   async ({ cli }) => {
     const root = await createTestTempDirectory("rea-ines-public-");
-    const path = join(root, "卡带.data");
+    const path = join(root, "卡带.hop");
     const bytes = inesFixture({
       trainer: true,
       trailing: Buffer.from([0, 255, 3, 0]),

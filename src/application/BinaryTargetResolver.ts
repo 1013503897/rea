@@ -157,9 +157,16 @@ export const parseBinaryTarget = async (
           availableArchitectures: ["x86"],
         });
       }
+      // Explicit database selection owns routing; a suffix is only a fallback.
+      const artifactFormat =
+        targetKind === "database"
+          ? undefined
+          : await detectArtifactFormat(path, handle, metadata, signal);
       if (
         targetKind === "database" ||
-        (targetKind === undefined && path.toLowerCase().endsWith(".hop"))
+        (targetKind === undefined &&
+          artifactFormat === undefined &&
+          path.toLowerCase().endsWith(".hop"))
       )
         return ok({
           path,
@@ -168,12 +175,6 @@ export const parseBinaryTarget = async (
           kind: "database",
           format: "analysis-database",
         });
-      const artifactFormat = await detectArtifactFormat(
-        path,
-        handle,
-        metadata,
-        signal,
-      );
       if (artifactFormat !== undefined) {
         const identity = {
           path,
