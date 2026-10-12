@@ -1,6 +1,9 @@
 import { join } from "node:path";
 
-import { describeClientRegistrationRetention } from "./ClientConfigurationDocument.js";
+import {
+  describeClientRegistrationRetention,
+  type ClientRegistrationDialect,
+} from "./ClientConfigurationDocument.js";
 import { isOwnedClientRegistrationCommand } from "./ClientRegistrationIdentity.js";
 import {
   linuxHopperInstallDisclosure,
@@ -179,6 +182,9 @@ export const planSetupActions = async (input: {
             inspection.backupPath !== undefined
               ? { backupPath: inspection.backupPath }
               : {}),
+            ...(inspection.dialect === undefined
+              ? {}
+              : { dialect: inspection.dialect }),
           },
         ]
       : [],
@@ -217,6 +223,7 @@ const setupPlan = (input: {
     readonly client: SetupClient;
     readonly operation: "create" | "update";
     readonly backupPath?: string;
+    readonly dialect?: ClientRegistrationDialect;
   }[];
   readonly providerEnvironment: SetupProviderEnvironment;
   readonly linuxPackageFamily?: LinuxPackageFamily;
@@ -254,7 +261,7 @@ const setupPlan = (input: {
     : []),
   ...input.clients
     .filter(({ client }) => client.format !== "unsupported")
-    .map(({ client, operation, backupPath }): SetupAction => ({
+    .map(({ client, operation, backupPath, dialect }): SetupAction => ({
       id: `configure_client:${client.name}`,
       kind: "configure_client",
       label: client.displayName ?? client.name,
@@ -264,6 +271,7 @@ const setupPlan = (input: {
           name: client.name,
           label: client.displayName ?? client.name,
           format: client.format,
+          ...(dialect === undefined ? {} : { dialect }),
         },
         input.command,
         input.providerEnvironment,
@@ -312,6 +320,7 @@ const clientConfigurationDetail = (
     readonly name: string;
     readonly label: string;
     readonly format: SetupClient["format"];
+    readonly dialect?: ClientRegistrationDialect;
   },
   command: readonly string[],
   environment: SetupProviderEnvironment,
@@ -321,9 +330,10 @@ const clientConfigurationDetail = (
     .sort(([left], [right]) => compareUnicodeCodePoints(left, right))
     .map(([name, value]) => `${name}=${value}`);
   const dialect =
-    client.format === undefined || client.format === "unsupported"
+    client.dialect ??
+    (client.format === undefined || client.format === "unsupported"
       ? "json"
-      : client.format;
+      : client.format);
   const retainedFields = describeClientRegistrationRetention(
     client.name,
     dialect,

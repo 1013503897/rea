@@ -18,6 +18,7 @@ import {
   serializeClientConfiguration,
   withClientServers,
   type ClientConfigurationDocument,
+  type ClientRegistrationDialect,
 } from "./ClientConfigurationDocument.js";
 import { dshDocument, DshCordisDocument } from "./DshCordisPatch.js";
 import { constants as fsConstants } from "node:fs";
@@ -361,7 +362,7 @@ export const inspectClientConfiguration = async (
         throwCleanupFailure(fallback.error);
         return { status: "invalid", remediation: fallback.error.detail };
       }
-      return { status: "create" };
+      return { status: "create", dialect: clientRegistrationDialect(client) };
     }
     return {
       status: "invalid",
@@ -391,12 +392,17 @@ export const inspectClientConfiguration = async (
       parsed,
     );
     if (registrationCurrent(parsed, desired))
-      return { status: "already_current" };
+      return { status: "already_current", dialect: parsed.dialect };
     const fallback = await readZcodeFallbackServers(client, parsed);
     if (!fallback.ok) {
       throwCleanupFailure(fallback.error);
       return { status: "invalid", remediation: fallback.error.detail };
     }
+    return {
+      status: "update",
+      backupPath: `${client.configPath}.rea.backup`,
+      dialect: parsed.dialect,
+    };
   } catch (cause: unknown) {
     if (cause instanceof RegularFileCleanupFailure) throw cause;
     // Malformed configuration is reported with the invalid remediation.
@@ -407,11 +413,14 @@ export const inspectClientConfiguration = async (
         "The existing configuration is malformed. Repair it before setup applies any other changes.",
     };
   }
-  return {
-    status: "update",
-    backupPath: `${client.configPath}.rea.backup`,
-  };
 };
+
+const clientRegistrationDialect = (
+  client: SetupClient,
+): ClientRegistrationDialect =>
+  client.format === undefined || client.format === "unsupported"
+    ? "json"
+    : client.format;
 
 const isMissing = (cause: unknown): boolean =>
   cause instanceof Error && "code" in cause && cause.code === "ENOENT";
