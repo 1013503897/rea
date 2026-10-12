@@ -31,3 +31,10 @@ boundary tests. Build the complete VitePress site with dead-link checks enabled,
 then compare emitted HTML routes with the pre-migration guide inventory. Inspect
 the diff for unintended text rewrites and retained generated ownership. Run the
 repository static checks before requesting review.
+
+Keep a reproducible built-HTML verifier with an independent 56-route baseline,
+including the new upstream signal guide. Verify physical edit targets, local
+published files/images and fragment IDs rather than treating a successful build
+as sufficient link verification. Normalize references to docs/public at the
+renderer boundary, where VitePress publishes them at the site root. Preserve a
+legacy managed/native fragment alias while retaining the existing heading.

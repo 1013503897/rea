@@ -6,3 +6,7 @@
 - [x] Update local links and physical-path consumers; preserve public routes.
 - [x] Add the documentation directory and canonical authoring conventions.
 - [x] Run documentation checks, path-consumer tests, site build and static checks.
+- [x] Validate the merged upstream signal guide and all 56 published routes.
+- [x] Add built-HTML route/edit/file/anchor regression verification.
+- [x] Resolve and validate the doubled catalog base URL and legacy managed anchor.
+- [ ] Publish the signed conflict-resolution commit and verify GitHub mergeability.

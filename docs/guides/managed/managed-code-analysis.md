@@ -179,6 +179,8 @@ to native function addresses requires verified
 provider evidence; names or vtable similarity alone do not prove that a native
 function implements a specific managed method.
 
+<div id="managednative-boundary-rules"></div>
+
 ## Managed/native boundary rules
 
 `verify_managed_native_boundaries` compares declared P/Invoke module and entry

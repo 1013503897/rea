@@ -360,6 +360,16 @@ export const documentationSections = [
       },
     ],
   },
+  {
+    text: "Signal recordings",
+    items: [
+      {
+        text: "Recorded signal inspection",
+        source: "guides/signals/signal-recordings.md",
+        route: "/signal-recordings",
+      },
+    ],
+  },
 ];
 
 export const documentationRewrites = Object.fromEntries(

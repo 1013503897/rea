@@ -65,7 +65,12 @@ export default defineConfig({
               .join("/");
             const rendered = relative(
               dirname(renderedPath),
-              resolve(documentationRoot, rewrites[source] ?? source),
+              resolve(
+                documentationRoot,
+                source.startsWith("public/")
+                  ? source.slice("public/".length)
+                  : (rewrites[source] ?? source),
+              ),
             )
               .split(sep)
               .join("/");

@@ -79,6 +79,10 @@ product pages. The VitePress documentation source is this `docs/` tree.
 - [Process capture](guides/runtime/process-capture.md)
 - [Frida instrumentation](guides/runtime/frida-instrumentation.md)
 
+## Signal recordings
+
+- [Recorded signal inspection](guides/signals/signal-recordings.md)
+
 ## Provider setup and formats
 
 - [Ghidra provider semantics](providers/ghidra-provider.md)
