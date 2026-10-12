@@ -171,6 +171,42 @@ describe("Ghidra function-analysis result values", () => {
   });
 });
 
+describe("Ghidra Swift String literals", () => {
+  it("keeps a small Swift literal without storage apart from a large literal's bytes", () => {
+    const dossier = ghidraFunctionDossier();
+    if (
+      typeof dossier !== "object" ||
+      dossier === null ||
+      Array.isArray(dossier)
+    )
+      throw new TypeError("Ghidra dossier fixture is invalid");
+    const literals = [
+      {
+        source_address: "0x401004",
+        value: "The user name ",
+        representation: "small",
+        address: null,
+        registers: ["x0", "x1"],
+        words: ["0x7265737520656854", "0xee0020656d616e20"],
+      },
+      {
+        source_address: "0x401008",
+        value: " cannot be written into a sudoers rule safely.",
+        representation: "large",
+        address: "0x402270",
+        registers: ["x0", "x1"],
+        words: ["0xd00000000000002e", "0x8000000000402250"],
+      },
+    ];
+    expect(
+      parseFunctionValueFixture("analyze_function", {
+        ...dossier,
+        swift_string_literals: literals,
+      }),
+    ).toMatchObject({ ok: true, value: { swift_string_literals: literals } });
+  });
+});
+
 describe("Ghidra compact reference provenance", () => {
   it("distinguishes incoming references, examined emptiness and unavailable coverage at data addresses", () => {
     const instruction = {
@@ -442,6 +478,23 @@ const malformedOutputs = (): Array<
       Object.fromEntries(
         Object.entries(dossier).filter(([key]) => key !== "native_api"),
       ),
+    ],
+    [
+      "non-canonical Swift literal address",
+      "analyze_function",
+      {
+        ...dossier,
+        swift_string_literals: [
+          {
+            source_address: "0x401004",
+            value: "The power setting could not be changed.",
+            representation: "large",
+            address: "402240",
+            registers: ["x0", "x1"],
+            words: ["0xd000000000000027", "0x8000000000402220"],
+          },
+        ],
+      },
     ],
     [
       "non-canonical native API target",

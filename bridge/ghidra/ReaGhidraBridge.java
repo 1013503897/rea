@@ -13,6 +13,8 @@ import java.net.UnixDomainSocketAddress;
 import java.nio.channels.Channels;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
@@ -23,6 +25,7 @@ import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.security.MessageDigest;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
@@ -82,6 +85,7 @@ import ghidra.program.model.address.SegmentedAddress;
 import ghidra.program.model.reloc.Relocation;
 import java.io.ByteArrayOutputStream;
 import ghidra.program.model.symbol.Namespace;
+import ghidra.program.model.symbol.FlowType;
 import ghidra.program.model.symbol.RefType;
 import ghidra.program.model.symbol.Reference;
 import ghidra.program.model.symbol.ReferenceIterator;
@@ -100,6 +104,9 @@ import ghidra.program.model.pcode.PcodeBlock;
 import ghidra.program.model.pcode.PcodeBlockBasic;
 import ghidra.program.model.pcode.Varnode;
 import ghidra.program.model.pcode.VarnodeAST;
+import ghidra.program.util.ContextEvaluatorAdapter;
+import ghidra.program.util.SymbolicPropogator;
+import ghidra.program.util.VarnodeContext;
 
 public final class ReaGhidraBridge extends HeadlessScript {
     private static final int MAX_HIGH_PCODE_OPS = 3000;
@@ -1233,6 +1240,11 @@ public final class ReaGhidraBridge extends HeadlessScript {
         result.add("outgoing_references", outgoing);
         result.add("referenced_strings", referencedStrings);
         result.add("referenced_names", referencedNames);
+        boolean swift = swiftProgram();
+        boolean aarch64 = currentProgram.getLanguageID().getIdAsString().startsWith("AARCH64:");
+        if (swift && aarch64) {
+            result.add("swift_string_literals", swiftStringLiterals(function));
+        }
         result.add("basic_blocks", blocks);
         result.add(
             "native_api",
@@ -1252,6 +1264,15 @@ public final class ReaGhidraBridge extends HeadlessScript {
         limitations.add(
             "Synthetic Ghidra entry-point references without actionable memory sources are omitted."
         );
+        if (swift && aarch64) {
+            limitations.add(
+                "Swift String literals are decoded from constant register pairs at calls, returns and paired stores; literals stored one word at a time, chosen by two conditional selects, or built at runtime are not reported."
+            );
+        } else if (swift) {
+            limitations.add(
+                "Swift String literal decoding is implemented for AArch64 register pairs only; no Swift literals were decoded for this architecture."
+            );
+        }
         List<String> boundaryLimitations = noReturnCallLimitations(scan.instructions);
         for (String limitation : boundaryLimitations) {
             limitations.add(limitation);
@@ -3292,6 +3313,184 @@ public final class ReaGhidraBridge extends HeadlessScript {
         JsonArray result = new JsonArray();
         observed.values().forEach(result::add);
         return result;
+    }
+
+    private boolean swiftProgram() {
+        for (MemoryBlock block : currentProgram.getMemory().getBlocks()) {
+            String name = block.getName();
+            if (name.startsWith("__swift5_") || name.startsWith("swift5_")) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Swift passes a String as two words: small literals carry their bytes in the words and
+     * immortal large literals carry their count and a biased pointer to the bytes. Ghidra keeps
+     * neither as a data reference, so decode constant pairs where Swift consumes them: argument
+     * and return registers at calls, tail calls and returns, and both registers of one STP.
+     */
+    private JsonArray swiftStringLiterals(Function function) throws Exception {
+        Register[] registers = new Register[31];
+        for (int index = 0; index < registers.length; index++) {
+            registers[index] = currentProgram.getRegister("x" + index);
+        }
+        TreeMap<String, JsonObject> observed = new TreeMap<>();
+        SymbolicPropogator propagator = new SymbolicPropogator(currentProgram, false);
+        propagator.flowConstants(function.getEntryPoint(), function.getBody(), new ContextEvaluatorAdapter() {
+            @Override
+            public boolean evaluateContextBefore(VarnodeContext context, Instruction instruction) {
+                for (Register[] pair : swiftStringPairs(function, instruction, registers)) {
+                    Long word = registerConstant(context, pair[0]);
+                    Long object = registerConstant(context, pair[1]);
+                    if (word == null || object == null) continue;
+                    JsonObject item = swiftStringLiteral(word, object);
+                    // Ghidra forks each select without correlating its condition, so a pair whose
+                    // registers are both selected may combine words from different cases.
+                    if (item == null || (selectedValue(instruction, pair[0]) && selectedValue(instruction, pair[1]))) continue;
+                    item.addProperty("source_address", canonicalAddress(instruction.getAddress()));
+                    JsonArray pairRegisters = new JsonArray();
+                    pairRegisters.add(pair[0].getName());
+                    pairRegisters.add(pair[1].getName());
+                    item.add("registers", pairRegisters);
+                    observed.put(
+                        canonicalAddress(instruction.getAddress()) + "\u0000" + pair[0].getName() +
+                            "\u0000" + pair[1].getName() + "\u0000" + item.get("value").getAsString(),
+                        item
+                    );
+                }
+                return false;
+            }
+        }, false, monitor);
+        JsonArray result = new JsonArray();
+        observed.values().forEach(result::add);
+        return result;
+    }
+
+    private static List<Register[]> swiftStringPairs(
+        Function function,
+        Instruction instruction,
+        Register[] registers
+    ) {
+        List<Register[]> pairs = new ArrayList<>();
+        if (instruction.getMnemonicString().equals("stp")) {
+            Register first = instruction.getRegister(0);
+            Register second = instruction.getRegister(1);
+            if (first != null && second != null && first.getBitLength() == 64 && second.getBitLength() == 64) {
+                pairs.add(new Register[] {first, second});
+            }
+            return pairs;
+        }
+        FlowType flow = instruction.getFlowType();
+        boolean returns = flow.isTerminal() && !flow.isJump() && !flow.isCall();
+        boolean leaves = flow.isCall() || returns || (flow.isJump() && flow.isComputed()) ||
+            (flow.isJump() && !flow.isConditional() &&
+                Arrays.stream(instruction.getFlows()).anyMatch(target -> !function.getBody().contains(target)));
+        if (!leaves) return pairs;
+        // A String occupies two consecutive registers among x0-x7, or x0 and x1 when returned.
+        int lastFirstRegister = returns ? 0 : 6;
+        for (int index = 0; index <= lastFirstRegister; index++) {
+            pairs.add(new Register[] {registers[index], registers[index + 1]});
+        }
+        return pairs;
+    }
+
+    private static Long registerConstant(VarnodeContext context, Register register) {
+        Varnode value = context.getRegisterVarnodeValue(register);
+        return value != null && context.isConstant(value) ? value.getOffset() : null;
+    }
+
+    private boolean selectedValue(Instruction use, Register register) {
+        Register target = register.getBaseRegister();
+        Address from = use.getFallFrom();
+        Instruction instruction = from == null ? null : currentProgram.getListing().getInstructionAt(from);
+        while (instruction != null) {
+            for (Object result : instruction.getResultObjects()) {
+                if (result instanceof Register written && written.getBaseRegister().equals(target)) {
+                    for (PcodeOp operation : instruction.getPcode()) {
+                        if (operation.getOpcode() == PcodeOp.CBRANCH && operation.getInput(0).isConstant()) return true;
+                    }
+                    return false;
+                }
+            }
+            from = instruction.getFallFrom();
+            instruction = from == null ? null : currentProgram.getListing().getInstructionAt(from);
+        }
+        return false;
+    }
+
+    private JsonObject swiftStringLiteral(long word, long object) {
+        int discriminator = (int) (object >>> 60);
+        if (discriminator == 0xE || discriminator == 0xA) {
+            int count = (int) ((object >>> 56) & 0xF);
+            byte[] bytes = new byte[15];
+            for (int index = 0; index < 8; index++) bytes[index] = (byte) (word >>> (8 * index));
+            for (int index = 0; index < 7; index++) bytes[8 + index] = (byte) (object >>> (8 * index));
+            for (int index = count; index < bytes.length; index++) {
+                if (bytes[index] != 0) return null;
+            }
+            String value = swiftStringText(Arrays.copyOf(bytes, count), discriminator == 0xE);
+            return value == null ? null : swiftStringItem(value, "small", null, word, object);
+        }
+        int flags = (int) (word >>> 60);
+        long count = word & 0xFFFFFFFFFFFFL;
+        // Immortal literals: ASCII and NFC or neither, tail allocated, with a pointer biased by 32.
+        if ((object >>> 56) != 0x80 || (flags != 0xD && flags != 0x1) || ((word >>> 48) & 0xFFF) != 0) {
+            return null;
+        }
+        Address address;
+        byte[] bytes;
+        try {
+            address = currentProgram.getAddressFactory().getDefaultAddressSpace()
+                .getAddress((object & 0x00FFFFFFFFFFFFFFL) + 0x20);
+            MemoryBlock block = currentProgram.getMemory().getBlock(address);
+            // The bytes and their terminator must lie in one initialized, non-executable block.
+            if (block == null || !block.isInitialized() || block.isExecute() ||
+                count >= block.getEnd().subtract(address) + 1 || count >= Integer.MAX_VALUE) {
+                return null;
+            }
+            bytes = new byte[(int) count + 1];
+            if (currentProgram.getMemory().getBytes(address, bytes) != bytes.length) return null;
+        } catch (Exception unreadable) {
+            return null;
+        }
+        if (bytes[(int) count] != 0) return null;
+        String value = swiftStringText(Arrays.copyOf(bytes, (int) count), flags == 0xD);
+        return value == null ? null : swiftStringItem(value, "large", address, word, object);
+    }
+
+    private static String swiftStringText(byte[] bytes, boolean ascii) {
+        if (bytes.length == 0) return null;
+        for (byte value : bytes) {
+            if ((value >= 0 && value < 0x20 && value != '\t' && value != '\n' && value != '\r') || value == 0x7f) return null;
+            if (ascii && value < 0) return null;
+        }
+        try {
+            return StandardCharsets.UTF_8.newDecoder().decode(ByteBuffer.wrap(bytes)).toString();
+        } catch (CharacterCodingException invalid) {
+            return null;
+        }
+    }
+
+    private static JsonObject swiftStringItem(
+        String value,
+        String representation,
+        Address address,
+        long word,
+        long object
+    ) {
+        JsonObject item = new JsonObject();
+        item.addProperty("value", value);
+        item.addProperty("representation", representation);
+        if (address == null) {
+            item.add("address", JsonNull.INSTANCE);
+        } else {
+            item.addProperty("address", canonicalAddress(address));
+        }
+        JsonArray words = new JsonArray();
+        words.add("0x" + Long.toUnsignedString(word, 16));
+        words.add("0x" + Long.toUnsignedString(object, 16));
+        item.add("words", words);
+        return item;
     }
 
     private static String exclusiveAddress(Address inclusive) {
