@@ -13,7 +13,10 @@ import {
   nesContainerFormat,
   parseInesLayout,
 } from "../../domain/inesContainer.js";
-import { ARTIFACT_CLASSIFICATION_PREFIX_BYTES } from "../ArtifactHash.js";
+import {
+  abortIfNeeded,
+  ARTIFACT_CLASSIFICATION_PREFIX_BYTES,
+} from "../ArtifactHash.js";
 import type { ArtifactOccurrence } from "../../domain/artifactGraph.js";
 import {
   hasZipSignature,
@@ -107,12 +110,18 @@ export const classifyAndHashRootForInventory = async (
     | { readonly kind: "failed"; readonly cause: unknown };
   try {
     const initial = await handle.stat();
+    abortIfNeeded(options.signal);
     if (!sameRegularFileState(expectedMetadata, initial))
       throw new ArtifactReaderFailure(
         "integrity",
         `Root artifact changed before inventory: ${path}`,
       );
-    const format = await classifyRootFormat(path, handle, initial);
+    const format = await classifyRootFormat(
+      path,
+      handle,
+      initial,
+      options.signal,
+    );
     const digest = await hashStableRootArtifactHandle(
       path,
       handle,
@@ -137,13 +146,19 @@ export const classifyAndHashRootForInventory = async (
     outcome = {
       kind: "failed",
       cause:
-        cause instanceof RegularFileChangedError
+        options.signal?.aborted === true
           ? new ArtifactReaderFailure(
-              "integrity",
-              `Root artifact changed during inventory: ${path}`,
-              { cause: cause.cause ?? cause },
+              "cancelled",
+              "Artifact inventory cancelled",
+              { cause },
             )
-          : cause,
+          : cause instanceof RegularFileChangedError
+            ? new ArtifactReaderFailure(
+                "integrity",
+                `Root artifact changed during inventory: ${path}`,
+                { cause: cause.cause ?? cause },
+              )
+            : cause,
     };
   }
   if (outcome.kind === "failed" || outcome.value.rootSource === undefined) {
@@ -165,10 +180,14 @@ const classifyRootFormat = async (
   path: string,
   handle: FileHandle,
   initial: Stats,
+  signal?: AbortSignal,
 ): Promise<ArtifactOccurrence["artifact_format"]> => {
+  abortIfNeeded(signal);
   const magic = Buffer.alloc(ARTIFACT_CLASSIFICATION_PREFIX_BYTES);
   const observed = await handle.read(magic, 0, magic.length, 0);
+  abortIfNeeded(signal);
   await verifyRegularFileState(path, { handle, initial });
+  abortIfNeeded(signal);
   const prefix = magic.subarray(0, observed.bytesRead);
   if (nesContainerFormat(prefix) !== undefined) {
     const parsed = parseInesLayout(prefix, initial.size);

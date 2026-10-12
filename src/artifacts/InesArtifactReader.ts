@@ -41,12 +41,12 @@ export class InesArtifactReader implements ArtifactReader {
 
   async *entries(signal?: AbortSignal): AsyncIterable<ArtifactEntry> {
     abortIfNeeded(signal);
-    await this.#verifySource();
+    await this.#verifySource(signal);
     const prefix = Buffer.alloc(16);
     const { bytesRead } = await this.source.handle.read(prefix, 0, 16, 0);
     abortIfNeeded(signal);
     // Concurrent source changes take precedence over malformed header diagnostics.
-    await this.#verifySource();
+    await this.#verifySource(signal);
     const parsed = parseInesLayout(
       prefix.subarray(0, bytesRead),
       this.source.initial.size,
@@ -82,7 +82,7 @@ export class InesArtifactReader implements ArtifactReader {
         "integrity",
         "iNES region does not match this reader's inventory",
       );
-    await this.#verifySource();
+    await this.#verifySource(signal);
     const offset = produced.byteOffset;
     const size = produced.declaredSize;
     if (offset === null || size === null || size <= 0)
@@ -92,7 +92,7 @@ export class InesArtifactReader implements ArtifactReader {
       end: offset + size - 1,
       signal,
     });
-    const verify = () => this.#verifySource();
+    const verify = () => this.#verifySource(signal);
     return Readable.from(
       (async function* () {
         let bytes = 0;
@@ -126,6 +126,7 @@ export class InesArtifactReader implements ArtifactReader {
     expectedSha256: string,
     signal?: AbortSignal,
   ): Promise<InesInventory> {
+    abortIfNeeded(signal);
     const layout = this.#layout;
     if (layout === undefined || this.#entries.size !== layout.regions.length)
       throw new ArtifactReaderFailure("integrity", "Incomplete iNES inventory");
@@ -146,6 +147,7 @@ export class InesArtifactReader implements ArtifactReader {
         bytes += chunk.length;
       }
     }
+    abortIfNeeded(signal);
     const sha256 = hash.digest("hex");
     if (bytes !== this.source.initial.size || sha256 !== expectedSha256)
       throw new ArtifactReaderFailure(
@@ -174,12 +176,14 @@ export class InesArtifactReader implements ArtifactReader {
     return this.ownedSource?.close() ?? Promise.resolve();
   }
 
-  async #verifySource(): Promise<void> {
+  async #verifySource(signal?: AbortSignal): Promise<void> {
+    abortIfNeeded(signal);
     if (this.#closed)
       throw new ArtifactReaderFailure("unavailable", "iNES reader is closed");
     try {
       await verifyRegularFileState(this.path, this.source);
     } catch (cause: unknown) {
+      abortIfNeeded(signal);
       if (cause instanceof RegularFileChangedError)
         throw new ArtifactReaderFailure(
           "integrity",
@@ -188,5 +192,7 @@ export class InesArtifactReader implements ArtifactReader {
         );
       throw cause;
     }
+    // State validation is asynchronous even after the final byte was consumed.
+    abortIfNeeded(signal);
   }
 }

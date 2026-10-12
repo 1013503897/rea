@@ -130,6 +130,7 @@ export const hashStableRootArtifactHandle = async (
   try {
     await verifyRegularFileState(path, { handle, initial });
   } catch (cause: unknown) {
+    abortIfNeeded(signal);
     if (cause instanceof RegularFileChangedError)
       throw new ArtifactReaderFailure(
         "integrity",
@@ -138,6 +139,7 @@ export const hashStableRootArtifactHandle = async (
       );
     throw cause;
   }
+  abortIfNeeded(signal);
   if (digest.bytes !== initial.size)
     throw new ArtifactReaderFailure(
       "integrity",

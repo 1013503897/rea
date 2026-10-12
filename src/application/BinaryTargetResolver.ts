@@ -259,6 +259,22 @@ const throwIfTargetResolutionCancelled = (signal?: AbortSignal): void => {
     throw new AnalysisCancelledError("resolve_binary_target");
 };
 
+/** Preserve cancellation when an asynchronous identity check succeeds or rejects. */
+const verifyTargetState = async (
+  path: string,
+  handle: FileHandle,
+  initial: Stats,
+  signal?: AbortSignal,
+): Promise<void> => {
+  try {
+    await verifyRegularFileState(path, { handle, initial });
+  } catch (cause: unknown) {
+    throwIfTargetResolutionCancelled(signal);
+    throw cause;
+  }
+  throwIfTargetResolutionCancelled(signal);
+};
+
 const detectArtifactFormat = async (
   path: string,
   handle: FileHandle,
@@ -283,8 +299,7 @@ const detectArtifactFormat = async (
   const magic = Buffer.alloc(16);
   const observed = await handle.read(magic, 0, magic.length, 0);
   throwIfTargetResolutionCancelled(signal);
-  await verifyRegularFileState(path, { handle, initial });
-  throwIfTargetResolutionCancelled(signal);
+  await verifyTargetState(path, handle, initial, signal);
   if (
     observed.bytesRead >= 8 &&
     magic.subarray(0, 8).equals(Buffer.from([0, 0x61, 0x73, 0x6d, 1, 0, 0, 0]))
@@ -389,7 +404,7 @@ const sha256Handle = async (
       throw new BinaryTargetError(path, "target grew while being read");
   }
   throwIfTargetResolutionCancelled(signal);
-  await verifyRegularFileState(path, { handle, initial });
+  await verifyTargetState(path, handle, initial, signal);
   if (position !== initial.size)
     throw new BinaryTargetError(path, "target changed while being read");
   return hash.digest("hex");
