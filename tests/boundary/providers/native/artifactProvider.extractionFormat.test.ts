@@ -15,7 +15,7 @@ import { artifactExtractionExecutionSchema } from "../../../../src/contracts/art
 import type { BinaryTarget } from "../../../../src/domain/binaryTargetTypes.js";
 
 describe("artifact extraction format support", () => {
-  it.each(["zip", "asar"] as const)(
+  it.each(["zip", "asar", "hap", "hsp", "app"] as const)(
     "extracts the scanned %s after an active iNES path is replaced",
     async (format) => {
       const root = await createTestTempDirectory("rea-extract-replaced-");
@@ -27,7 +27,7 @@ describe("artifact extraction format support", () => {
       const client = new ArtifactProvider(process.env).createClient(
         target.value,
       );
-      if (format === "zip") {
+      if (format !== "asar") {
         await writeOrderedZip(path, ["payload.txt"]);
       } else {
         const source = join(root, "source");
@@ -44,7 +44,9 @@ describe("artifact extraction format support", () => {
       const extracted = artifactExtractionResultSchema.parse(
         result.value.result,
       );
-      expect(extracted.manifest.root_format).toBe(format);
+      expect(extracted.manifest.root_format).toBe(
+        format === "app" ? "app-pack" : format,
+      );
       expect(
         extracted.artifacts.map(({ relative_path }) => relative_path),
       ).toEqual(["payload.txt"]);

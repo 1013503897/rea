@@ -1,3 +1,4 @@
+import { isZipPackageFormat } from "../../domain/zipPackageFormat.js";
 import { lstat, realpath } from "node:fs/promises";
 
 import { compareUnicodeCodePoints } from "../../domain/unicodeCodePointOrder.js";
@@ -410,13 +411,6 @@ interface ExtractionInventory {
   readonly integrityContradictions: readonly IntegrityContradiction[];
 }
 
-const ZIP_FORMATS = ["ipa", "apk", "msix", "appx", "zip"] as const;
-
-const isZipFormat = (
-  format: BinaryTarget["format"] | ArtifactGraphManifest["root_format"],
-): format is (typeof ZIP_FORMATS)[number] =>
-  (ZIP_FORMATS as readonly string[]).includes(format);
-
 /**
  * Refuse a format without an extraction reader before inventory work starts.
  * The target kind, not the host, is unsupported by extraction. The error keeps
@@ -433,7 +427,7 @@ const requireExtractableFormat = async (
     format !== "asar" &&
     format !== "ines" &&
     !isMachOFormat(format) &&
-    !isZipFormat(format)
+    !isZipPackageFormat(format)
   )
     throw new AnalysisUnsupportedTargetError(
       "extract_artifact",
@@ -498,7 +492,7 @@ const createReader = async (
   }
   if (format === "directory") return new DirectoryArtifactReader(path);
   if (format === "asar") return new AsarArtifactReader(path);
-  if (isZipFormat(format)) return new ZipArtifactReader(path, format);
+  if (isZipPackageFormat(format)) return new ZipArtifactReader(path, format);
   if (format === "mach-o" || format === "mach-o-universal")
     return new MachOSliceArtifactReader(path, input.environment);
   throw new AnalysisUnsupportedTargetError(

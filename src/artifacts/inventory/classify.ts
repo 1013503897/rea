@@ -1,3 +1,4 @@
+import { readFileHandlePrefix } from "../../filesystem/readFileHandlePrefix.js";
 import {
   sameRegularFileState,
   verifyRegularFileState,
@@ -183,12 +184,14 @@ const classifyRootFormat = async (
   signal?: AbortSignal,
 ): Promise<ArtifactOccurrence["artifact_format"]> => {
   abortIfNeeded(signal);
-  const magic = Buffer.alloc(ARTIFACT_CLASSIFICATION_PREFIX_BYTES);
-  const observed = await handle.read(magic, 0, magic.length, 0);
+  const prefix = await readFileHandlePrefix(
+    handle,
+    ARTIFACT_CLASSIFICATION_PREFIX_BYTES,
+    () => abortIfNeeded(signal),
+  );
   abortIfNeeded(signal);
   await verifyRegularFileState(path, { handle, initial });
   abortIfNeeded(signal);
-  const prefix = magic.subarray(0, observed.bytesRead);
   if (nesContainerFormat(prefix) !== undefined) {
     const parsed = parseInesLayout(prefix, initial.size);
     if (!parsed.ok) throw new ArtifactReaderFailure("format", parsed.error);

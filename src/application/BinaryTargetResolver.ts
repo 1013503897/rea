@@ -1,3 +1,4 @@
+import { readFileHandlePrefix } from "../filesystem/readFileHandlePrefix.js";
 import { constants, type Stats } from "node:fs";
 import { createHash } from "node:crypto";
 import {
@@ -297,12 +298,13 @@ const detectArtifactFormat = async (
 > => {
   throwIfTargetResolutionCancelled(signal);
   const lower = path.toLowerCase();
-  const magic = Buffer.alloc(16);
-  const observed = await handle.read(magic, 0, magic.length, 0);
+  const magic = await readFileHandlePrefix(handle, 16, () =>
+    throwIfTargetResolutionCancelled(signal),
+  );
   throwIfTargetResolutionCancelled(signal);
   await verifyTargetState(path, handle, initial, signal);
   if (
-    observed.bytesRead >= 8 &&
+    magic.length >= 8 &&
     magic.subarray(0, 8).equals(Buffer.from([0, 0x61, 0x73, 0x6d, 1, 0, 0, 0]))
   )
     throw new BinaryTargetError(
@@ -310,7 +312,7 @@ const detectArtifactFormat = async (
       "WebAssembly v1 artifacts are not supported by the native opening route",
       { constraint: "wasm_requires_static_inspection" },
     );
-  const prefix = magic.subarray(0, observed.bytesRead);
+  const prefix = magic;
   const nesFormat = nesContainerFormat(prefix);
   if (nesFormat !== undefined) {
     const parsed = parseInesLayout(prefix, initial.size);
@@ -328,16 +330,13 @@ const detectArtifactFormat = async (
     return zipPackageFormatForPath(lower) ?? "zip";
   }
   // Binary plists, including keyed archives, often use other extensions.
-  if (
-    observed.bytesRead >= 8 &&
-    magic.subarray(0, 8).equals(Buffer.from("bplist00"))
-  )
+  if (magic.length >= 8 && magic.subarray(0, 8).equals(Buffer.from("bplist00")))
     return "plist";
   const named = namedArtifactFormat(lower);
   if (named !== undefined) return named;
   if (
     lower.endsWith(".pkg") &&
-    observed.bytesRead >= 4 &&
+    magic.length >= 4 &&
     magic.subarray(0, 4).equals(Buffer.from("xar!"))
   )
     return "pkg";

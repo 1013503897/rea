@@ -1,3 +1,4 @@
+import { readFileHandlePrefix } from "../filesystem/readFileHandlePrefix.js";
 import { createHash } from "node:crypto";
 import { Readable } from "node:stream";
 import {
@@ -42,15 +43,13 @@ export class InesArtifactReader implements ArtifactReader {
   async *entries(signal?: AbortSignal): AsyncIterable<ArtifactEntry> {
     abortIfNeeded(signal);
     await this.#verifySource(signal);
-    const prefix = Buffer.alloc(16);
-    const { bytesRead } = await this.source.handle.read(prefix, 0, 16, 0);
+    const prefix = await readFileHandlePrefix(this.source.handle, 16, () =>
+      abortIfNeeded(signal),
+    );
     abortIfNeeded(signal);
     // Concurrent source changes take precedence over malformed header diagnostics.
     await this.#verifySource(signal);
-    const parsed = parseInesLayout(
-      prefix.subarray(0, bytesRead),
-      this.source.initial.size,
-    );
+    const parsed = parseInesLayout(prefix, this.source.initial.size);
     if (!parsed.ok) throw new ArtifactReaderFailure("format", parsed.error);
     this.#layout = parsed.value;
     this.#entries.clear();
