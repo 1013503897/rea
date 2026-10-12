@@ -413,7 +413,7 @@ interface ExtractionInventory {
 const ZIP_FORMATS = ["ipa", "apk", "msix", "appx", "zip"] as const;
 
 const isZipFormat = (
-  format: BinaryTarget["format"],
+  format: BinaryTarget["format"] | ArtifactGraphManifest["root_format"],
 ): format is (typeof ZIP_FORMATS)[number] =>
   (ZIP_FORMATS as readonly string[]).includes(format);
 
@@ -447,15 +447,14 @@ const createReader = async (
   path: string,
   input: Pick<
     ArtifactExtractionInput,
-    "inputPath" | "inputFormat" | "environment" | "resourceScope"
+    "inputPath" | "environment" | "resourceScope"
   >,
   manifest: ArtifactGraphManifest,
   signal?: AbortSignal,
 ): Promise<ArtifactReader> => {
-  const format = input.inputFormat;
-  // The scanned container determines admission; a replaced path cannot select
-  // a different reader. Bind the reopened descriptor to its observed bytes.
-  if (manifest.root_format === "ines") {
+  // The current scan owns format selection; the opened target may be stale.
+  const format = manifest.root_format;
+  if (format === "ines") {
     const owner = await openRootArtifact(
       path,
       input.resourceScope,
@@ -497,11 +496,16 @@ const createReader = async (
       throw cause;
     }
   }
-  if (await requireExtractableFormat(path, input))
-    return new DirectoryArtifactReader(path);
+  if (format === "directory") return new DirectoryArtifactReader(path);
   if (format === "asar") return new AsarArtifactReader(path);
   if (isZipFormat(format)) return new ZipArtifactReader(path, format);
-  return new MachOSliceArtifactReader(path, input.environment);
+  if (format === "mach-o" || format === "mach-o-universal")
+    return new MachOSliceArtifactReader(path, input.environment);
+  throw new AnalysisUnsupportedTargetError(
+    "extract_artifact",
+    input.inputPath,
+    `Artifact format has no extraction reader: ${format}`,
+  );
 };
 
 const preflight = (entry: ArtifactEntry): void => {
