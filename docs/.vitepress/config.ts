@@ -17,6 +17,7 @@ export default defineConfig({
         text: "Getting started",
         items: [
           { text: "Installation and setup", link: "/installation" },
+          { text: "Client configuration", link: "/client-configuration" },
           { text: "CLI and Evidence", link: "/cli" },
           { text: "Agent prompts", link: "/mcp-prompts" },
           { text: "Roadmap", link: "/roadmap" },
@@ -43,10 +44,6 @@ export default defineConfig({
           { text: "Apple applications", link: "/apple-application-analysis" },
           { text: "Firmware", link: "/firmware-analysis" },
           { text: "iNES containers", link: "/ines-containers" },
-          {
-            text: "Reconstruction readiness",
-            link: "/reconstruction-readiness",
-          },
         ],
       },
       {
@@ -68,6 +65,11 @@ export default defineConfig({
           { text: "MCP contracts", link: "/mcp-contracts" },
           { text: "Tool design", link: "/tool-design" },
           { text: "Testing", link: "/testing" },
+          { text: "Client verification", link: "/client-verification" },
+          {
+            text: "Reconstruction readiness",
+            link: "/reconstruction-readiness",
+          },
           { text: "Releasing", link: "/releasing" },
         ],
       },
