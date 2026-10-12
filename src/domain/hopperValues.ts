@@ -286,30 +286,40 @@ export const unresolvedCallSchema = z.strictObject({
   reason: z.string(),
 });
 
-/** A Swift String literal decoded from the two words of its ABI value, not a data reference. */
-export const swiftStringLiteralSchema = z.strictObject({
+const swiftStringLiteralFields = {
   source_address: z
     .string()
     .describe(
       "Instruction that consumes both words: a call, tail call, return, or paired store.",
     ),
-  value: z.string(),
-  representation: z
-    .enum(["small", "large"])
-    .describe(
-      "small: the UTF-8 bytes are inside the two words. large: an immortal literal whose words hold its count and a pointer to its bytes.",
-    ),
-  address: z
+  value: z
     .string()
-    .nullable()
-    .describe(
-      "Address of a large literal's bytes; null for a small literal, which has no storage of its own.",
-    ),
+    .describe("Decoded UTF-8 text, including the canonical empty string."),
   registers: z.tuple([z.string(), z.string()]),
   words: z
     .tuple([z.string(), z.string()])
     .describe("Observed constant register values, in register order."),
-});
+};
+
+/** A Swift String literal decoded from the two words of its ABI value, not a data reference. */
+export const swiftStringLiteralSchema = z.discriminatedUnion("representation", [
+  z.strictObject({
+    ...swiftStringLiteralFields,
+    representation: z
+      .literal("small")
+      .describe("The UTF-8 bytes are inside the two words."),
+    address: z.null().describe("A small literal has no storage of its own."),
+  }),
+  z.strictObject({
+    ...swiftStringLiteralFields,
+    representation: z
+      .literal("large")
+      .describe(
+        "An immortal literal whose words hold its count and a pointer to its bytes.",
+      ),
+    address: z.string().describe("Address of a large literal's bytes."),
+  }),
+]);
 
 /** Observed endpoints with complete or partial reference classification evidence. */
 export const referenceEdgeSchema = z

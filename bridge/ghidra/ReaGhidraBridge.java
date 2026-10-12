@@ -1242,8 +1242,11 @@ public final class ReaGhidraBridge extends HeadlessScript {
         result.add("referenced_names", referencedNames);
         boolean swift = swiftProgram();
         boolean aarch64 = currentProgram.getLanguageID().getIdAsString().startsWith("AARCH64:");
+        boolean omittedSwiftLiteralForCapacity = false;
         if (swift && aarch64) {
-            result.add("swift_string_literals", swiftStringLiterals(function));
+            SwiftStringLiteralDecode decoded = swiftStringLiterals(function);
+            result.add("swift_string_literals", decoded.literals());
+            omittedSwiftLiteralForCapacity = decoded.omittedForCapacity();
         }
         result.add("basic_blocks", blocks);
         result.add(
@@ -1268,6 +1271,11 @@ public final class ReaGhidraBridge extends HeadlessScript {
             limitations.add(
                 "Swift String literals are decoded from constant register pairs at calls, returns and paired stores; literals stored one word at a time, chosen by two conditional selects, or built at runtime are not reported."
             );
+            if (omittedSwiftLiteralForCapacity) {
+                limitations.add(
+                    "A Swift String literal matched the immortal layout but was omitted because its byte length does not fit in the remaining Java heap before UTF-16 and JSON expansion."
+                );
+            }
         } else if (swift) {
             limitations.add(
                 "Swift String literal decoding is implemented for AArch64 register pairs only; no Swift literals were decoded for this architecture."
@@ -3328,13 +3336,15 @@ public final class ReaGhidraBridge extends HeadlessScript {
      * immortal large literals carry their count and a biased pointer to the bytes. Ghidra keeps
      * neither as a data reference, so decode constant pairs where Swift consumes them: argument
      * and return registers at calls, tail calls and returns, and both registers of one STP.
+     * The canonical empty string is a small literal with a zero count.
      */
-    private JsonArray swiftStringLiterals(Function function) throws Exception {
+    private SwiftStringLiteralDecode swiftStringLiterals(Function function) throws Exception {
         Register[] registers = new Register[31];
         for (int index = 0; index < registers.length; index++) {
             registers[index] = currentProgram.getRegister("x" + index);
         }
         TreeMap<String, JsonObject> observed = new TreeMap<>();
+        boolean[] omittedForCapacity = { false };
         SymbolicPropogator propagator = new SymbolicPropogator(currentProgram, false);
         propagator.flowConstants(function.getEntryPoint(), function.getBody(), new ContextEvaluatorAdapter() {
             @Override
@@ -3343,7 +3353,7 @@ public final class ReaGhidraBridge extends HeadlessScript {
                     Long word = registerConstant(context, pair[0]);
                     Long object = registerConstant(context, pair[1]);
                     if (word == null || object == null) continue;
-                    JsonObject item = swiftStringLiteral(word, object);
+                    JsonObject item = swiftStringLiteral(word, object, omittedForCapacity);
                     // Ghidra forks each select without correlating its condition, so a pair whose
                     // registers are both selected may combine words from different cases.
                     if (item == null || (selectedValue(instruction, pair[0]) && selectedValue(instruction, pair[1]))) continue;
@@ -3363,7 +3373,7 @@ public final class ReaGhidraBridge extends HeadlessScript {
         }, false, monitor);
         JsonArray result = new JsonArray();
         observed.values().forEach(result::add);
-        return result;
+        return new SwiftStringLiteralDecode(result, omittedForCapacity[0]);
     }
 
     private static List<Register[]> swiftStringPairs(
@@ -3418,7 +3428,7 @@ public final class ReaGhidraBridge extends HeadlessScript {
         return false;
     }
 
-    private JsonObject swiftStringLiteral(long word, long object) {
+    private JsonObject swiftStringLiteral(long word, long object, boolean[] omittedForCapacity) {
         int discriminator = (int) (object >>> 60);
         if (discriminator == 0xE || discriminator == 0xA) {
             int count = (int) ((object >>> 56) & 0xF);
@@ -3428,7 +3438,8 @@ public final class ReaGhidraBridge extends HeadlessScript {
             for (int index = count; index < bytes.length; index++) {
                 if (bytes[index] != 0) return null;
             }
-            String value = swiftStringText(Arrays.copyOf(bytes, count), discriminator == 0xE);
+            // Count zero is the canonical empty string (object 0xE000000000000000, word 0).
+            String value = swiftStringText(bytes, count, discriminator == 0xE);
             return value == null ? null : swiftStringItem(value, "small", null, word, object);
         }
         int flags = (int) (word >>> 60);
@@ -3445,27 +3456,54 @@ public final class ReaGhidraBridge extends HeadlessScript {
             MemoryBlock block = currentProgram.getMemory().getBlock(address);
             // The bytes and their terminator must lie in one initialized, non-executable block.
             if (block == null || !block.isInitialized() || block.isExecute() ||
-                count >= block.getEnd().subtract(address) + 1 || count >= Integer.MAX_VALUE) {
+                count >= block.getEnd().subtract(address) + 1) {
+                return null;
+            }
+            if (!swiftLiteralBytesFit(count)) {
+                omittedForCapacity[0] = true;
                 return null;
             }
             bytes = new byte[(int) count + 1];
             if (currentProgram.getMemory().getBytes(address, bytes) != bytes.length) return null;
+        } catch (OutOfMemoryError exhausted) {
+            omittedForCapacity[0] = true;
+            return null;
         } catch (Exception unreadable) {
             return null;
         }
         if (bytes[(int) count] != 0) return null;
-        String value = swiftStringText(Arrays.copyOf(bytes, (int) count), flags == 0xD);
+        String value = swiftStringText(bytes, (int) count, flags == 0xD);
         return value == null ? null : swiftStringItem(value, "large", address, word, object);
     }
 
-    private static String swiftStringText(byte[] bytes, boolean ascii) {
-        if (bytes.length == 0) return null;
-        for (byte value : bytes) {
+    /**
+     * A large literal is retained as a byte array, a UTF-16 String, and JSON text.
+     * ASCII expands to two UTF-16 bytes and JSON serialization retains another copy,
+     * so require five bytes of remaining heap per content byte and leave half the heap
+     * for the rest of the dossier. Measure that before allocating.
+     */
+    private static boolean swiftLiteralBytesFit(long count) {
+        if (count < 0 || count >= Integer.MAX_VALUE) return false;
+        Runtime runtime = Runtime.getRuntime();
+        long available = runtime.maxMemory() - runtime.totalMemory() + runtime.freeMemory();
+        long expanded;
+        try {
+            expanded = Math.addExact(Math.multiplyExact(count, 5L), 1L);
+        } catch (ArithmeticException overflow) {
+            return false;
+        }
+        return available > 0 && expanded <= available / 2;
+    }
+
+    private static String swiftStringText(byte[] bytes, int length, boolean ascii) {
+        if (length < 0 || length > bytes.length) return null;
+        for (int index = 0; index < length; index++) {
+            byte value = bytes[index];
             if ((value >= 0 && value < 0x20 && value != '\t' && value != '\n' && value != '\r') || value == 0x7f) return null;
             if (ascii && value < 0) return null;
         }
         try {
-            return StandardCharsets.UTF_8.newDecoder().decode(ByteBuffer.wrap(bytes)).toString();
+            return StandardCharsets.UTF_8.newDecoder().decode(ByteBuffer.wrap(bytes, 0, length)).toString();
         } catch (CharacterCodingException invalid) {
             return null;
         }
@@ -4032,6 +4070,7 @@ public final class ReaGhidraBridge extends HeadlessScript {
     private record AddressNameRequest(String inputAddress, Address address, String name) {}
     private record FunctionEntry(Function function, InventoryItem item) {}
     private record FunctionAnalysisObservation(JsonObject dossier, List<String> limitations) {}
+    private record SwiftStringLiteralDecode(JsonArray literals, boolean omittedForCapacity) {}
     private record InstructionScan(List<Instruction> instructions, boolean truncated) {}
     private record SessionDescriptor(
         String transport,

@@ -190,6 +190,14 @@ describe("Ghidra Swift String literals", () => {
         words: ["0x7265737520656854", "0xee0020656d616e20"],
       },
       {
+        source_address: "0x401006",
+        value: "",
+        representation: "small",
+        address: null,
+        registers: ["x0", "x1"],
+        words: ["0x0", "0xe000000000000000"],
+      },
+      {
         source_address: "0x401008",
         value: " cannot be written into a sudoers rule safely.",
         representation: "large",
@@ -435,6 +443,33 @@ describe("Ghidra function-analysis malformed results", () => {
   );
 });
 
+const malformedSwiftStringLiterals = (
+  dossier: Record<string, JsonValue>,
+): Array<[string, GhidraFunctionOperation, JsonValue]> =>
+  (
+    [
+      ["non-canonical Swift literal address", "large", "402240"],
+      ["small Swift literal with storage", "small", "0x402270"],
+      ["large Swift literal without storage", "large", null],
+    ] as const
+  ).map(([name, representation, address]) => [
+    name,
+    "analyze_function",
+    {
+      ...dossier,
+      swift_string_literals: [
+        {
+          source_address: "0x401004",
+          value: "The power setting could not be changed.",
+          representation,
+          address,
+          registers: ["x0", "x1"],
+          words: ["0xd000000000000027", "0x8000000000402220"],
+        },
+      ],
+    },
+  ]);
+
 const malformedOutputs = (): Array<
   [string, GhidraFunctionOperation, JsonValue]
 > => {
@@ -479,23 +514,7 @@ const malformedOutputs = (): Array<
         Object.entries(dossier).filter(([key]) => key !== "native_api"),
       ),
     ],
-    [
-      "non-canonical Swift literal address",
-      "analyze_function",
-      {
-        ...dossier,
-        swift_string_literals: [
-          {
-            source_address: "0x401004",
-            value: "The power setting could not be changed.",
-            representation: "large",
-            address: "402240",
-            registers: ["x0", "x1"],
-            words: ["0xd000000000000027", "0x8000000000402220"],
-          },
-        ],
-      },
-    ],
+    ...malformedSwiftStringLiterals(dossier),
     [
       "non-canonical native API target",
       "analyze_function",
