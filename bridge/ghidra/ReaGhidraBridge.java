@@ -3415,12 +3415,12 @@ public final class ReaGhidraBridge extends HeadlessScript {
         for (PcodeOp operation : instruction.getPcode()) {
             if (operation.getOpcode() == PcodeOp.RETURN) returns = true;
         }
-        // A jump leaves the function only toward a target outside its body; a computed jump
-        // without resolved targets is an indirect tail call, while a resolved jump table is not.
+        // A jump leaves the function only when every resolved target is outside its body; a
+        // computed jump without resolved targets is an indirect tail call.
         Address[] targets = instruction.getFlows();
         boolean tailCall = flow.isJump() && !flow.isConditional() && (targets.length == 0
             ? flow.isComputed()
-            : Arrays.stream(targets).anyMatch(target -> !function.getBody().contains(target)));
+            : Arrays.stream(targets).allMatch(target -> !function.getBody().contains(target)));
         if (!flow.isCall() && !returns && !tailCall) return pairs;
         // A String occupies two consecutive registers among x0-x7, or x0 and x1 when returned.
         int lastFirstRegister = returns ? 0 : 6;
@@ -3435,23 +3435,38 @@ public final class ReaGhidraBridge extends HeadlessScript {
         return value != null && context.isConstant(value) ? value.getOffset() : null;
     }
 
+    // Follow register copies back to the defining instruction, since a select copied into an
+    // argument register forks just as independently as one written there directly.
     private boolean selectedValue(Instruction use, Register register) {
         Register target = register.getBaseRegister();
         Address from = use.getFallFrom();
         Instruction instruction = from == null ? null : currentProgram.getListing().getInstructionAt(from);
         while (instruction != null) {
+            boolean defines = false;
             for (Object result : instruction.getResultObjects()) {
-                if (result instanceof Register written && written.getBaseRegister().equals(target)) {
-                    for (PcodeOp operation : instruction.getPcode()) {
-                        if (operation.getOpcode() == PcodeOp.CBRANCH && operation.getInput(0).isConstant()) return true;
-                    }
-                    return false;
+                if (result instanceof Register written && written.getBaseRegister().equals(target)) defines = true;
+            }
+            if (defines) {
+                PcodeOp[] operations = instruction.getPcode();
+                for (PcodeOp operation : operations) {
+                    if (operation.getOpcode() == PcodeOp.CBRANCH && operation.getInput(0).isConstant()) return true;
                 }
+                Register source = copiedRegister(operations);
+                if (source == null) return false;
+                target = source.getBaseRegister();
             }
             from = instruction.getFallFrom();
             instruction = from == null ? null : currentProgram.getListing().getInstructionAt(from);
         }
         return false;
+    }
+
+    private Register copiedRegister(PcodeOp[] operations) {
+        if (operations.length != 1) return null;
+        int opcode = operations[0].getOpcode();
+        Varnode input = operations[0].getInput(0);
+        if ((opcode != PcodeOp.COPY && opcode != PcodeOp.INT_ZEXT) || input == null || !input.isRegister()) return null;
+        return currentProgram.getRegister(input);
     }
 
     /** Validate the ABI layout of a pair; a small literal is decoded here, a large one only located. */
@@ -3503,10 +3518,13 @@ public final class ReaGhidraBridge extends HeadlessScript {
     }
 
     /**
-     * Decoded text is retained as UTF-16 and again as JSON text, so every large literal of one
-     * dossier draws five bytes per UTF-8 byte from half of the heap that was free when decoding began.
+     * Every large literal of one dossier draws on half of the heap that was free when decoding
+     * began, charged at the worst case per UTF-8 byte: two bytes of UTF-16 text, then up to six
+     * escaped JSON characters ("\\u0000") held as UTF-16 in Gson's growing writer buffer (up to
+     * twice its length), again in the returned String, and once more as UTF-8 on the socket.
      */
     private static final class SwiftLiteralBudget {
+        private static final long BYTES_PER_LITERAL_BYTE = 2 + 6 * 2 * 2 + 6 * 2 + 6;
         private long remaining;
 
         SwiftLiteralBudget() {
@@ -3515,8 +3533,8 @@ public final class ReaGhidraBridge extends HeadlessScript {
         }
 
         boolean take(long bytes) {
-            if (bytes > remaining / 5) return false;
-            remaining -= bytes * 5;
+            if (bytes > remaining / BYTES_PER_LITERAL_BYTE) return false;
+            remaining -= bytes * BYTES_PER_LITERAL_BYTE;
             return true;
         }
 

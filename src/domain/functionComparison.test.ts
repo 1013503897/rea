@@ -629,7 +629,7 @@ describe("function comparison Swift string literals", () => {
     ).toMatchObject({
       status: "unknown",
       limitations: [
-        "Swift String literal coverage differs or is partial; referenced strings and names match, but decoded literals were not compared.",
+        "Swift String literal coverage differs or is partial; referenced strings and names match, and no use site decoded on both sides disagrees.",
       ],
     });
   });
@@ -669,6 +669,32 @@ describe("function comparison Swift string literals", () => {
         partial,
       ),
     ).toMatchObject({ status: "unknown" });
+  });
+
+  it("reports a conflicting literal at a shared use site despite partial coverage", () => {
+    const partial = (base: "0x1000" | "0x2000", value: string) =>
+      functionDossierSchema.parse({
+        ...withLiterals(base, [value]),
+        swift_string_literal_omissions: [
+          {
+            source_address: base === "0x1000" ? "0x1004" : "0x2004",
+            representation: "large",
+            address: "0x3000",
+            byte_length: 64,
+            reason: "capacity",
+            registers: ["x0", "x1"],
+            words: ["0xd000000000000040", "0x8000000000002fe0"],
+          },
+        ],
+      });
+    expect(
+      stringsDimension(
+        "b",
+        partial("0x1000", "SleepDisabled"),
+        "c",
+        partial("0x2000", "Holding awake"),
+      ),
+    ).toMatchObject({ status: "changed" });
   });
 });
 

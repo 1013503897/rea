@@ -194,6 +194,47 @@ export const stringAndNameProjection = (
     : sorted(values);
 };
 
+/** Whether both dossiers decoded different literals at one use site that neither left partial. */
+export const swiftLiteralSitesConflict = (
+  left: FunctionSnapshot,
+  right: FunctionSnapshot,
+): boolean => {
+  const leftSites = swiftLiteralSites(left);
+  const rightSites = swiftLiteralSites(right);
+  for (const [site, values] of leftSites.values) {
+    const other = rightSites.values.get(site);
+    if (other === undefined || rightSites.omitted.has(site)) continue;
+    if (canonicalJson(values) !== canonicalJson(other)) return true;
+  }
+  return false;
+};
+
+const swiftLiteralSites = (snapshot: FunctionSnapshot) => {
+  const base = snapshot.dossier.procedure.address;
+  const site = (sourceAddress: string, registers: readonly string[]) => {
+    const offset = relativeAddress(sourceAddress, base);
+    return offset === null ? null : canonicalJson([offset, registers]);
+  };
+  const omitted = new Set(
+    (snapshot.dossier.swift_string_literal_omissions ?? []).map(
+      ({ source_address: sourceAddress, registers }) =>
+        site(sourceAddress, registers),
+    ),
+  );
+  const values = new Map<string, string[]>();
+  for (const literal of snapshot.dossier.swift_string_literals ?? []) {
+    const key = site(literal.source_address, literal.registers);
+    if (key === null || omitted.has(key)) continue;
+    values.set(
+      key,
+      [...(values.get(key) ?? []), literal.value].sort(
+        compareUnicodeCodePoints,
+      ),
+    );
+  }
+  return { values, omitted };
+};
+
 export const sorted = (values: readonly unknown[]): readonly unknown[] =>
   values
     .map((value) => ({

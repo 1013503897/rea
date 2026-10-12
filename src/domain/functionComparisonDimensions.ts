@@ -11,6 +11,7 @@ import {
   referenceProjection,
   sorted,
   stringAndNameProjection,
+  swiftLiteralSitesConflict,
 } from "./functionComparisonNormalization.js";
 import type {
   DimensionName,
@@ -162,13 +163,20 @@ const compareStringsAndNames = (
     context,
   );
   if (complete || compared.status === "changed") return compared;
+  // A different literal at a use site both dossiers decoded is a change despite partial coverage.
+  if (swiftLiteralSitesConflict(left, right)) {
+    const leftAll = stringAndNameProjection(left);
+    const rightAll = stringAndNameProjection(right);
+    if (leftAll !== null && rightAll !== null)
+      return compareValues("strings_names", leftAll, rightAll, context);
+  }
   return unresolvedDimension({
     dimension: "strings_names",
     links: context.links,
     leftCount: null,
     rightCount: null,
     limitations: [
-      "Swift String literal coverage differs or is partial; referenced strings and names match, but decoded literals were not compared.",
+      "Swift String literal coverage differs or is partial; referenced strings and names match, and no use site decoded on both sides disagrees.",
     ],
   });
 };
