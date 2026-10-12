@@ -311,6 +311,9 @@ const ghidraFunctionDossier = functionDossierSchema
         ({ address, source_address }) =>
           address === null ? [source_address] : [address, source_address],
       ),
+      ...(value.swift_string_literal_omissions ?? []).flatMap(
+        ({ address, source_address }) => [address, source_address],
+      ),
       ...value.basic_blocks.flatMap(({ start, end, successors }) => [
         start,
         end,

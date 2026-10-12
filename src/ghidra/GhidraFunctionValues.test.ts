@@ -516,6 +516,25 @@ const malformedOutputs = (): Array<
     ],
     ...malformedSwiftStringLiterals(dossier),
     [
+      "non-canonical Swift literal omission address",
+      "analyze_function",
+      {
+        ...dossier,
+        swift_string_literals: [],
+        swift_string_literal_omissions: [
+          {
+            source_address: "0x401004",
+            representation: "large",
+            address: "402240",
+            byte_length: 39,
+            reason: "capacity",
+            registers: ["x0", "x1"],
+            words: ["0xd000000000000027", "0x8000000000402220"],
+          },
+        ],
+      },
+    ],
+    [
       "non-canonical native API target",
       "analyze_function",
       {

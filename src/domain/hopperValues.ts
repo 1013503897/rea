@@ -321,6 +321,21 @@ export const swiftStringLiteralSchema = z.discriminatedUnion("representation", [
   }),
 ]);
 
+/** A large Swift literal whose layout matched but whose text was not decoded. */
+export const swiftStringLiteralOmissionSchema = z.strictObject({
+  source_address: swiftStringLiteralFields.source_address,
+  representation: z.literal("large"),
+  address: z.string().describe("Address of the literal's bytes."),
+  byte_length: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+  reason: z
+    .literal("capacity")
+    .describe(
+      "The text did not fit the provider's memory budget for this dossier.",
+    ),
+  registers: swiftStringLiteralFields.registers,
+  words: swiftStringLiteralFields.words,
+});
+
 /** Observed endpoints with complete or partial reference classification evidence. */
 export const referenceEdgeSchema = z
   .object({
@@ -377,6 +392,12 @@ export const functionDossierSchema = z
       .exactOptional()
       .describe(
         "Swift String literals decoded from constant register values. Absent when the provider does not decode them for this target.",
+      ),
+    swift_string_literal_omissions: z
+      .array(swiftStringLiteralOmissionSchema)
+      .exactOptional()
+      .describe(
+        "Literals that matched the Swift layout but were not decoded. Empty when swift_string_literals is complete for the examined use sites.",
       ),
     basic_blocks: z.array(
       z

@@ -121,6 +121,7 @@ const nativeRows = (
     referenced_strings: dossier.referenced_strings,
     referenced_names: dossier.referenced_names,
     swift_string_literals: dossier.swift_string_literals,
+    swift_string_literal_omissions: dossier.swift_string_literal_omissions,
     value_flow_operations: flow?.operations,
     value_flow_def_use: flow?.def_use,
     value_flow_effects: flow?.effects,

@@ -59,9 +59,19 @@ try {
   await mkdir(join(root, "copied"));
   const copied = join(root, "copied", "swift-inventory");
   await copyFile(binary, copied);
-  await execute("swiftc", ["-O", literalSource, "-o", literalBinary], {
-    timeout: 60_000,
-  });
+  // Decoding covers AArch64 register pairs, so build that slice on any Mac host.
+  await execute(
+    "swiftc",
+    [
+      "-O",
+      "-target",
+      "arm64-apple-macosx13.0",
+      literalSource,
+      "-o",
+      literalBinary,
+    ],
+    { timeout: 60_000 },
+  );
   await client.connect(transport);
   for (const [variant, path] of [
     ["debug", binary],
@@ -182,6 +192,10 @@ async function verifyStringLiterals() {
         ["café", "small"],
         ["Résumé of the naïve décor, written twice", "large"],
       ],
+      emptyAndControlLiterals: [
+        ["", "small"],
+        ["tab\there", "small"],
+      ],
       returnedLiteral: [["Holding awake", "small"]],
     };
     const decoded = {};
@@ -193,6 +207,7 @@ async function verifyStringLiterals() {
       });
       const observed = dossier.swift_string_literals;
       assert(Array.isArray(observed), `${name} recorded no Swift literals`);
+      assert.deepEqual(dossier.swift_string_literal_omissions, []);
       assert.deepEqual(
         observed.map(({ value, representation }) => [value, representation]),
         literals,

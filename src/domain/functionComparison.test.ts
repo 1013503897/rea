@@ -628,12 +628,47 @@ describe("function comparison Swift string literals", () => {
       ),
     ).toMatchObject({
       status: "unknown",
-      left_count: 0,
-      right_count: null,
       limitations: [
-        "Swift String literal coverage differs; one dossier did not record decoded literals.",
+        "Swift String literal coverage differs or is partial; referenced strings and names match, but decoded literals were not compared.",
       ],
     });
+  });
+
+  it("reports a referenced name change even when Swift literal coverage differs", () => {
+    const named = functionDossierSchema.parse({
+      ...dossier("return 0;", "0x2000"),
+      referenced_names: [
+        { address: "0x3000", value: "helper", source_address: "0x2000" },
+      ],
+    });
+    expect(
+      stringsDimension("7", withLiterals("0x1000", []), "8", named),
+    ).toMatchObject({ status: "changed" });
+  });
+
+  it("does not equate a partial literal record with a complete one", () => {
+    const partial = functionDossierSchema.parse({
+      ...withLiterals("0x2000", ["SleepDisabled"]),
+      swift_string_literal_omissions: [
+        {
+          source_address: "0x2000",
+          representation: "large",
+          address: "0x3000",
+          byte_length: 64,
+          reason: "capacity",
+          registers: ["x0", "x1"],
+          words: ["0xd000000000000040", "0x8000000000002fe0"],
+        },
+      ],
+    });
+    expect(
+      stringsDimension(
+        "9",
+        withLiterals("0x1000", ["SleepDisabled"]),
+        "a",
+        partial,
+      ),
+    ).toMatchObject({ status: "unknown" });
   });
 });
 

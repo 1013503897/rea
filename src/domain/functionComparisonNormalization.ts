@@ -145,6 +145,7 @@ export const commentProjection = (
 
 export const stringAndNameProjection = (
   snapshot: FunctionSnapshot,
+  includeSwiftLiterals = true,
 ): readonly unknown[] | null => {
   const values = [
     ...snapshot.dossier.referenced_strings.map(
@@ -167,7 +168,10 @@ export const stringAndNameProjection = (
         value,
       }),
     ),
-    ...(snapshot.dossier.swift_string_literals ?? []).map(
+    ...(includeSwiftLiterals
+      ? (snapshot.dossier.swift_string_literals ?? [])
+      : []
+    ).map(
       ({
         source_address: sourceAddress,
         value,

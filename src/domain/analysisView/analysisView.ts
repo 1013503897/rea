@@ -97,6 +97,7 @@ const nativeViewSchema = z.strictObject({
     "referenced_strings",
     "referenced_names",
     "swift_string_literals",
+    "swift_string_literal_omissions",
     "native_api",
     "value_flow_summary",
     "value_flow_operations",
