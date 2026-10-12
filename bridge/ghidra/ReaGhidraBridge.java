@@ -3350,6 +3350,8 @@ public final class ReaGhidraBridge extends HeadlessScript {
         propagator.flowConstants(function.getEntryPoint(), function.getBody(), new ContextEvaluatorAdapter() {
             @Override
             public boolean evaluateContextBefore(VarnodeContext context, Instruction instruction) {
+                // Returning true ends only the current flow, so every queued flow checks the shared stop.
+                if (budget.stopped()) return true;
                 for (Register[] pair : swiftStringPairs(function, instruction, registers)) {
                     Long word = registerConstant(context, pair[0]);
                     Long object = registerConstant(context, pair[1]);
@@ -3376,7 +3378,7 @@ public final class ReaGhidraBridge extends HeadlessScript {
                         }
                     }
                     if (value == null && !overCapacity) continue;
-                    JsonObject item = value == null
+                    JsonObject item = overCapacity
                         ? swiftStringOmission(layout, word, object)
                         : swiftStringItem(value, layout, word, object);
                     item.addProperty("source_address", canonicalAddress(instruction.getAddress()));
@@ -3384,8 +3386,11 @@ public final class ReaGhidraBridge extends HeadlessScript {
                     pairRegisters.add(pair[0].getName());
                     pairRegisters.add(pair[1].getName());
                     item.add("registers", pairRegisters);
-                    (value == null ? omitted : observed).put(key, item);
-                    if (overCapacity) return true;
+                    (overCapacity ? omitted : observed).put(key, item);
+                    if (overCapacity) {
+                        budget.stop();
+                        return true;
+                    }
                 }
                 return false;
             }
@@ -3557,6 +3562,7 @@ public final class ReaGhidraBridge extends HeadlessScript {
         private static final long BYTES_PER_LITERAL_BYTE = 2 + 6 * 2 * 2 + 6 * 2 + 6;
         private static final long BYTES_PER_RECORD = 4096;
         private long remaining;
+        private boolean stopped;
 
         SwiftLiteralBudget() {
             Runtime runtime = Runtime.getRuntime();
@@ -3570,6 +3576,14 @@ public final class ReaGhidraBridge extends HeadlessScript {
             }
             remaining -= BYTES_PER_RECORD + bytes * BYTES_PER_LITERAL_BYTE;
             return true;
+        }
+
+        void stop() {
+            stopped = true;
+        }
+
+        boolean stopped() {
+            return stopped;
         }
     }
 

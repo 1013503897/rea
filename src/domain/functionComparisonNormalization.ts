@@ -232,15 +232,17 @@ const swiftLiteralSites = (snapshot: FunctionSnapshot) => {
       site(sourceAddress, registers),
     ),
   );
+  // Keep the same literal facts the full strings_names projection compares.
   const values = new Map<string, string[]>();
   for (const literal of snapshot.dossier.swift_string_literals ?? []) {
     const key = site(literal.source_address, literal.registers);
     if (key === null) continue;
     values.set(
       key,
-      [...(values.get(key) ?? []), literal.value].sort(
-        compareUnicodeCodePoints,
-      ),
+      [
+        ...(values.get(key) ?? []),
+        canonicalJson([literal.value, literal.representation]),
+      ].sort(compareUnicodeCodePoints),
     );
   }
   const complete =

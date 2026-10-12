@@ -645,7 +645,9 @@ describe("function comparison Swift string literals", () => {
       stringsDimension("7", withLiterals("0x1000", []), "8", named),
     ).toMatchObject({ status: "changed" });
   });
+});
 
+describe("function comparison partial Swift literal coverage", () => {
   it("does not equate a partial literal record with a complete one", () => {
     const partial = functionDossierSchema.parse({
       ...withLiterals("0x2000", ["SleepDisabled"]),
@@ -709,6 +711,41 @@ describe("function comparison Swift string literals", () => {
     expect(
       stringsDimension("f", dossier("return 0;", "0x1000"), "0", omissionOnly),
     ).toMatchObject({ status: "unknown" });
+  });
+
+  it("reports a representation change at a shared site despite partial coverage", () => {
+    const omission = {
+      source_address: "0x1004",
+      representation: "small",
+      address: null,
+      byte_length: 4,
+      reason: "capacity",
+      registers: ["x0", "x1"],
+      words: ["0x732f4220", "0xe400000000000000"],
+    } as const;
+    const small = functionDossierSchema.parse({
+      ...withLiterals("0x1000", ["SleepDisabled"]),
+      swift_string_literal_omissions: [omission],
+    });
+    const large = functionDossierSchema.parse({
+      ...dossier("return 0;", "0x2000"),
+      swift_string_literals: [
+        {
+          source_address: "0x2000",
+          value: "SleepDisabled",
+          representation: "large",
+          address: "0x3000",
+          registers: ["x0", "x1"],
+          words: ["0xd00000000000000d", "0x8000000000002fe0"],
+        },
+      ],
+      swift_string_literal_omissions: [
+        { ...omission, source_address: "0x2004" },
+      ],
+    });
+    expect(stringsDimension("1", small, "2", large)).toMatchObject({
+      status: "changed",
+    });
   });
 
   it("reports a conflicting literal at a shared use site despite partial coverage", () => {
