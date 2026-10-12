@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { lstat, open, readFile, writeFile } from "node:fs/promises";
+import { lstat, open, readFile, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, it } from "vitest";
 import { parseBinaryTarget } from "../../../src/application/BinaryTargetResolver.js";
@@ -190,6 +190,48 @@ it("rejects forged region ranges, cancellation and a changed retained source", a
     await handle.close();
   }
 });
+
+it.each(["before", "during"])(
+  "reports source removal %s a region read as integrity failure",
+  async (when) => {
+    const root = await createTestTempDirectory("rea-ines-removed-source-");
+    const path = join(root, "source.nes");
+    await writeFile(path, inesFixture());
+    const handle = await open(path, "r");
+    const reader = new InesArtifactReader(path, {
+      handle,
+      initial: await handle.stat(),
+    });
+    try {
+      const entries = [];
+      for await (const entry of reader.entries()) entries.push(entry);
+      const entry = entries[0];
+      if (entry === undefined) throw new Error("No header region");
+      if (when === "before") {
+        await unlink(path);
+        await expect(reader.open(entry)).rejects.toMatchObject({
+          reason: "integrity",
+          cause: { code: "ENOENT" },
+        });
+      } else {
+        const stream = await reader.open(entry);
+        await unlink(path);
+        await expect(
+          (async () => {
+            for await (const chunk of stream)
+              expect(Buffer.isBuffer(chunk)).toBe(true);
+          })(),
+        ).rejects.toMatchObject({
+          reason: "integrity",
+          cause: { code: "ENOENT" },
+        });
+      }
+    } finally {
+      await reader.close();
+      await handle.close();
+    }
+  },
+);
 
 it("releases an extraction-owned source descriptor on repeated close", async () => {
   const root = await createTestTempDirectory("rea-ines-owned-source-");

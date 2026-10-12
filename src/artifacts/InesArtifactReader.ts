@@ -178,7 +178,19 @@ export class InesArtifactReader implements ArtifactReader {
       throw new ArtifactReaderFailure("unavailable", "iNES reader is closed");
     const [opened, selected] = await Promise.all([
       this.source.handle.stat(),
-      lstat(this.path),
+      lstat(this.path).catch((cause: unknown) => {
+        if (
+          cause instanceof Error &&
+          "code" in cause &&
+          ["ENOENT", "ENOTDIR", "ELOOP"].includes(String(cause.code))
+        )
+          throw new ArtifactReaderFailure(
+            "integrity",
+            "iNES source changed during reading",
+            { cause },
+          );
+        throw cause;
+      }),
     ]);
     if (
       !sameRegularFileState(this.source.initial, opened) ||
