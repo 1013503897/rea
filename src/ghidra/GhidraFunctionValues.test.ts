@@ -210,6 +210,7 @@ describe("Ghidra Swift String literals", () => {
       parseFunctionValueFixture("analyze_function", {
         ...dossier,
         swift_string_literals: literals,
+        swift_string_literal_omissions: [],
       }),
     ).toMatchObject({ ok: true, value: { swift_string_literals: literals } });
   });
@@ -457,6 +458,7 @@ const malformedSwiftStringLiterals = (
     "analyze_function",
     {
       ...dossier,
+      swift_string_literal_omissions: [],
       swift_string_literals: [
         {
           source_address: "0x401004",
@@ -484,6 +486,11 @@ const malformedOutputs = (): Array<
     throw new TypeError("Ghidra native API fixture is invalid");
   return [
     ["non-canonical address", "procedure_callers", ["401000"]],
+    [
+      "Swift literals without their omission record",
+      "analyze_function",
+      { ...dossier, swift_string_literals: [] },
+    ],
     [
       "missing classification",
       "procedure_info",

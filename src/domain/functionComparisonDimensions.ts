@@ -184,10 +184,10 @@ const compareStringsAndNames = (
 const swiftLiteralCoverage = (
   snapshot: FunctionSnapshot,
 ): "absent" | "complete" | "partial" =>
-  snapshot.dossier.swift_string_literals === undefined
-    ? "absent"
-    : (snapshot.dossier.swift_string_literal_omissions ?? []).length > 0
-      ? "partial"
+  (snapshot.dossier.swift_string_literal_omissions ?? []).length > 0
+    ? "partial"
+    : snapshot.dossier.swift_string_literals === undefined
+      ? "absent"
       : "complete";
 
 const compareReferences = (

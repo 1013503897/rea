@@ -24,6 +24,7 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.security.MessageDigest;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -3356,22 +3357,21 @@ public final class ReaGhidraBridge extends HeadlessScript {
                     SwiftLiteralLayout layout = swiftLiteralLayout(word, object);
                     // Ghidra forks each select without correlating its condition, so a pair whose
                     // registers are both selected may combine words from different cases.
-                    if (layout == null || (selectedValue(instruction, pair[0]) && selectedValue(instruction, pair[1]))) continue;
+                    if (layout == null ||
+                        (selectedValue(function, instruction, pair[0]) && selectedValue(function, instruction, pair[1]))) continue;
                     // Forks can reach one site with different constants, so the words are part of the key.
                     String key = canonicalAddress(instruction.getAddress()) + "\u0000" + pair[0].getName() +
                         "\u0000" + pair[1].getName() + "\u0000" + Long.toUnsignedString(word, 16) +
                         "\u0000" + Long.toUnsignedString(object, 16);
                     if (observed.containsKey(key) || omitted.containsKey(key)) continue;
-                    // Small text is at most 15 bytes and already decoded; only large reads draw on the budget.
+                    // Every record draws on the budget; the first one that does not fit is kept as an
+                    // omission and decoding stops, so later sites are never examined.
                     String value = layout.smallValue();
-                    boolean overCapacity = false;
-                    if (value == null && !budget.take(layout.byteLength())) {
-                        overCapacity = true;
-                    } else if (value == null) {
+                    boolean overCapacity = !budget.take(layout.byteLength());
+                    if (!overCapacity && value == null) {
                         try {
                             value = swiftLargeLiteralText(layout);
                         } catch (OutOfMemoryError exhausted) {
-                            budget.exhaust();
                             overCapacity = true;
                         }
                     }
@@ -3385,6 +3385,7 @@ public final class ReaGhidraBridge extends HeadlessScript {
                     pairRegisters.add(pair[1].getName());
                     item.add("registers", pairRegisters);
                     (value == null ? omitted : observed).put(key, item);
+                    if (overCapacity) return true;
                 }
                 return false;
             }
@@ -3435,30 +3436,57 @@ public final class ReaGhidraBridge extends HeadlessScript {
         return value != null && context.isConstant(value) ? value.getOffset() : null;
     }
 
-    // Follow register copies back to the defining instruction, since a select copied into an
-    // argument register forks just as independently as one written there directly.
-    private boolean selectedValue(Instruction use, Register register) {
-        Register target = register.getBaseRegister();
-        Address from = use.getFallFrom();
-        Instruction instruction = from == null ? null : currentProgram.getListing().getInstructionAt(from);
-        while (instruction != null) {
+    // Search every predecessor path for the reaching definitions, following register copies,
+    // since a select copied into an argument register or defined before a branch forks just as
+    // independently as one written there directly.
+    private boolean selectedValue(Function function, Instruction use, Register register) {
+        ArrayDeque<Instruction> instructions = new ArrayDeque<>();
+        ArrayDeque<Register> targets = new ArrayDeque<>();
+        Set<String> visited = new HashSet<>();
+        for (Instruction predecessor : predecessors(function, use)) {
+            instructions.push(predecessor);
+            targets.push(register.getBaseRegister());
+        }
+        while (!instructions.isEmpty()) {
+            Instruction instruction = instructions.pop();
+            Register target = targets.pop();
+            if (!visited.add(canonicalAddress(instruction.getAddress()) + "\u0000" + target.getName())) continue;
             boolean defines = false;
             for (Object result : instruction.getResultObjects()) {
                 if (result instanceof Register written && written.getBaseRegister().equals(target)) defines = true;
             }
+            Register next = target;
             if (defines) {
                 PcodeOp[] operations = instruction.getPcode();
                 for (PcodeOp operation : operations) {
                     if (operation.getOpcode() == PcodeOp.CBRANCH && operation.getInput(0).isConstant()) return true;
                 }
                 Register source = copiedRegister(operations);
-                if (source == null) return false;
-                target = source.getBaseRegister();
+                if (source == null) continue;
+                next = source.getBaseRegister();
             }
-            from = instruction.getFallFrom();
-            instruction = from == null ? null : currentProgram.getListing().getInstructionAt(from);
+            for (Instruction predecessor : predecessors(function, instruction)) {
+                instructions.push(predecessor);
+                targets.push(next);
+            }
         }
         return false;
+    }
+
+    private List<Instruction> predecessors(Function function, Instruction instruction) {
+        List<Instruction> result = new ArrayList<>();
+        Address from = instruction.getFallFrom();
+        if (from != null) {
+            Instruction previous = currentProgram.getListing().getInstructionAt(from);
+            if (previous != null) result.add(previous);
+        }
+        for (Reference reference : currentProgram.getReferenceManager().getReferencesTo(instruction.getAddress())) {
+            if (!reference.getReferenceType().isFlow() || reference.getReferenceType().isCall()) continue;
+            if (!function.getBody().contains(reference.getFromAddress())) continue;
+            Instruction source = currentProgram.getListing().getInstructionAt(reference.getFromAddress());
+            if (source != null) result.add(source);
+        }
+        return result;
     }
 
     private Register copiedRegister(PcodeOp[] operations) {
@@ -3518,13 +3546,16 @@ public final class ReaGhidraBridge extends HeadlessScript {
     }
 
     /**
-     * Every large literal of one dossier draws on half of the heap that was free when decoding
-     * began, charged at the worst case per UTF-8 byte: two bytes of UTF-16 text, then up to six
-     * escaped JSON characters ("\\u0000") held as UTF-16 in Gson's growing writer buffer (up to
-     * twice its length), again in the returned String, and once more as UTF-8 on the socket.
+     * Every literal record of one dossier draws on half of the heap that was free when decoding
+     * began. Text is charged at the worst case per UTF-8 byte: two bytes of UTF-16 text, then up
+     * to six escaped JSON characters ("\\u0000") held as UTF-16 in Gson's growing writer buffer
+     * (up to twice its length), again in the returned String, and once more as UTF-8 on the
+     * socket. Each record also pays a fixed cost for its map key, JSON members, addresses, words
+     * and their serialized form, so many empty or small literals are bounded too.
      */
     private static final class SwiftLiteralBudget {
         private static final long BYTES_PER_LITERAL_BYTE = 2 + 6 * 2 * 2 + 6 * 2 + 6;
+        private static final long BYTES_PER_RECORD = 4096;
         private long remaining;
 
         SwiftLiteralBudget() {
@@ -3533,13 +3564,12 @@ public final class ReaGhidraBridge extends HeadlessScript {
         }
 
         boolean take(long bytes) {
-            if (bytes > remaining / BYTES_PER_LITERAL_BYTE) return false;
-            remaining -= bytes * BYTES_PER_LITERAL_BYTE;
+            if (remaining < BYTES_PER_RECORD ||
+                bytes > (remaining - BYTES_PER_RECORD) / BYTES_PER_LITERAL_BYTE) {
+                return false;
+            }
+            remaining -= BYTES_PER_RECORD + bytes * BYTES_PER_LITERAL_BYTE;
             return true;
-        }
-
-        void exhaust() {
-            remaining = 0;
         }
     }
 
@@ -3559,7 +3589,11 @@ public final class ReaGhidraBridge extends HeadlessScript {
     private static JsonObject swiftStringOmission(SwiftLiteralLayout layout, long word, long object) {
         JsonObject item = new JsonObject();
         item.addProperty("representation", layout.representation());
-        item.addProperty("address", canonicalAddress(layout.address()));
+        if (layout.address() == null) {
+            item.add("address", JsonNull.INSTANCE);
+        } else {
+            item.addProperty("address", canonicalAddress(layout.address()));
+        }
         item.addProperty("byte_length", layout.byteLength());
         item.addProperty("reason", "capacity");
         item.add("words", swiftStringWords(word, object));

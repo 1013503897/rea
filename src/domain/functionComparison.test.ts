@@ -572,30 +572,30 @@ describe("function comparison", () => {
   });
 });
 
-describe("function comparison Swift string literals", () => {
-  const withLiterals = (base: "0x1000" | "0x2000", values: readonly string[]) =>
-    functionDossierSchema.parse({
-      ...dossier("return 0;", base),
-      swift_string_literals: values.map((value) => ({
-        source_address: base,
-        value,
-        representation: "small" as const,
-        address: null,
-        registers: ["x0", "x1"] as const,
-        words: ["0x0", "0xe"] as const,
-      })),
-    });
-  const stringsDimension = (
-    leftDigit: string,
-    left: ReturnType<typeof withLiterals> | ReturnType<typeof dossier>,
-    rightDigit: string,
-    right: ReturnType<typeof withLiterals> | ReturnType<typeof dossier>,
-  ) =>
-    compareFunctions(
-      observe(leftDigit, left),
-      observe(rightDigit, right),
-    ).dimensions.find(({ dimension }) => dimension === "strings_names");
+const withLiterals = (base: "0x1000" | "0x2000", values: readonly string[]) =>
+  functionDossierSchema.parse({
+    ...dossier("return 0;", base),
+    swift_string_literals: values.map((value) => ({
+      source_address: base,
+      value,
+      representation: "small" as const,
+      address: null,
+      registers: ["x0", "x1"] as const,
+      words: ["0x0", "0xe"] as const,
+    })),
+  });
+const stringsDimension = (
+  leftDigit: string,
+  left: ReturnType<typeof withLiterals> | ReturnType<typeof dossier>,
+  rightDigit: string,
+  right: ReturnType<typeof withLiterals> | ReturnType<typeof dossier>,
+) =>
+  compareFunctions(
+    observe(leftDigit, left),
+    observe(rightDigit, right),
+  ).dimensions.find(({ dimension }) => dimension === "strings_names");
 
+describe("function comparison Swift string literals", () => {
   it("treats differing decoded literals as a strings and names change", () => {
     expect(
       stringsDimension(
@@ -668,6 +668,46 @@ describe("function comparison Swift string literals", () => {
         "a",
         partial,
       ),
+    ).toMatchObject({ status: "unknown" });
+  });
+
+  it("reports a literal that a complete dossier shows absent at a site the partial one decoded", () => {
+    const partial = functionDossierSchema.parse({
+      ...withLiterals("0x2000", ["SleepDisabled"]),
+      swift_string_literal_omissions: [
+        {
+          source_address: "0x2004",
+          representation: "small",
+          address: null,
+          byte_length: 4,
+          reason: "capacity",
+          registers: ["x0", "x1"],
+          words: ["0x732f4220", "0xe400000000000000"],
+        },
+      ],
+    });
+    expect(
+      stringsDimension("d", withLiterals("0x1000", []), "e", partial),
+    ).toMatchObject({ status: "changed" });
+  });
+
+  it("treats an omission record without decoded literals as partial coverage", () => {
+    const omissionOnly = functionDossierSchema.parse({
+      ...dossier("return 0;", "0x2000"),
+      swift_string_literal_omissions: [
+        {
+          source_address: "0x2004",
+          representation: "small",
+          address: null,
+          byte_length: 4,
+          reason: "capacity",
+          registers: ["x0", "x1"],
+          words: ["0x732f4220", "0xe400000000000000"],
+        },
+      ],
+    });
+    expect(
+      stringsDimension("f", dossier("return 0;", "0x1000"), "0", omissionOnly),
     ).toMatchObject({ status: "unknown" });
   });
 

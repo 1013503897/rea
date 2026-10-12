@@ -321,20 +321,34 @@ export const swiftStringLiteralSchema = z.discriminatedUnion("representation", [
   }),
 ]);
 
-/** A large Swift literal whose layout matched but whose text was not decoded. */
-export const swiftStringLiteralOmissionSchema = z.strictObject({
+const swiftStringLiteralOmissionFields = {
   source_address: swiftStringLiteralFields.source_address,
-  representation: z.literal("large"),
-  address: z.string().describe("Address of the literal's bytes."),
   byte_length: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
   reason: z
     .literal("capacity")
     .describe(
-      "The text did not fit the provider's memory budget for this dossier.",
+      "The record did not fit the provider's memory budget for this dossier; decoding stopped here, so later use sites were not examined.",
     ),
   registers: swiftStringLiteralFields.registers,
   words: swiftStringLiteralFields.words,
-});
+};
+
+/** A Swift literal whose layout matched but whose record did not fit; decoding stopped there. */
+export const swiftStringLiteralOmissionSchema = z.discriminatedUnion(
+  "representation",
+  [
+    z.strictObject({
+      ...swiftStringLiteralOmissionFields,
+      representation: z.literal("small"),
+      address: z.null(),
+    }),
+    z.strictObject({
+      ...swiftStringLiteralOmissionFields,
+      representation: z.literal("large"),
+      address: z.string().describe("Address of the literal's bytes."),
+    }),
+  ],
+);
 
 /** Observed endpoints with complete or partial reference classification evidence. */
 export const referenceEdgeSchema = z
@@ -397,7 +411,7 @@ export const functionDossierSchema = z
       .array(swiftStringLiteralOmissionSchema)
       .exactOptional()
       .describe(
-        "Literals that matched the Swift layout but were not decoded. Empty when swift_string_literals is complete for the examined use sites.",
+        "The literal at which decoding stopped for capacity. Present exactly when swift_string_literals is present; empty when decoding examined every use site.",
       ),
     basic_blocks: z.array(
       z
