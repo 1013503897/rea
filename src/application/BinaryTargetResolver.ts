@@ -4,19 +4,12 @@ import {
   nesContainerFormat,
   parseInesLayout,
 } from "../domain/inesContainer.js";
-import {
-  access,
-  lstat,
-  realpath,
-  stat,
-  type FileHandle,
-} from "node:fs/promises";
+import { access, realpath, stat, type FileHandle } from "node:fs/promises";
 import { extname, isAbsolute, resolve } from "node:path";
 
 import { BinaryTargetError } from "../domain/configurationErrors.js";
 import {
   openRegularFile,
-  sameRegularFileState,
   verifyRegularFileState,
 } from "../filesystem/RegularFile.js";
 import { AnalysisCancelledError } from "../domain/analysisErrorCore.js";
@@ -390,12 +383,8 @@ const sha256Handle = async (
       throw new BinaryTargetError(path, "target grew while being read");
   }
   throwIfTargetResolutionCancelled(signal);
-  const [opened, currentPath] = await Promise.all([handle.stat(), lstat(path)]);
-  if (
-    !sameRegularFileState(initial, opened) ||
-    !sameRegularFileState(initial, currentPath) ||
-    position !== initial.size
-  )
+  await verifyRegularFileState(path, { handle, initial });
+  if (position !== initial.size)
     throw new BinaryTargetError(path, "target changed while being read");
   return hash.digest("hex");
 };

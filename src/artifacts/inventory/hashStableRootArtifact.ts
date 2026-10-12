@@ -1,4 +1,3 @@
-import { lstat } from "node:fs/promises";
 import type { Stats } from "node:fs";
 import type { FileHandle } from "node:fs/promises";
 import { readFileHandleChunks } from "../../filesystem/readFileHandleChunks.js";
@@ -9,7 +8,8 @@ import {
   NonRegularFileReadError,
   RegularFileAdmissionFailure,
   openRegularFile,
-  sameRegularFileState,
+  RegularFileChangedError,
+  verifyRegularFileState,
 } from "../../filesystem/RegularFile.js";
 import {
   abortIfNeeded,
@@ -105,12 +105,18 @@ export const hashStableRootArtifactHandle = async (
     signal,
   );
   abortIfNeeded(signal);
-  const [opened, currentPath] = await Promise.all([handle.stat(), lstat(path)]);
-  if (
-    !sameRegularFileState(initial, opened) ||
-    !sameRegularFileState(initial, currentPath) ||
-    digest.bytes !== initial.size
-  )
+  try {
+    await verifyRegularFileState(path, { handle, initial });
+  } catch (cause: unknown) {
+    if (cause instanceof RegularFileChangedError)
+      throw new ArtifactReaderFailure(
+        "integrity",
+        `Root artifact changed during inventory: ${path}`,
+        { cause: cause.cause ?? cause },
+      );
+    throw cause;
+  }
+  if (digest.bytes !== initial.size)
     throw new ArtifactReaderFailure(
       "integrity",
       `Root artifact changed during inventory: ${path}`,

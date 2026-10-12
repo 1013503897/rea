@@ -314,6 +314,63 @@ it.each(["inventory", "target"])(
   },
 );
 
+it.each([
+  { route: "inventory", hashPass: 1 },
+  { route: "inventory", hashPass: 2 },
+  { route: "target", hashPass: 1 },
+])(
+  "reports source loss in $route hash pass $hashPass as a changed input",
+  async ({ route, hashPass }) => {
+    const root = await createTestTempDirectory("rea-ines-hash-loss-");
+    const path = join(root, "source.nes");
+    await writeFile(path, inesFixture());
+    const sample = await open(path, "r");
+    const prototype = Object.getPrototypeOf(sample) as Pick<
+      typeof sample,
+      "read"
+    >;
+    await sample.close();
+    const originalRead = prototype.read;
+    let observedPasses = 0;
+    const read = vi.spyOn(prototype, "read").mockImplementation(async function (
+      this: typeof sample,
+      ...args
+    ) {
+      const result = await originalRead.call(this, ...args);
+      const readArguments: readonly unknown[] = args;
+      const [buffer, , , position] = readArguments;
+      if (
+        Buffer.isBuffer(buffer) &&
+        buffer.byteLength > 8192 &&
+        (position === 0 || position === 0n)
+      ) {
+        observedPasses += 1;
+        if (observedPasses === hashPass) {
+          read.mockRestore();
+          await unlink(path);
+        }
+      }
+      return result;
+    });
+    try {
+      if (route === "inventory") {
+        await expect(inventoryArtifact(path)).rejects.toMatchObject({
+          reason: "integrity",
+          cause: { code: "ENOENT" },
+        });
+      } else {
+        expect(await parseBinaryTarget(path)).toMatchObject({
+          ok: false,
+          error: { reason: expect.stringContaining("changed") },
+        });
+      }
+      expect(observedPasses).toBe(hashPass);
+    } finally {
+      read.mockRestore();
+    }
+  },
+);
+
 it("releases an extraction-owned source descriptor on repeated close", async () => {
   const root = await createTestTempDirectory("rea-ines-owned-source-");
   const path = join(root, "source.nes");
