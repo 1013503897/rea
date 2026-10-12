@@ -312,7 +312,10 @@ const detectArtifactFormat = async (
     return zipPackageFormatForPath(lower) ?? "zip";
   }
   // Binary plists, including keyed archives, often use other extensions.
-  if (observed.bytesRead === 8 && magic.equals(Buffer.from("bplist00")))
+  if (
+    observed.bytesRead >= 8 &&
+    magic.subarray(0, 8).equals(Buffer.from("bplist00"))
+  )
     return "plist";
   const named = namedArtifactFormat(lower);
   if (named !== undefined) return named;
