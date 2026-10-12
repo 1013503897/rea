@@ -23,6 +23,7 @@ export const openRootArtifact = async (
   path: string,
   resourceScope: ArtifactResourceScope,
   signal?: AbortSignal,
+  admission: "initial" | "inventoried" = "initial",
 ): Promise<OwnedFileHandle> => {
   try {
     return new OwnedFileHandle(
@@ -31,14 +32,35 @@ export const openRootArtifact = async (
   } catch (cause: unknown) {
     const primary =
       cause instanceof RegularFileAdmissionFailure ? cause.cause : cause;
+    const changed =
+      admission === "inventoried" &&
+      (primary instanceof NonRegularFileReadError ||
+        (primary instanceof Error &&
+          "code" in primary &&
+          ["ENOENT", "ENOTDIR", "ELOOP", "EISDIR", "ENOTFILE"].includes(
+            String(primary.code),
+          )));
+    // Normalize the primary failure before cleanup so failed closes keep both facts.
     const failure =
-      primary instanceof NonRegularFileReadError
+      signal?.aborted === true
         ? new ArtifactReaderFailure(
-            "format",
-            `Artifact root is not a regular file: ${path}`,
+            "cancelled",
+            "Artifact admission cancelled",
             { cause: primary },
           )
-        : primary;
+        : changed
+          ? new ArtifactReaderFailure(
+              "integrity",
+              `Inventoried artifact source changed: ${path}`,
+              { cause: primary },
+            )
+          : primary instanceof NonRegularFileReadError
+            ? new ArtifactReaderFailure(
+                "format",
+                `Artifact root is not a regular file: ${path}`,
+                { cause: primary },
+              )
+            : primary;
     if (cause instanceof RegularFileAdmissionFailure) {
       const resource = `root artifact descriptor for ${path}`;
       const cleanup = await resourceScope.release({

@@ -1,15 +1,29 @@
 import { createHash } from "node:crypto";
-import { lstat, open, readFile, unlink, writeFile } from "node:fs/promises";
+import {
+  lstat,
+  mkdir,
+  open,
+  readFile,
+  unlink,
+  writeFile,
+} from "node:fs/promises";
 import { join } from "node:path";
 import { expect, it, vi } from "vitest";
 import { parseBinaryTarget } from "../../../src/application/BinaryTargetResolver.js";
 import { createTestTempDirectory } from "../../fixtures/temporaryDirectory.js";
 import { inesFixture } from "../../fixtures/ines.js";
-import { inventoryArtifact } from "../../fixtures/artifactInventory.js";
+import {
+  inventoryArtifact,
+  scanArtifactInventory,
+  materializeArtifactInventory,
+} from "../../fixtures/artifactInventory.js";
 import { InesArtifactReader } from "../../../src/artifacts/InesArtifactReader.js";
 import { OwnedFileHandle } from "../../../src/filesystem/OwnedFileHandle.js";
 import { ArtifactResourceScope } from "../../../src/artifacts/ArtifactResourceScope.js";
-import { extractArtifact } from "../../../src/artifacts/extraction/ArtifactExtraction.js";
+import {
+  extractArtifact,
+  materializeArtifactInventory as materializeInScope,
+} from "../../../src/artifacts/extraction/ArtifactExtraction.js";
 
 const sha256 = (bytes: Buffer) =>
   createHash("sha256").update(bytes).digest("hex");
@@ -370,6 +384,129 @@ it.each([
     }
   },
 );
+
+it.each(["removed", "directory", "malformed"])(
+  "rejects a %s source after inventory before extraction",
+  async (change) => {
+    const root = await createTestTempDirectory("rea-ines-extraction-change-");
+    const path = join(root, "source.nes");
+    const outputRoot = join(root, "output");
+    await writeFile(path, inesFixture());
+    const snapshot = await scanArtifactInventory(path);
+    await unlink(path);
+    if (change === "directory") await mkdir(path);
+    if (change === "malformed") await writeFile(path, "changed cartridge");
+    await expect(
+      materializeArtifactInventory(
+        {
+          inputPath: path,
+          inputFormat: "ines",
+          outputRoot,
+          environment: process.env,
+          integrityPolicy: "fail",
+        },
+        path,
+        snapshot,
+      ),
+    ).rejects.toMatchObject({ reason: "integrity" });
+    await expect(lstat(outputRoot)).rejects.toMatchObject({ code: "ENOENT" });
+  },
+);
+
+it.each(["EISDIR", "ENOTFILE", "EACCES", "cancelled"])(
+  "preserves the %s admission meaning while reopening extraction",
+  async (code) => {
+    const root = await createTestTempDirectory("rea-ines-reopen-error-");
+    const path = join(root, "source.nes");
+    await writeFile(path, inesFixture());
+    const snapshot = await scanArtifactInventory(path);
+    const sample = await open(path, "r");
+    const prototype = Object.getPrototypeOf(sample) as Pick<
+      typeof sample,
+      "stat"
+    >;
+    await sample.close();
+    const originalStat = prototype.stat;
+    const controller = new AbortController();
+    const stat = vi
+      .spyOn(prototype, "stat")
+      .mockImplementationOnce(async function (this: typeof sample, ...args) {
+        if (code !== "cancelled")
+          throw Object.assign(new Error("injected admission failure"), {
+            code,
+          });
+        const result = await originalStat.call(this, ...args);
+        controller.abort();
+        return result;
+      });
+    try {
+      await expect(
+        materializeArtifactInventory(
+          {
+            inputPath: path,
+            inputFormat: "ines",
+            outputRoot: join(root, "output"),
+            environment: process.env,
+            integrityPolicy: "fail",
+          },
+          path,
+          snapshot,
+          controller.signal,
+        ),
+      ).rejects.toMatchObject(
+        code === "EACCES"
+          ? { code }
+          : { reason: code === "cancelled" ? "cancelled" : "integrity" },
+      );
+    } finally {
+      stat.mockRestore();
+    }
+  },
+);
+
+it("retains a failed close after rejecting changed extraction bytes", async () => {
+  const root = await createTestTempDirectory("rea-ines-reopen-cleanup-");
+  const path = join(root, "source.nes");
+  await writeFile(path, inesFixture());
+  const snapshot = await scanArtifactInventory(path);
+  await writeFile(path, "changed source");
+  const scope = new ArtifactResourceScope();
+  const originalClose = OwnedFileHandle.prototype.close;
+  const owners: OwnedFileHandle[] = [];
+  const close = vi
+    .spyOn(OwnedFileHandle.prototype, "close")
+    .mockImplementation(async function (this: OwnedFileHandle) {
+      owners.push(this);
+      if (owners.length === 1) throw new Error("injected close failure");
+      await originalClose.call(this);
+    });
+  try {
+    await expect(
+      materializeInScope(
+        {
+          inputPath: path,
+          inputFormat: "ines",
+          outputRoot: join(root, "output"),
+          environment: process.env,
+          integrityPolicy: "fail",
+          resourceScope: scope,
+        },
+        path,
+        snapshot,
+      ),
+    ).rejects.toMatchObject({
+      reason: "integrity",
+      cleanup: { reason: expect.stringContaining("injected close failure") },
+    });
+    expect(owners).toHaveLength(1);
+    await scope.close();
+    expect(owners).toHaveLength(2);
+    expect(owners[1]).toBe(owners[0]);
+  } finally {
+    close.mockRestore();
+    await scope.close();
+  }
+});
 
 it("releases an extraction-owned source descriptor on repeated close", async () => {
   const root = await createTestTempDirectory("rea-ines-owned-source-");
