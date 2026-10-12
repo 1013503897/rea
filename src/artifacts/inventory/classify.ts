@@ -1,4 +1,8 @@
-import { sameRegularFileState } from "../../filesystem/RegularFile.js";
+import {
+  sameRegularFileState,
+  verifyRegularFileState,
+  RegularFileChangedError,
+} from "../../filesystem/RegularFile.js";
 import type { FileHandle } from "node:fs/promises";
 import type { Stats } from "node:fs";
 import type { StableRegularFileDescriptor } from "../../filesystem/RegularFile.js";
@@ -108,7 +112,7 @@ export const classifyAndHashRootForInventory = async (
         "integrity",
         `Root artifact changed before inventory: ${path}`,
       );
-    const format = await classifyRootFormat(path, handle);
+    const format = await classifyRootFormat(path, handle, initial);
     const digest = await hashStableRootArtifactHandle(
       path,
       handle,
@@ -130,7 +134,17 @@ export const classifyAndHashRootForInventory = async (
       },
     };
   } catch (cause: unknown) {
-    outcome = { kind: "failed", cause };
+    outcome = {
+      kind: "failed",
+      cause:
+        cause instanceof RegularFileChangedError
+          ? new ArtifactReaderFailure(
+              "integrity",
+              `Root artifact changed during inventory: ${path}`,
+              { cause: cause.cause ?? cause },
+            )
+          : cause,
+    };
   }
   if (outcome.kind === "failed" || outcome.value.rootSource === undefined) {
     const cleanupAttempt = await options.resourceScope.release(owner);
@@ -150,12 +164,14 @@ export const classifyAndHashRootForInventory = async (
 const classifyRootFormat = async (
   path: string,
   handle: FileHandle,
+  initial: Stats,
 ): Promise<ArtifactOccurrence["artifact_format"]> => {
   const magic = Buffer.alloc(ARTIFACT_CLASSIFICATION_PREFIX_BYTES);
   const observed = await handle.read(magic, 0, magic.length, 0);
+  await verifyRegularFileState(path, { handle, initial });
   const prefix = magic.subarray(0, observed.bytesRead);
   if (nesContainerFormat(prefix) !== undefined) {
-    const parsed = parseInesLayout(prefix, (await handle.stat()).size);
+    const parsed = parseInesLayout(prefix, initial.size);
     if (!parsed.ok) throw new ArtifactReaderFailure("format", parsed.error);
     return "ines";
   }

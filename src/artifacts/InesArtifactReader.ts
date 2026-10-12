@@ -1,5 +1,4 @@
 import { createHash } from "node:crypto";
-import { lstat } from "node:fs/promises";
 import { Readable } from "node:stream";
 import {
   parseInesLayout,
@@ -8,7 +7,8 @@ import {
 } from "../domain/inesContainer.js";
 import type { ArtifactCommand } from "../domain/artifactGraph.js";
 import {
-  sameRegularFileState,
+  RegularFileChangedError,
+  verifyRegularFileState,
   type StableRegularFileDescriptor,
 } from "../filesystem/RegularFile.js";
 import { readFileHandleChunks } from "../filesystem/readFileHandleChunks.js";
@@ -177,29 +177,16 @@ export class InesArtifactReader implements ArtifactReader {
   async #verifySource(): Promise<void> {
     if (this.#closed)
       throw new ArtifactReaderFailure("unavailable", "iNES reader is closed");
-    const [opened, selected] = await Promise.all([
-      this.source.handle.stat(),
-      lstat(this.path).catch((cause: unknown) => {
-        if (
-          cause instanceof Error &&
-          "code" in cause &&
-          ["ENOENT", "ENOTDIR", "ELOOP"].includes(String(cause.code))
-        )
-          throw new ArtifactReaderFailure(
-            "integrity",
-            "iNES source changed during reading",
-            { cause },
-          );
-        throw cause;
-      }),
-    ]);
-    if (
-      !sameRegularFileState(this.source.initial, opened) ||
-      !sameRegularFileState(this.source.initial, selected)
-    )
-      throw new ArtifactReaderFailure(
-        "integrity",
-        "iNES source changed during reading",
-      );
+    try {
+      await verifyRegularFileState(this.path, this.source);
+    } catch (cause: unknown) {
+      if (cause instanceof RegularFileChangedError)
+        throw new ArtifactReaderFailure(
+          "integrity",
+          "iNES source changed during reading",
+          { cause: cause.cause ?? cause },
+        );
+      throw cause;
+    }
   }
 }

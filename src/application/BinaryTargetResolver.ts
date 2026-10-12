@@ -17,6 +17,7 @@ import { BinaryTargetError } from "../domain/configurationErrors.js";
 import {
   openRegularFile,
   sameRegularFileState,
+  verifyRegularFileState,
 } from "../filesystem/RegularFile.js";
 import { AnalysisCancelledError } from "../domain/analysisErrorCore.js";
 import type { BinaryTarget } from "../domain/binaryTargetTypes.js";
@@ -174,7 +175,12 @@ export const parseBinaryTarget = async (
           kind: "database",
           format: "analysis-database",
         });
-      const artifactFormat = await detectArtifactFormat(path, handle, signal);
+      const artifactFormat = await detectArtifactFormat(
+        path,
+        handle,
+        metadata,
+        signal,
+      );
       if (artifactFormat !== undefined) {
         const identity = {
           path,
@@ -263,6 +269,7 @@ const throwIfTargetResolutionCancelled = (signal?: AbortSignal): void => {
 const detectArtifactFormat = async (
   path: string,
   handle: FileHandle,
+  initial: Stats,
   signal?: AbortSignal,
 ): Promise<
   | Exclude<
@@ -283,6 +290,8 @@ const detectArtifactFormat = async (
   const magic = Buffer.alloc(16);
   const observed = await handle.read(magic, 0, magic.length, 0);
   throwIfTargetResolutionCancelled(signal);
+  await verifyRegularFileState(path, { handle, initial });
+  throwIfTargetResolutionCancelled(signal);
   if (
     observed.bytesRead >= 8 &&
     magic.subarray(0, 8).equals(Buffer.from([0, 0x61, 0x73, 0x6d, 1, 0, 0, 0]))
@@ -295,7 +304,7 @@ const detectArtifactFormat = async (
   const prefix = magic.subarray(0, observed.bytesRead);
   const nesFormat = nesContainerFormat(prefix);
   if (nesFormat !== undefined) {
-    const parsed = parseInesLayout(prefix, (await handle.stat()).size);
+    const parsed = parseInesLayout(prefix, initial.size);
     throwIfTargetResolutionCancelled(signal);
     if (!parsed.ok)
       throw new BinaryTargetError(path, parsed.error, {

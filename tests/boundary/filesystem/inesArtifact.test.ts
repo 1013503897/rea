@@ -270,6 +270,50 @@ it.each(["truncated", "overwritten"])(
   },
 );
 
+it.each(["inventory", "target"])(
+  "rejects changed iNES prefixes at the %s entry point",
+  async (route) => {
+    const root = await createTestTempDirectory("rea-ines-classification-race-");
+    const path = join(root, "source.nes");
+    for (const change of ["truncated", "counts", "signature"] as const) {
+      const bytes = inesFixture();
+      await writeFile(path, bytes);
+      const sample = await open(path, "r");
+      const prototype = Object.getPrototypeOf(sample) as Pick<
+        typeof sample,
+        "read"
+      >;
+      await sample.close();
+      const originalRead = prototype.read;
+      const read = vi
+        .spyOn(prototype, "read")
+        .mockImplementationOnce(async function (this: typeof sample, ...args) {
+          read.mockRestore();
+          const changed =
+            change === "truncated" ? bytes.subarray(0, 16) : Buffer.from(bytes);
+          if (change === "counts") changed[4] = 255;
+          if (change === "signature") changed.fill(0, 0, 4);
+          await writeFile(path, changed);
+          return originalRead.call(this, ...args);
+        });
+      try {
+        if (route === "inventory") {
+          await expect(inventoryArtifact(path)).rejects.toMatchObject({
+            reason: "integrity",
+          });
+        } else {
+          expect(await parseBinaryTarget(path)).toMatchObject({
+            ok: false,
+            error: { reason: expect.stringContaining("changed") },
+          });
+        }
+      } finally {
+        read.mockRestore();
+      }
+    }
+  },
+);
+
 it("releases an extraction-owned source descriptor on repeated close", async () => {
   const root = await createTestTempDirectory("rea-ines-owned-source-");
   const path = join(root, "source.nes");
