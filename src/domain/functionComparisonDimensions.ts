@@ -163,7 +163,7 @@ const compareStringsAndNames = (
     context,
   );
   if (complete || compared.status === "changed") return compared;
-  // A different literal at a use site both dossiers decoded is a change despite partial coverage.
+  // A retained literal differs only when the opposite dossier establishes its absence.
   if (swiftLiteralSitesConflict(left, right)) {
     const leftAll = stringAndNameProjection(left);
     const rightAll = stringAndNameProjection(right);
@@ -176,7 +176,7 @@ const compareStringsAndNames = (
     leftCount: null,
     rightCount: null,
     limitations: [
-      "Swift String literal coverage differs or is partial; referenced strings and names match, and no use site decoded on both sides disagrees.",
+      "Swift String literal coverage differs or is partial; referenced strings and names match, and complete coverage does not establish a differing literal.",
     ],
   });
 };
@@ -269,6 +269,18 @@ const compareCalls = (
 ): FunctionDimension => {
   const leftValues = callProjection(left);
   const rightValues = callProjection(right);
+  const coverageLimitations = [
+    ...left.callCoverageLimitations.map((reason) => `Left: ${reason}`),
+    ...right.callCoverageLimitations.map((reason) => `Right: ${reason}`),
+  ];
+  if (coverageLimitations.length > 0)
+    return unresolvedDimension({
+      dimension: "calls",
+      links: context.links,
+      leftCount: leftValues.length,
+      rightCount: rightValues.length,
+      limitations: coverageLimitations,
+    });
   if ([...leftValues, ...rightValues].some(({ name }) => isAutoName(name)))
     return unresolvedDimension({
       dimension: "calls",

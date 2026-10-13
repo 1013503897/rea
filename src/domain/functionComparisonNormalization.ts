@@ -16,24 +16,21 @@ export const functionMatch = (
   left: FunctionSnapshot,
   right: FunctionSnapshot,
 ): FunctionComparisonResult["function_match"] => {
-  if (
-    !isAutoName(left.dossier.procedure.name) &&
-    left.dossier.procedure.name === right.dossier.procedure.name
-  )
+  const leftName = left.dossier.procedure.name;
+  const rightName = right.dossier.procedure.name;
+  const stableNames = !isAutoName(leftName) && !isAutoName(rightName);
+  if (stableNames && leftName === rightName)
     return {
       status: "matched",
       method: "symbol",
-      left_name: left.dossier.procedure.name,
-      right_name: right.dossier.procedure.name,
+      left_name: leftName,
+      right_name: rightName,
     };
   return {
-    status:
-      left.dossier.procedure.name === right.dossier.procedure.name
-        ? "ambiguous"
-        : "mismatched",
+    status: stableNames ? "mismatched" : "ambiguous",
     method: "explicit",
-    left_name: left.dossier.procedure.name,
-    right_name: right.dossier.procedure.name,
+    left_name: leftName,
+    right_name: rightName,
   };
 };
 
@@ -195,9 +192,9 @@ export const stringAndNameProjection = (
 };
 
 /**
- * Whether one use site is known to hold different literals in the two dossiers. A decoded
- * literal is known wherever it was recorded; an absence is known only in a dossier whose
- * decoding examined every use site, and the site where decoding stopped is never known.
+ * A retained literal proves presence, not that every path through its site was examined.
+ * A differing retained fact proves a change only when the opposite dossier is complete
+ * and therefore establishes its absence.
  */
 export const swiftLiteralSitesConflict = (
   left: FunctionSnapshot,
@@ -209,13 +206,19 @@ export const swiftLiteralSitesConflict = (
     ...leftSites.values.keys(),
     ...rightSites.values.keys(),
   ])) {
-    if (leftSites.omitted.has(site) || rightSites.omitted.has(site)) continue;
     const leftValues =
       leftSites.values.get(site) ?? (leftSites.complete ? [] : undefined);
     const rightValues =
       rightSites.values.get(site) ?? (rightSites.complete ? [] : undefined);
     if (leftValues === undefined || rightValues === undefined) continue;
-    if (canonicalJson(leftValues) !== canonicalJson(rightValues)) return true;
+    const leftFacts = new Set(leftValues);
+    const rightFacts = new Set(rightValues);
+    if (
+      (rightSites.complete &&
+        leftValues.some((value) => !rightFacts.has(value))) ||
+      (leftSites.complete && rightValues.some((value) => !leftFacts.has(value)))
+    )
+      return true;
   }
   return false;
 };
@@ -227,11 +230,6 @@ const swiftLiteralSites = (snapshot: FunctionSnapshot) => {
     const offset = relativeAddress(sourceAddress, base);
     return offset === null ? null : canonicalJson([offset, registers]);
   };
-  const omitted = new Set(
-    omissions.map(({ source_address: sourceAddress, registers }) =>
-      site(sourceAddress, registers),
-    ),
-  );
   // Keep the same literal facts the full strings_names projection compares.
   const values = new Map<string, string[]>();
   for (const literal of snapshot.dossier.swift_string_literals ?? []) {
@@ -248,7 +246,7 @@ const swiftLiteralSites = (snapshot: FunctionSnapshot) => {
   const complete =
     snapshot.dossier.swift_string_literals !== undefined &&
     omissions.length === 0;
-  return { values, omitted, complete };
+  return { values, complete };
 };
 
 export const sorted = (values: readonly unknown[]): readonly unknown[] =>
