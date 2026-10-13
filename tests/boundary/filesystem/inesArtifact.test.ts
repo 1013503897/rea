@@ -8,6 +8,7 @@ import {
   readFile,
   unlink,
   writeFile,
+  type FileHandle,
 } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, it, vi } from "vitest";
@@ -30,21 +31,27 @@ import {
 const sha256 = (bytes: Buffer) =>
   createHash("sha256").update(bytes).digest("hex");
 
+const fileReadPrototype = async (
+  path: string,
+): Promise<Pick<FileHandle, "read">> => {
+  const handle = await open(path, "r");
+  try {
+    return Object.getPrototypeOf(handle) as Pick<FileHandle, "read">;
+  } finally {
+    await handle.close();
+  }
+};
+
 it("reuses scanned iNES region bytes for reconstruction without another full read", async () => {
   const root = await createTestTempDirectory("rea-ines-read-budget-");
   const path = join(root, "large-tail.nes");
   const bytes = inesFixture({ trailing: Buffer.alloc(2 * 1024 * 1024, 0x5a) });
   await writeFile(path, bytes);
-  const sample = await open(path, "r");
-  const prototype = Object.getPrototypeOf(sample) as Pick<
-    typeof sample,
-    "read"
-  >;
-  await sample.close();
+  const prototype = await fileReadPrototype(path);
   const originalRead = prototype.read;
   let bytesRead = 0;
   const read = vi.spyOn(prototype, "read").mockImplementation(async function (
-    this: typeof sample,
+    this: FileHandle,
     ...args
   ) {
     const result = await originalRead.call(this, ...args);
@@ -70,16 +77,11 @@ it("rejects region bytes that disagree with stable whole-file hashes", async () 
   const path = join(root, "source.nes");
   const bytes = inesFixture();
   await writeFile(path, bytes);
-  const sample = await open(path, "r");
-  const prototype = Object.getPrototypeOf(sample) as Pick<
-    typeof sample,
-    "read"
-  >;
-  await sample.close();
+  const prototype = await fileReadPrototype(path);
   const originalRead = prototype.read;
   let changed = false;
   const read = vi.spyOn(prototype, "read").mockImplementation(async function (
-    this: typeof sample,
+    this: FileHandle,
     ...args
   ) {
     const result = await originalRead.call(this, ...args);
@@ -384,16 +386,11 @@ it.each(["inventory", "target"])(
     for (const change of ["truncated", "counts", "signature"] as const) {
       const bytes = inesFixture();
       await writeFile(path, bytes);
-      const sample = await open(path, "r");
-      const prototype = Object.getPrototypeOf(sample) as Pick<
-        typeof sample,
-        "read"
-      >;
-      await sample.close();
+      const prototype = await fileReadPrototype(path);
       const originalRead = prototype.read;
       const read = vi
         .spyOn(prototype, "read")
-        .mockImplementationOnce(async function (this: typeof sample, ...args) {
+        .mockImplementationOnce(async function (this: FileHandle, ...args) {
           read.mockRestore();
           const changed =
             change === "truncated" ? bytes.subarray(0, 16) : Buffer.from(bytes);
@@ -430,16 +427,11 @@ it.each([
     const root = await createTestTempDirectory("rea-ines-hash-loss-");
     const path = join(root, "source.nes");
     await writeFile(path, inesFixture());
-    const sample = await open(path, "r");
-    const prototype = Object.getPrototypeOf(sample) as Pick<
-      typeof sample,
-      "read"
-    >;
-    await sample.close();
+    const prototype = await fileReadPrototype(path);
     const originalRead = prototype.read;
     let observedPasses = 0;
     const read = vi.spyOn(prototype, "read").mockImplementation(async function (
-      this: typeof sample,
+      this: FileHandle,
       ...args
     ) {
       const result = await originalRead.call(this, ...args);
@@ -521,7 +513,7 @@ it.each(["EISDIR", "ENOTFILE", "EACCES", "cancelled"])(
     const controller = new AbortController();
     const stat = vi
       .spyOn(prototype, "stat")
-      .mockImplementationOnce(async function (this: typeof sample, ...args) {
+      .mockImplementationOnce(async function (this: FileHandle, ...args) {
         if (code !== "cancelled")
           throw Object.assign(new Error("injected admission failure"), {
             code,
@@ -635,7 +627,7 @@ it.each(["target", "inventory", "reader"])(
     };
     const originalRead = prototype.read;
     const read = vi.spyOn(prototype, "read").mockImplementation(async function (
-      this: typeof sample,
+      this: FileHandle,
       ...args
     ) {
       const [buffer, offset, length, position] = args;
