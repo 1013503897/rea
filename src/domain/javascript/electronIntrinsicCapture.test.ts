@@ -11,6 +11,26 @@ const WINDOW = `let electron = require("electron");
   electron = __toESM(electron, 1); new electron.BrowserWindow({});`;
 
 describe("captured intrinsic invocation reads", () => {
+  it("evaluates assignment operands before recording their writes", () => {
+    const result = analyzeJavaScriptStaticSource(`
+      const define = Object.defineProperty;
+      const metadata = {};
+      Object.defineProperty = (Object.defineProperty(metadata, "x", {value:1}), replacement);
+      ${CAPTURED_INTEROP} ${WINDOW}
+    `);
+    expect(result.electron.browser_windows).toHaveLength(1);
+  });
+
+  it("retains whole-object mutations at a captured function's later member read", () => {
+    const result = analyzeJavaScriptStaticSource(`
+      const define = Object.defineProperty;
+      Object.assign(define, {call: replacement});
+      const metadata = {}; define.call(null, metadata, "x", {value:1});
+      ${CAPTURED_INTEROP} ${WINDOW}
+    `);
+    expect(result.electron.browser_windows).toEqual([]);
+  });
+
   it.each([
     '(0, Object.defineProperty.call)(null,Object,"create",{value:replacement});',
     '(0, Object.defineProperty.apply)(null,[Object,"create",{value:replacement}]);',
