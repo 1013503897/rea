@@ -1,4 +1,4 @@
-import { lstat, realpath } from "node:fs/promises";
+import { realpath } from "node:fs/promises";
 
 import { compareUnicodeCodePoints } from "../../domain/unicodeCodePointOrder.js";
 import { digestCanonicalValue } from "../../domain/canonicalDigest.js";
@@ -37,10 +37,7 @@ import type {
   ArtifactResourceOwner,
   ArtifactResourceScope,
 } from "../ArtifactResourceScope.js";
-import {
-  isMachOFormat,
-  type BinaryTarget,
-} from "../../domain/binaryTargetTypes.js";
+import { isMachOFormat } from "../../domain/binaryTargetTypes.js";
 import type { ArtifactInventorySnapshot } from "../../domain/artifactInventorySnapshot.js";
 import { scanArtifactInventoryInScope } from "../inventory/ArtifactInventory.js";
 import type { ArtifactIntegrityPolicyName } from "../../domain/artifactIntegrityPolicy.js";
@@ -48,7 +45,6 @@ import type { ArtifactIntegrityPolicyName } from "../../domain/artifactIntegrity
 /** Local extraction input with the output root chosen by the adapter. */
 export interface ArtifactExtractionInput {
   readonly inputPath: string;
-  readonly inputFormat: BinaryTarget["format"];
   readonly outputRoot: string;
   readonly environment: Readonly<NodeJS.ProcessEnv>;
   readonly integrityPolicy: ArtifactIntegrityPolicyName;
@@ -69,12 +65,13 @@ const extractArtifactInScope = async (
   // Cancellation wins over every later refusal, including unsupported formats.
   abortIfNeeded(signal);
   const sourcePath = await realpath(input.inputPath);
-  await requireExtractableFormat(sourcePath, input);
   const snapshot = await scanArtifactInventoryInScope(sourcePath, {
     resourceScope: input.resourceScope,
     signal,
     environment: input.environment,
     integrity: { mode: input.integrityPolicy },
+    admitRootFormat: (format) =>
+      requireExtractableFormat(format, input.inputPath),
   });
   return materializeArtifactInventoryInScope(
     input,
@@ -259,7 +256,7 @@ const materializeSelection = async ({
       compareUnicodeCodePoints(left.relative_path, right.relative_path),
     );
     completed = createExtractionResult(input, inventory, selected, extracted);
-    await output.commit();
+    await output.commit(signal);
     return completed;
   } catch (cause: unknown) {
     const cleanupFailures = await releaseExtractionOwners(
@@ -412,18 +409,14 @@ interface ExtractionInventory {
 }
 
 /**
- * Refuse a format without an extraction reader before inventory work starts.
- * The target kind, not the host, is unsupported by extraction. The error keeps
- * the caller's spelling of the path; I/O uses the canonical path.
+ * Admit the scanner's format, preserving the caller's path in a refusal.
  */
-const requireExtractableFormat = async (
-  path: string,
-  input: Pick<ArtifactExtractionInput, "inputPath" | "inputFormat">,
-): Promise<boolean> => {
-  const format = input.inputFormat;
-  const directory = (await lstat(path)).isDirectory();
+const requireExtractableFormat = (
+  format: ArtifactGraphManifest["root_format"],
+  inputPath: string,
+): void => {
   if (
-    !directory &&
+    format !== "directory" &&
     format !== "asar" &&
     format !== "ines" &&
     !isMachOFormat(format) &&
@@ -431,10 +424,9 @@ const requireExtractableFormat = async (
   )
     throw new AnalysisUnsupportedTargetError(
       "extract_artifact",
-      input.inputPath,
+      inputPath,
       `Artifact format has no extraction reader: ${format}`,
     );
-  return directory;
 };
 
 const createReader = async (

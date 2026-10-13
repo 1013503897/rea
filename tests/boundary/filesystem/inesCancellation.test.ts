@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { expect, it, vi } from "vitest";
 import { parseBinaryTarget } from "../../../src/application/BinaryTargetResolver.js";
 import { InesArtifactReader } from "../../../src/artifacts/InesArtifactReader.js";
+import { scanReader } from "../../../src/artifacts/inventory/scanReader.js";
 import { hashStableRootArtifactHandle } from "../../../src/artifacts/inventory/hashStableRootArtifact.js";
 import { inventoryArtifact } from "../../fixtures/artifactInventory.js";
 import { inesFixture } from "../../fixtures/ines.js";
@@ -207,10 +208,20 @@ it.each(["stream", "reconstruction"])(
       if (last === undefined) throw new Error("Missing last iNES region");
       const result =
         operation === "reconstruction"
-          ? reader.verifyReconstruction(
-              createHash("sha256").update(bytes).digest("hex"),
-              controller.signal,
-            )
+          ? (async () => {
+              const { inesRegionScan } = await scanReader(
+                reader,
+                [reader],
+                controller.signal,
+              );
+              if (inesRegionScan === undefined)
+                throw new Error("Missing region scan");
+              return reader.verifyReconstruction(
+                createHash("sha256").update(bytes).digest("hex"),
+                inesRegionScan,
+                controller.signal,
+              );
+            })()
           : (async () => {
               for await (const chunk of await reader.open(
                 last,

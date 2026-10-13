@@ -30,6 +30,81 @@ import {
 const sha256 = (bytes: Buffer) =>
   createHash("sha256").update(bytes).digest("hex");
 
+it("reuses scanned iNES region bytes for reconstruction without another full read", async () => {
+  const root = await createTestTempDirectory("rea-ines-read-budget-");
+  const path = join(root, "large-tail.nes");
+  const bytes = inesFixture({ trailing: Buffer.alloc(2 * 1024 * 1024, 0x5a) });
+  await writeFile(path, bytes);
+  const sample = await open(path, "r");
+  const prototype = Object.getPrototypeOf(sample) as Pick<
+    typeof sample,
+    "read"
+  >;
+  await sample.close();
+  const originalRead = prototype.read;
+  let bytesRead = 0;
+  const read = vi.spyOn(prototype, "read").mockImplementation(async function (
+    this: typeof sample,
+    ...args
+  ) {
+    const result = await originalRead.call(this, ...args);
+    bytesRead += result.bytesRead;
+    return result;
+  });
+  try {
+    const result = await inventoryArtifact(path);
+    expect(result.ines?.reconstruction).toMatchObject({
+      bytes: bytes.length,
+      sha256: sha256(bytes),
+      verified: true,
+    });
+    // Initial root hash, region scan, final freshness hash, plus bounded headers.
+    expect(bytesRead).toBeLessThanOrEqual(3 * bytes.length + 64 * 1024);
+  } finally {
+    read.mockRestore();
+  }
+});
+
+it("rejects region bytes that disagree with stable whole-file hashes", async () => {
+  const root = await createTestTempDirectory("rea-ines-region-digest-");
+  const path = join(root, "source.nes");
+  const bytes = inesFixture();
+  await writeFile(path, bytes);
+  const sample = await open(path, "r");
+  const prototype = Object.getPrototypeOf(sample) as Pick<
+    typeof sample,
+    "read"
+  >;
+  await sample.close();
+  const originalRead = prototype.read;
+  let changed = false;
+  const read = vi.spyOn(prototype, "read").mockImplementation(async function (
+    this: typeof sample,
+    ...args
+  ) {
+    const result = await originalRead.call(this, ...args);
+    const arguments_: readonly unknown[] = args;
+    if (!changed && arguments_[3] === 16n && result.bytesRead === 16_384) {
+      // Alter only the region observation, leaving both whole-file passes intact.
+      if (!Buffer.isBuffer(result.buffer))
+        throw new Error("Expected byte buffer");
+      result.buffer.writeUInt8(result.buffer.readUInt8(0) ^ 0xff, 0);
+      changed = true;
+    }
+    return result;
+  });
+  try {
+    await expect(inventoryArtifact(path)).rejects.toMatchObject({
+      reason: "integrity",
+      message: "iNES reconstruction differs from the source",
+    });
+    expect(changed).toBe(true);
+    expect(await readFile(path)).toEqual(bytes);
+  } finally {
+    read.mockRestore();
+  }
+});
+
 it.each(["data", "hop", "HOP"])(
   "routes iNES bytes as an archive with a .%s suffix",
   async (suffix) => {
@@ -124,7 +199,6 @@ it.each([true, false])(
     try {
       const extraction = await extractArtifact({
         inputPath: path,
-        inputFormat: "ines",
         outputRoot,
         environment: process.env,
         integrityPolicy: "fail",
@@ -418,7 +492,6 @@ it.each(["removed", "directory", "malformed"])(
       materializeArtifactInventory(
         {
           inputPath: path,
-          inputFormat: "ines",
           outputRoot,
           environment: process.env,
           integrityPolicy: "fail",
@@ -462,7 +535,6 @@ it.each(["EISDIR", "ENOTFILE", "EACCES", "cancelled"])(
         materializeArtifactInventory(
           {
             inputPath: path,
-            inputFormat: "ines",
             outputRoot: join(root, "output"),
             environment: process.env,
             integrityPolicy: "fail",
@@ -503,7 +575,6 @@ it("retains a failed close after rejecting changed extraction bytes", async () =
       materializeInScope(
         {
           inputPath: path,
-          inputFormat: "ines",
           outputRoot: join(root, "output"),
           environment: process.env,
           integrityPolicy: "fail",

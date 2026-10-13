@@ -1,8 +1,12 @@
 import type { ArtifactInventorySnapshot } from "../../domain/artifactInventorySnapshot.js";
+import type { InesInventory } from "../../domain/inesContainer.js";
 import { compareUnicodeCodePoints } from "../../domain/unicodeCodePointOrder.js";
 
 import { AsarArtifactReader } from "../AsarArtifactReader.js";
-import { InesArtifactReader } from "../InesArtifactReader.js";
+import {
+  InesArtifactReader,
+  type InesRegionScan,
+} from "../InesArtifactReader.js";
 
 import { lstat } from "node:fs/promises";
 import type { Stats } from "node:fs";
@@ -100,6 +104,7 @@ export const scanCanonicalArtifactInventoryInScope = async (
       occurrences,
       pendingContradictions,
       caseCollisionLimitation,
+      inesRegionScan,
     } = await scanReader(reader, ownedReaders, options.signal, integrity);
     outcome = {
       kind: "completed",
@@ -116,6 +121,7 @@ export const scanCanonicalArtifactInventoryInScope = async (
         occurrences,
         pendingContradictions,
         caseCollisionLimitation,
+        inesRegionScan,
       }),
     };
   } catch (cause: unknown) {
@@ -197,6 +203,7 @@ interface SnapshotBuildInput {
   readonly occurrences: MutableOccurrence[];
   readonly pendingContradictions: PendingIntegrityContradiction[];
   readonly caseCollisionLimitation: string | undefined;
+  readonly inesRegionScan: InesRegionScan | undefined;
 }
 
 const buildInventorySnapshot = async (
@@ -275,11 +282,22 @@ const buildInventorySnapshot = async (
     integrityContradictions,
     input.caseCollisionLimitation,
   );
+  let ines: InesInventory | undefined;
+  if (reader instanceof InesArtifactReader) {
+    if (rootDigest === null || input.inesRegionScan === undefined)
+      throw new ArtifactReaderFailure(
+        "integrity",
+        "Missing iNES reconstruction scan",
+      );
+    ines = await reader.verifyReconstruction(
+      rootDigest.sha256,
+      input.inesRegionScan,
+      signal,
+    );
+  }
   return {
     manifest,
-    ...(reader instanceof InesArtifactReader && rootDigest !== null
-      ? { ines: await reader.verifyReconstruction(rootDigest.sha256, signal) }
-      : {}),
+    ...(ines === undefined ? {} : { ines }),
     nodes: orderedNodes,
     occurrences: orderedOccurrences,
     edges: orderedEdges,

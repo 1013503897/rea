@@ -25,8 +25,9 @@ contains the complete graph and an `ines` object:
   `source_location.length` in the original container. Follow `artifact_id` to
   the node's observed SHA-256 and byte count.
 - `ines.reconstruction`: ordered region paths, concatenated byte count,
-  SHA-256 and `verified: true`. REA streams the actual region bytes in physical
-  order and compares their concatenation with the original whole-file digest.
+  SHA-256 and `verified: true`. REA accumulates the concatenation digest during
+  the same physical-order region scan that produces node hashes, then compares
+  it with the original whole-file digest. Final source freshness is also checked.
   No reconstructed file is written during inspection.
 
 Regions are `header.bin`, optional `trainer.bin` (512 bytes),

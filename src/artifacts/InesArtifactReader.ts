@@ -1,5 +1,4 @@
 import { readFileHandlePrefix } from "../filesystem/readFileHandlePrefix.js";
-import { createHash } from "node:crypto";
 import { Readable } from "node:stream";
 import {
   parseInesLayout,
@@ -26,6 +25,9 @@ import { streamChunkToBuffer } from "./StreamBytes.js";
 
 export const INES_LIMITATION =
   "Classic iNES file regions are observed; mapper execution, CPU bank mappings, CHR-RAM contents, 6502 analysis and emulator behavior are not observed. Trailing bytes are retained without interpretation. NES 2.0 and UNIF are unsupported.";
+
+/** Actual concatenated bytes observed by the inventory's ordered region scan. */
+export type InesRegionScan = Omit<InesInventory["reconstruction"], "verified">;
 
 /** Read positional regions from a descriptor retained by the artifact resource scope. */
 export class InesArtifactReader implements ArtifactReader {
@@ -120,35 +122,25 @@ export class InesArtifactReader implements ArtifactReader {
     );
   }
 
-  /** Hash actual ordered region bytes; per-region digests alone cannot prove concatenation. */
+  /** Validate the completed region scan without rereading its payload. */
   async verifyReconstruction(
     expectedSha256: string,
+    observed: InesRegionScan,
     signal?: AbortSignal,
   ): Promise<InesInventory> {
     abortIfNeeded(signal);
     const layout = this.#layout;
     if (layout === undefined || this.#entries.size !== layout.regions.length)
       throw new ArtifactReaderFailure("integrity", "Incomplete iNES inventory");
-    const hash = createHash("sha256");
-    let bytes = 0;
-    for (const region of layout.regions) {
-      if (region.offset !== bytes)
-        throw new ArtifactReaderFailure(
-          "integrity",
-          "Noncontiguous iNES regions",
-        );
-      const entry = this.#entries.get(region.path);
-      if (entry === undefined)
-        throw new ArtifactReaderFailure("integrity", "Missing iNES region");
-      for await (const raw of await this.open(entry, signal)) {
-        const chunk = streamChunkToBuffer(raw);
-        hash.update(chunk);
-        bytes += chunk.length;
-      }
-    }
-    abortIfNeeded(signal);
-    const sha256 = hash.digest("hex");
-    if (bytes !== this.source.initial.size || sha256 !== expectedSha256)
+    await this.#verifySource(signal);
+    if (
+      observed.region_order.length !== layout.regions.length ||
+      layout.regions.some(
+        (region, index) => observed.region_order[index] !== region.path,
+      ) ||
+      observed.bytes !== this.source.initial.size ||
+      observed.sha256 !== expectedSha256
+    )
       throw new ArtifactReaderFailure(
         "integrity",
         "iNES reconstruction differs from the source",
@@ -156,9 +148,7 @@ export class InesArtifactReader implements ArtifactReader {
     return {
       header: layout.header,
       reconstruction: {
-        region_order: layout.regions.map(({ path }) => path),
-        bytes,
-        sha256,
+        ...observed,
         verified: true,
       },
     };

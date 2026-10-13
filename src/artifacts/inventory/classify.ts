@@ -53,7 +53,10 @@ export const classifyAndHashRoot = async (
   path: string,
   directory: boolean,
   expectedMetadata: Stats,
-  options: Pick<ArtifactInventoryOptions, "resourceScope" | "signal">,
+  options: Pick<
+    ArtifactInventoryOptions,
+    "resourceScope" | "signal" | "admitRootFormat"
+  >,
 ): Promise<RootClassification> => {
   return options.resourceScope.run(async () => {
     const result = await classifyAndHashRootForInventory(
@@ -88,10 +91,16 @@ export const classifyAndHashRootForInventory = async (
   path: string,
   directory: boolean,
   expectedMetadata: Stats,
-  options: Pick<ArtifactInventoryOptions, "resourceScope" | "signal">,
+  options: Pick<
+    ArtifactInventoryOptions,
+    "resourceScope" | "signal" | "admitRootFormat"
+  >,
 ): Promise<RootInventoryClassification> => {
-  if (directory)
+  abortIfNeeded(options.signal);
+  if (directory) {
+    options.admitRootFormat?.("directory");
     return { format: "directory", digest: null, rootSource: undefined };
+  }
   const ownedHandle = await openRootArtifact(
     path,
     options.resourceScope,
@@ -123,6 +132,8 @@ export const classifyAndHashRootForInventory = async (
       initial,
       options.signal,
     );
+    abortIfNeeded(options.signal);
+    options.admitRootFormat?.(format);
     const digest = await hashStableRootArtifactHandle(
       path,
       handle,
