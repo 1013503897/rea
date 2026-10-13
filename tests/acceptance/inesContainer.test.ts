@@ -17,6 +17,49 @@ import { createTestTempDirectory } from "../fixtures/temporaryDirectory.js";
 import { connectLocalToolsMcp } from "../fixtures/localToolsMcp.js";
 import { parseMcpToolError } from "../fixtures/mcpToolError.js";
 import { inesFixture } from "../fixtures/ines.js";
+import { writeOrderedZip } from "../fixtures/artifactEntryOrder.js";
+import { ZIP_PACKAGE_FORMATS } from "../../src/domain/zipPackageFormat.js";
+import { toolContract } from "../../src/contracts/toolContracts.js";
+
+cliTest(
+  "refreshes an iNES path through MCP for every ZIP package family",
+  async () => {
+    const root = await createTestTempDirectory("rea-ines-zip-refresh-");
+    const { call } = await connectLocalToolsMcp();
+    for (const format of ZIP_PACKAGE_FORMATS) {
+      const path = join(
+        root,
+        `cartridge.${format === "app-pack" ? "app" : format}`,
+      );
+      await writeFile(path, inesFixture());
+      const first = await call("open_binary", { path });
+      expect(first.isError, JSON.stringify(first.structuredContent)).not.toBe(
+        true,
+      );
+      await writeOrderedZip(path, ["payload.txt"]);
+      const refreshed = await call("open_binary", { path });
+      expect(
+        refreshed.isError,
+        JSON.stringify({ format, response: refreshed }),
+      ).not.toBe(true);
+      expect(
+        toolContract("open_binary").outputSchema.parse(
+          refreshed.structuredContent,
+        ).result,
+      ).toMatchObject({ kind: "archive", format });
+      const session = await call("binary_session", {});
+      expect(
+        session.isError,
+        JSON.stringify(session.structuredContent),
+      ).not.toBe(true);
+      expect(
+        toolContract("binary_session").outputSchema.parse(
+          session.structuredContent,
+        ).result,
+      ).toMatchObject({ open: true, kind: "archive", format });
+    }
+  },
+);
 
 const inventoryFrom = (input: unknown) => {
   const evidence = parseEvidence(input);
