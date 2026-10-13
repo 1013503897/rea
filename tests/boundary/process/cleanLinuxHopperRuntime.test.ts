@@ -266,6 +266,9 @@ it.runIf(process.platform === "linux").each([
       );
       await copyFile(helper, join(directory, "unrelated.py"));
     }
+    // The fixture must be the cause of a refusal; a retained host runtime
+    // would otherwise mask a broken classification or executable-identity check.
+    await assertCleanLinuxHopperRuntime(alternateMode ? [launcher] : []);
     const command = alternateMode
       ? alternate
       : pythonMode
