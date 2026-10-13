@@ -22,6 +22,9 @@ export const registrationSchema = z
 
 const codexRegistrationSchema = registrationSchema.extend({
   tool_timeout_sec: z.number().optional(),
+  required: z.boolean().optional(),
+  cwd: z.string().optional(),
+  env_vars: z.array(z.string()).optional(),
   enabled_tools: z.array(z.string()).optional(),
   disabled_tools: z.array(z.string()).optional(),
 });

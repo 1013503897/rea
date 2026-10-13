@@ -31,6 +31,7 @@ import { clientRegistrationEnvironment } from "./ClientRegistrationEnvironment.j
 import { PRODUCT_IDENTITY } from "../identity.js";
 import { npxRegistrationCommand } from "./ClientRegistrationIdentity.js";
 import { resolveClientConfigTransactionPath } from "./ClientConfigPath.js";
+import { packageReadTargetChanged } from "./MsixPackageStorage.js";
 import {
   readRegularFile,
   readRegularFileText,
@@ -42,7 +43,10 @@ import type {
   ClientConfigurationResult,
   SetupProviderEnvironment,
 } from "./SetupTypes.js";
-import type { SetupClient } from "./SupportedClients.js";
+import {
+  registrationWriteBlocker,
+  type SetupClient,
+} from "./SupportedClients.js";
 
 export class ClientConfigurationCleanupRollbackFailure extends RegularFileCleanupFailure<string> {
   constructor(
@@ -189,6 +193,13 @@ const persistClientConfiguration = async ({
   desired,
   fallbackServers,
 }: ClientConfigurationUpdate): Promise<ClientConfigurationResult> => {
+  // The plan chose this file; an MSIX package may have switched to its
+  // private copy since, for example when it quit.
+  if (
+    client.msixPackage !== undefined &&
+    (await packageReadTargetChanged(client.msixPackage, client.configPath))
+  )
+    return { status: "failed", reason: "target_changed" };
   const backupPath =
     original === undefined ? undefined : `${client.configPath}.rea.backup`;
   let recoveryBackupPath: string | undefined;
@@ -357,6 +368,25 @@ export const clientConfigurationAligned = async (
 
 /** Preflight one client configuration before setup presents any mutations. */
 export const inspectClientConfiguration = async (
+  client: SetupClient,
+  providerEnvironment: SetupProviderEnvironment,
+  command: readonly string[],
+): Promise<ClientConfigurationInspection> => {
+  const inspection = await inspectClientDocument(
+    client,
+    providerEnvironment,
+    command,
+  );
+  if (inspection.status !== "create" && inspection.status !== "update")
+    return inspection;
+  // A change the running client would overwrite is not a persisted registration.
+  const blocker = registrationWriteBlocker(client, "setup");
+  return blocker === undefined
+    ? inspection
+    : { status: "invalid", remediation: blocker };
+};
+
+const inspectClientDocument = async (
   client: SetupClient,
   providerEnvironment: SetupProviderEnvironment,
   command: readonly string[],
