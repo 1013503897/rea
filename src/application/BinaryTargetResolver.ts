@@ -161,11 +161,12 @@ export const parseBinaryTarget = async (
           availableArchitectures: ["x86"],
         });
       }
-      // Explicit database selection owns routing; a suffix is only a fallback.
+      // Probe content before suffix-only database routing; an explicit
+      // database selection keeps the caller's chosen interpretation.
       const artifactFormat =
         targetKind === "database"
           ? undefined
-          : await detectArtifactFormat(path, handle, metadata, signal);
+          : await detectArtifactFormat(path, handle, signal);
       if (
         targetKind === "database" ||
         (targetKind === undefined &&
