@@ -52,7 +52,9 @@ while (directories.length > 0) {
 for (const page of htmlPages.sort()) {
   const route = page.slice(output.length + 1).split(sep).join("/");
   const html = await readFile(page, "utf8");
-  if (route !== "404.html") {
+  // The configured home layout and generated 404 render no edit action.
+  // Their outgoing links still participate in the same all-page scan.
+  if (route !== "404.html" && route !== "index.html") {
     const source = physicalEditSource(html, route);
     assert.ok((await stat(source)).isFile(), route + ": edit link source is missing");
     sourceLinks++;
