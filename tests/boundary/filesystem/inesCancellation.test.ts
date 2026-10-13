@@ -8,6 +8,7 @@ import { hashStableRootArtifactHandle } from "../../../src/artifacts/inventory/h
 import { inventoryArtifact } from "../../fixtures/artifactInventory.js";
 import { inesFixture } from "../../fixtures/ines.js";
 import { createTestTempDirectory } from "../../fixtures/temporaryDirectory.js";
+import { RegularFileAdmissionFailure } from "../../../src/filesystem/RegularFile.js";
 
 // Complete the real I/O, then cancel while its caller is still awaiting it.
 const cancelAfterNextStat = (
@@ -36,6 +37,66 @@ const malformed = (format: string) => {
   }
   return bytes.subarray(0, 20);
 };
+
+it.each(["default", "caller-error", "failed-close"])(
+  "preserves cancellation and descriptor ownership during %s admission",
+  async (reasonKind) => {
+    const root = await createTestTempDirectory("rea-ines-cancel-admission-");
+    const path = join(root, "source.nes");
+    await writeFile(path, inesFixture());
+    const sample = await open(path, "r");
+    const prototype = Object.getPrototypeOf(sample) as Pick<FileHandle, "stat">;
+    await sample.close();
+    const original = prototype.stat;
+    const controller = new AbortController();
+    let admitted: FileHandle | undefined;
+    const cleanupFailure = new Error("descriptor close failed");
+    let restoreClose = () => {};
+    const stat = vi
+      .spyOn(prototype, "stat")
+      .mockImplementationOnce(async function (this: FileHandle, ...args) {
+        admitted = this;
+        const observed = await original.call(this, ...args);
+        if (reasonKind === "failed-close") {
+          const close = vi
+            .spyOn(this, "close")
+            .mockRejectedValueOnce(cleanupFailure);
+          restoreClose = () => close.mockRestore();
+        }
+        controller.abort(
+          reasonKind === "caller-error"
+            ? new Error("caller stopped admission")
+            : undefined,
+        );
+        return observed;
+      });
+    try {
+      const result = parseBinaryTarget(path, { signal: controller.signal });
+      if (reasonKind === "failed-close") {
+        const failure = await result.catch((cause: unknown) => cause);
+        expect(failure).toBeInstanceOf(RegularFileAdmissionFailure);
+        if (!(failure instanceof RegularFileAdmissionFailure)) throw failure;
+        expect(failure.cause).toBe(controller.signal.reason);
+        expect(failure.cleanupCause).toBe(cleanupFailure);
+        await failure.owner.close();
+      } else {
+        await expect(result).resolves.toMatchObject({
+          ok: false,
+          error: {
+            _tag: "AnalysisCancelledError",
+            operation: "resolve_binary_target",
+          },
+        });
+      }
+      if (admitted === undefined)
+        throw new Error("Admission descriptor was not observed");
+      await expect(admitted.stat()).rejects.toMatchObject({ code: "EBADF" });
+    } finally {
+      restoreClose();
+      stat.mockRestore();
+    }
+  },
+);
 
 it.each([
   ["truncated", "read"],

@@ -210,6 +210,13 @@ export const parseBinaryTarget = async (
       await handle.close();
     }
   } catch (cause: unknown) {
+    // The filesystem admission helper throws the caller's abort reason after
+    // confirming descriptor release. Cleanup failures carry a different owner
+    // error and must remain visible rather than being reduced to cancellation.
+    if (signal?.aborted === true && cause === signal.reason)
+      return err(
+        new AnalysisCancelledError("resolve_binary_target", { cause }),
+      );
     if (cause instanceof AnalysisCancelledError) return err(cause);
     if (cause instanceof BinaryTargetError) return err(cause);
     if (!(cause instanceof Error)) throw cause;
