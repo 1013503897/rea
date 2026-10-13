@@ -288,7 +288,7 @@ applicable licenses.
 
 REA'ya katkınızı bekliyoruz! Hata bildirmek veya özellik önermek için bir [issue açın](https://github.com/morluto/rea/issues); kodu veya belgeleri geliştirmek için bir [pull request gönderin](https://github.com/morluto/rea/pulls).
 
-Geliştirme ortamı ve kontroller için [CONTRIBUTING.md](../../CONTRIBUTING.md), doğrulama süreçleri için [test rehberi](../development/testing.md) ve proje yapısı için [mimari harita](../architecture.mermaid) belgelerine bakın.
+Geliştirme ortamı ve kontroller için [CONTRIBUTING.md](../../CONTRIBUTING.md), doğrulama süreçleri için [test rehberi](../development/testing.md) ve proje yapısı için [mimari harita](../architecture/architecture.mermaid) belgelerine bakın.
 
 ## Lisans
 

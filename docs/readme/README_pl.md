@@ -288,7 +288,7 @@ applicable licenses.
 
 Chętnie przyjmiemy Twoją pomoc w rozwoju REA! [Otwórz zgłoszenie](https://github.com/morluto/rea/issues), aby poinformować o błędzie lub zaproponować funkcję, albo [wyślij pull request](https://github.com/morluto/rea/pulls) z ulepszeniami kodu lub dokumentacji.
 
-Zobacz [CONTRIBUTING.md](../../CONTRIBUTING.md), aby poznać konfigurację środowiska programistycznego i kontrole, [testowanie](../development/testing.md), aby poznać ścieżki weryfikacji, oraz [mapę architektury](../architecture.mermaid), aby poznać strukturę projektu.
+Zobacz [CONTRIBUTING.md](../../CONTRIBUTING.md), aby poznać konfigurację środowiska programistycznego i kontrole, [testowanie](../development/testing.md), aby poznać ścieżki weryfikacji, oraz [mapę architektury](../architecture/architecture.mermaid), aby poznać strukturę projektu.
 
 ## Licencja
 

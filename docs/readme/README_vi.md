@@ -288,7 +288,7 @@ applicable licenses.
 
 Chúng tôi hoan nghênh bạn giúp phát triển REA! [Mở issue](https://github.com/morluto/rea/issues) để báo lỗi hoặc đề xuất tính năng, hoặc [gửi pull request](https://github.com/morluto/rea/pulls) để cải thiện mã hay tài liệu.
 
-Xem [CONTRIBUTING.md](../../CONTRIBUTING.md) về thiết lập môi trường phát triển và các bước kiểm tra, [hướng dẫn kiểm thử](../development/testing.md) về các luồng xác minh và [sơ đồ kiến trúc](../architecture.mermaid) về cấu trúc dự án.
+Xem [CONTRIBUTING.md](../../CONTRIBUTING.md) về thiết lập môi trường phát triển và các bước kiểm tra, [hướng dẫn kiểm thử](../development/testing.md) về các luồng xác minh và [sơ đồ kiến trúc](../architecture/architecture.mermaid) về cấu trúc dự án.
 
 ## Giấy phép
 

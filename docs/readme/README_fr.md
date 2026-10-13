@@ -292,7 +292,7 @@ applicable licenses.
 
 Votre aide sur REA est la bienvenue ! [Ouvrez une issue](https://github.com/morluto/rea/issues) pour signaler un bug ou proposer une fonctionnalité, ou [envoyez une pull request](https://github.com/morluto/rea/pulls) pour améliorer le code ou la documentation.
 
-Consultez [CONTRIBUTING.md](../../CONTRIBUTING.md) pour l'environnement de développement et les vérifications, la page [tests](../development/testing.md) pour les procédures de vérification, et la [carte de l'architecture](../architecture.mermaid) pour la structure du projet.
+Consultez [CONTRIBUTING.md](../../CONTRIBUTING.md) pour l'environnement de développement et les vérifications, la page [tests](../development/testing.md) pour les procédures de vérification, et la [carte de l'architecture](../architecture/architecture.mermaid) pour la structure du projet.
 
 ## Licence
 

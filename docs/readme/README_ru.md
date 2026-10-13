@@ -288,7 +288,7 @@ applicable licenses.
 
 Будем рады вашей помощи с REA! [Откройте issue](https://github.com/morluto/rea/issues), чтобы сообщить об ошибке или предложить функцию, либо [отправьте pull request](https://github.com/morluto/rea/pulls) с улучшениями кода или документации.
 
-Настройка среды разработки и проверки описаны в [CONTRIBUTING.md](../../CONTRIBUTING.md), направления проверки — в [руководстве по тестированию](../development/testing.md), а структура проекта — на [схеме архитектуры](../architecture.mermaid).
+Настройка среды разработки и проверки описаны в [CONTRIBUTING.md](../../CONTRIBUTING.md), направления проверки — в [руководстве по тестированию](../development/testing.md), а структура проекта — на [схеме архитектуры](../architecture/architecture.mermaid).
 
 ## Лицензия
 

@@ -289,7 +289,7 @@ REA 用于合法的研究、教育、互操作性、软件保存，以及分析�
 
 欢迎帮助改进 REA！你可以[提交 issue](https://github.com/morluto/rea/issues) 报告错误或建议功能，也可以[提交 pull request](https://github.com/morluto/rea/pulls) 改进代码或文档。
 
-开发设置和检查见 [CONTRIBUTING.md](../../CONTRIBUTING.md)，验证流程见[测试指南](../development/testing.md)，项目结构见[架构图](../architecture.mermaid)。
+开发设置和检查见 [CONTRIBUTING.md](../../CONTRIBUTING.md)，验证流程见[测试指南](../development/testing.md)，项目结构见[架构图](../architecture/architecture.mermaid)。
 
 ## 许可证
 

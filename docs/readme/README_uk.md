@@ -288,7 +288,7 @@ applicable licenses.
 
 Будемо раді вашій допомозі з REA! [Відкрийте issue](https://github.com/morluto/rea/issues), щоб повідомити про помилку чи запропонувати функцію, або [надішліть pull request](https://github.com/morluto/rea/pulls) з поліпшеннями коду чи документації.
 
-Налаштування середовища розробки й перевірки описано в [CONTRIBUTING.md](../../CONTRIBUTING.md), шляхи верифікації — у [посібнику тестування](../development/testing.md), а структуру проєкту — на [схемі архітектури](../architecture.mermaid).
+Налаштування середовища розробки й перевірки описано в [CONTRIBUTING.md](../../CONTRIBUTING.md), шляхи верифікації — у [посібнику тестування](../development/testing.md), а структуру проєкту — на [схемі архітектури](../architecture/architecture.mermaid).
 
 ## Ліцензія
 

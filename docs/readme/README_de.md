@@ -288,7 +288,7 @@ applicable licenses.
 
 Wir freuen uns über deine Hilfe bei REA! [Öffne ein Issue](https://github.com/morluto/rea/issues), um einen Fehler zu melden oder eine Funktion vorzuschlagen, oder [sende einen Pull Request](https://github.com/morluto/rea/pulls), um Code oder Dokumentation zu verbessern.
 
-Die Entwicklungsumgebung und Prüfungen beschreibt [CONTRIBUTING.md](../../CONTRIBUTING.md), die Verifikationspfade der [Testleitfaden](../development/testing.md) und die Projektstruktur die [Architekturübersicht](../architecture.mermaid).
+Die Entwicklungsumgebung und Prüfungen beschreibt [CONTRIBUTING.md](../../CONTRIBUTING.md), die Verifikationspfade der [Testleitfaden](../development/testing.md) und die Projektstruktur die [Architekturübersicht](../architecture/architecture.mermaid).
 
 ## Lizenz
 
