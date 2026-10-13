@@ -194,7 +194,17 @@ it("keeps attached-target ownership after the cleanup response timeout", async (
       cleanup: { reason: expect.stringContaining("timed out") },
     });
     await closeStarted.promise;
-    await vi.advanceTimersByTimeAsync(PLAYWRIGHT_SCENARIO_CLEANUP_TIMEOUT_MS);
+    let responseSettled = false;
+    void timedOutClose
+      .finally(() => {
+        responseSettled = true;
+      })
+      .catch(() => {});
+    await vi.advanceTimersByTimeAsync(
+      PLAYWRIGHT_SCENARIO_CLEANUP_TIMEOUT_MS - 1,
+    );
+    expect(responseSettled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
     await timeoutExpectation;
     expect(settled).toEqual([]);
 

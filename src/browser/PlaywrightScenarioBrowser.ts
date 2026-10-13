@@ -14,7 +14,6 @@ import {
 } from "./PlaywrightExecutionBoundary.js";
 
 const OPERATION = "capture_browser_scenario" as const;
-
 const throwIfScenarioCancelled = (signal: AbortSignal | undefined): void => {
   if (signal?.aborted === true)
     throw new BrowserObservationError(OPERATION, "cancelled");

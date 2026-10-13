@@ -8,14 +8,17 @@ import { spawnOwnedProviderProcess } from "../../dist/process/ProviderProcess.js
 import { createSystemProcessOwnershipHost } from "../../dist/process/ProcessOwnershipObservation.js";
 import { liveProcesses } from "../../dist/process/ProcessOwnershipProcessTree.js";
 import { CdpConnection } from "../../dist/browser/CdpConnection.js";
-import { waitForBrowserDevtoolsPort } from "../../dist/browser/BrowserProcessStartup.js";
+import {
+  BROWSER_DEVTOOLS_STARTUP_TIMEOUT_MS,
+  waitForBrowserDevtoolsPort,
+} from "../../dist/browser/BrowserProcessStartup.js";
 import { discoverCdpEndpoint } from "../../dist/browser/CdpEndpoint.js";
 import { BrowserObservationError } from "../../dist/domain/browserObservationError.js";
 
 /** Admit the owned fixture only after CDP serves its requested page. */
 export async function startRuntimeFixtureBrowser(executable, origin) {
   const profile = await mkdtemp(join(tmpdir(), "rea-real-web-runtime-"));
-  const deadline = performance.now() + 60_000;
+  const deadline = performance.now() + BROWSER_DEVTOOLS_STARTUP_TIMEOUT_MS;
   let owned;
   try {
     owned = await spawnOwnedProviderProcess({
