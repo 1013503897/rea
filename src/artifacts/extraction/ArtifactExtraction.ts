@@ -45,6 +45,8 @@ import type { ArtifactIntegrityPolicyName } from "../../domain/artifactIntegrity
 /** Local extraction input with the output root chosen by the adapter. */
 export interface ArtifactExtractionInput {
   readonly inputPath: string;
+  /** Digest of the active session target, when extraction is session-bound. */
+  readonly expectedRootSha256?: string;
   readonly outputRoot: string;
   readonly environment: Readonly<NodeJS.ProcessEnv>;
   readonly integrityPolicy: ArtifactIntegrityPolicyName;
@@ -73,6 +75,14 @@ const extractArtifactInScope = async (
     admitRootFormat: (format) =>
       requireExtractableFormat(format, input.inputPath),
   });
+  if (
+    input.expectedRootSha256 !== undefined &&
+    snapshot.manifest.root_sha256 !== input.expectedRootSha256
+  )
+    throw new ArtifactReaderFailure(
+      "integrity",
+      `Active artifact digest changed: expected ${input.expectedRootSha256}, observed ${snapshot.manifest.root_sha256}`,
+    );
   return materializeArtifactInventoryInScope(
     input,
     sourcePath,

@@ -188,6 +188,7 @@ class ArtifactClient implements AnalysisClient {
         const result = await extractArtifact(
           {
             inputPath: this.target.sourcePath ?? this.target.path,
+            expectedRootSha256: this.target.sha256,
             outputRoot: parsed.output_root,
             environment: this.environment,
             integrityPolicy: parsed.integrity_policy,

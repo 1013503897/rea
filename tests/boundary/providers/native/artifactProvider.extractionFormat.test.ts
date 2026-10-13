@@ -17,7 +17,7 @@ import { artifactExtractionResultSchema } from "../../../../src/domain/artifactG
 import type { BinaryTarget } from "../../../../src/domain/binaryTargetTypes.js";
 
 it.each(["plist", "pe"] as const)(
-  "extracts current iNES bytes after a non-extractable %s target is replaced",
+  "refuses iNES bytes after a non-extractable %s target is replaced",
   async (format) => {
     const root = await createTestTempDirectory("rea-extract-current-");
     const path = join(root, "source.bin");
@@ -29,40 +29,28 @@ it.each(["plist", "pe"] as const)(
     if (!target.ok) throw target.error;
     expect(target.value.format).toBe(format);
     const client = new ArtifactProvider(process.env).createClient(target.value);
-    const bytes = inesFixture({
-      trainer: true,
-      trailing: Buffer.from("tail"),
-    });
-    await writeFile(path, bytes);
+    await writeFile(path, inesFixture());
     const output = join(root, "output");
     const result = await client.execute(
       "extract_artifact",
       artifactExtractionExecutionSchema.parse({ output_root: output }),
     );
-    if (!result.ok) throw result.error;
-    const extracted = artifactExtractionResultSchema.parse(result.value.result);
-    expect(extracted.manifest.root_format).toBe("ines");
-    const paths = [
-      "header.bin",
-      "trainer.bin",
-      "prg/000.bin",
-      "prg/001.bin",
-      "chr/000.bin",
-      "trailing.bin",
-    ];
-    expect(extracted.artifacts).toHaveLength(paths.length);
-    expect(
-      Buffer.concat(
-        await Promise.all(paths.map((part) => readFile(join(output, part)))),
-      ),
-    ).toEqual(bytes);
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        _tag: "ArtifactOperationError",
+        operation: "extract_artifact",
+        reason: "integrity",
+      },
+    });
+    await expect(access(output)).rejects.toThrow();
     await client.close();
   },
 );
 
 describe("artifact extraction format support", () => {
   it.each(["zip", "asar", "hap", "hsp", "app"] as const)(
-    "extracts the scanned %s after an active iNES path is replaced",
+    "refuses a replaced iNES target that scans as %s",
     async (format) => {
       const root = await createTestTempDirectory("rea-extract-replaced-");
       const path = join(root, `source.${format}`);
@@ -86,19 +74,16 @@ describe("artifact extraction format support", () => {
         "extract_artifact",
         artifactExtractionExecutionSchema.parse({ output_root: output }),
       );
-      if (!result.ok) throw result.error;
-      const extracted = artifactExtractionResultSchema.parse(
-        result.value.result,
-      );
-      expect(extracted.manifest.root_format).toBe(
-        format === "app" ? "app-pack" : format,
-      );
-      expect(
-        extracted.artifacts.map(({ relative_path }) => relative_path),
-      ).toEqual(["payload.txt"]);
-      expect(await readFile(join(output, "payload.txt"), "utf8")).toBe(
-        "evidence\n",
-      );
+      expect(result).toMatchObject({
+        ok: false,
+        error: {
+          _tag: "ArtifactOperationError",
+          operation: "extract_artifact",
+          reason: "integrity",
+        },
+      });
+      await expect(access(output)).rejects.toThrow();
+      await client.close();
     },
   );
 
