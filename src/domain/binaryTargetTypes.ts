@@ -1,3 +1,5 @@
+import type { ZipPackageFormat } from "./zipPackageFormat.js";
+
 /** Provider-neutral CPU families detected from supported executable headers. */
 export const BINARY_ARCHITECTURES = [
   "x86",
@@ -167,19 +169,7 @@ export type BinaryTarget =
   | (BinaryTargetIdentity &
       NonExecutableMetadata & {
         readonly kind: "archive";
-        readonly format:
-          | "zip"
-          | "ipa"
-          | "apk"
-          | "msix"
-          | "appx"
-          | "hap"
-          | "hsp"
-          | "app-pack"
-          | "asar"
-          | "ines"
-          | "dmg"
-          | "pkg";
+        readonly format: ZipPackageFormat | "asar" | "ines" | "dmg" | "pkg";
       })
   | (BinaryTargetIdentity &
       NonExecutableMetadata & {
