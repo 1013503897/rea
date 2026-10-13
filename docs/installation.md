@@ -565,8 +565,11 @@ Java major range, 64-bit JDK bitness, and the presence of `javac`/`javac.exe`.
 It also checks that the reported JVM `os.arch` and `os.name` map to the same native decompiler
 directory validated for the host; unrecognized reported architectures or a
 non-host operating system are refused. LaunchSupport overrides of either
-property, including through helper-environment JVM option variables, are
-rejected at launch.
+property, including quoted helper-environment JVM options, are rejected at
+launch. Indirect JVM `@argument-file` options are also refused because their
+effective platform properties cannot be established before launch; provide
+explicit options instead. OS-name matching follows Ghidra's operating-system
+identifiers: macOS requires `Mac OS X`, not `Darwin` or a generic `mac*` alias.
 When Java is found through `PATH`, setup records its observed JDK home so GUI
 MCP clients do not depend on an incidental shell path. Setup shows every exact
 environment entry in its plan, writes only after approval, and never downloads,

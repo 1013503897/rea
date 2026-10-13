@@ -26,6 +26,13 @@ const jvmEnvironmentArguments = (value: string): readonly string[] => {
 };
 
 const rejectJvmPlatformOverrides = (arguments_: readonly string[]): void => {
+  // Indirect options can change the JVM platform after this admission check.
+  // Do not read arbitrary, mutable argument files and pretend their contents
+  // establish the later launch; require explicit inspectable options instead.
+  if (arguments_.some((argument) => argument.startsWith("@")))
+    throw new Error(
+      "Ghidra LaunchSupport may not supply JVM argument files; their effective platform properties cannot be validated before launch.",
+    );
   if (
     arguments_.some((argument) => /^-Dos\.(?:arch|name)(?:=|$)/u.test(argument))
   )
@@ -113,7 +120,8 @@ export const ghidraJavaLaunch = async (options: {
   // The merged environment becomes the analysis JVM's environment, and the
   // JVM applies these options variables automatically. An injected
   // -Dos.arch/-Dos.name there selects an unvalidated native directory without
-  // appearing in vmArguments, so reject the effective values as well.
+  // appearing in vmArguments, so reject the effective values as well. Argument
+  // files are refused because their expanded options are not established here.
   for (const key of [
     "JAVA_TOOL_OPTIONS",
     "_JAVA_OPTIONS",

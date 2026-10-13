@@ -273,6 +273,22 @@ describe.skipIf(process.platform === "win32")(
       expect(analysisArguments).toHaveLength(1);
     });
 
+    it.each(["@options", '"@options with spaces"'])(
+      "refuses indirect JVM options (%s) instead of assuming platform alignment",
+      async (value) => {
+        const { session, launcher, analysisArguments } = await fixture(
+          `env-injection:JDK_JAVA_OPTIONS=${value}`,
+        );
+        const launched = await launcher.launch(session);
+        expect(launched.ok).toBe(false);
+        expect(analysisArguments).toEqual([]);
+        if (launched.ok) throw new Error("Expected an argument-file refusal");
+        expect(launched.error.cause).toMatchObject({
+          message: expect.stringContaining("may not supply JVM argument files"),
+        });
+      },
+    );
+
     it("bounds retained UTF-8 warnings and reports original byte counts", async () => {
       const { session, launcher } = await fixture("large");
       const launched = await launcher.launch(session);

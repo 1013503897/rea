@@ -741,11 +741,17 @@ const jvmOsNameMatchesPlatform = (
   osName: string,
 ): boolean => {
   const normalized = osName.toLowerCase();
-  if (platform === "win32") return normalized.startsWith("windows");
-  if (platform === "darwin")
-    return normalized.startsWith("mac") || normalized.startsWith("darwin");
-  if (platform === "linux") return normalized.startsWith("linux");
-  return false;
+  // Ghidra 12.1.4 OperatingSystem.findCurrentOperatingSystem uses ordered,
+  // case-insensitive substring matching, not Node's platform names or broad
+  // mac*/Darwin aliases. Preserve that order for names containing several tags.
+  const selected = normalized.includes("windows")
+    ? "win32"
+    : normalized.includes("linux")
+      ? "linux"
+      : normalized.includes("mac os x")
+        ? "darwin"
+        : undefined;
+  return selected === platform;
 };
 
 /**

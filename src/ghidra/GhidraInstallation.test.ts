@@ -1041,6 +1041,36 @@ describe("Ghidra JVM native directory admission", () => {
 });
 
 describe("Ghidra JVM OS admission", () => {
+  it.each([
+    ["Darwin", false],
+    ["macOS", false],
+    ["Macintosh", false],
+    ["Mac OS X", true],
+    ["MAC OS X 26", true],
+    ["JVM on Mac OS X", true],
+    ["Mac OS X / Windows", false],
+    ["Mac OS X / Linux", false],
+  ] as const)(
+    "matches Ghidra's ordered OS-name predicate for %s (available=%s)",
+    (osName, available) => {
+      const result = inspectGhidraInstallation(
+        {
+          environment: {},
+          installDir: INSTALL,
+          platform: "darwin",
+          architecture: "arm64",
+        },
+        host({ probeJava: () => ({ ...JAVA, osArch: "aarch64", osName }) }),
+      );
+      expect(result.status).toBe(available ? "available" : "unavailable");
+      expect(projectGhidraDoctorInspection(result).available).toBe(available);
+      expect(result.javaOsName).toBe(osName);
+      expect(
+        result.checks.find(({ name }) => name === "native_decompiler"),
+      ).toMatchObject({ status: available ? "passed" : "failed" });
+    },
+  );
+
   it("rejects a successful Java probe that omits os.name", () => {
     const { osName: _observedOsName, ...withoutOsName } = JAVA;
     const result = inspectGhidraInstallation(
