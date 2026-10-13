@@ -19,7 +19,10 @@ import {
   electronMemberPath,
   type JavaScriptIntrinsicInvocation,
 } from "./javascriptElectronMemberWrites.js";
-import { resolveJavaScriptIntrinsicInvocation } from "./javascriptIntrinsicInvocation.js";
+import {
+  expandJavaScriptInvocationArguments,
+  resolveJavaScriptIntrinsicInvocation,
+} from "./javascriptIntrinsicInvocation.js";
 import { semanticPropertyPathKeyMatches } from "./javascriptSemanticPropertyPaths.js";
 import {
   readExactJavaScriptLiteral,
@@ -84,6 +87,9 @@ const intrinsicWriteCovers = (
 /** Prove one inert namespace conversion without relaxing general assignment semantics. */
 export const createSemanticModuleInterop = (
   state: JavaScriptSemanticAnalysisState,
+  options?: {
+    readonly intrinsicPath: (node: t.Node) => readonly string[] | undefined;
+  },
 ) => {
   const helpers = new Map<string, InteropHelper | null>();
   const origins = new Map<string, InteropOrigin>();
@@ -106,61 +112,63 @@ export const createSemanticModuleInterop = (
     return ["intrinsic"];
   };
 
-  const intrinsicPath = (node: t.Node): readonly string[] | undefined => {
-    let current = node;
-    const visited = new Set<string>();
-    const pending: { id: string; suffixLength: number }[] = [];
-    let suffix: readonly string[] = [];
-    const finish = (
-      path: readonly string[] | undefined,
-    ): readonly string[] | undefined => {
-      for (const binding of pending)
-        intrinsicBindings.set(
-          binding.id,
-          path === undefined
-            ? null
-            : path.slice(0, path.length - binding.suffixLength),
-        );
-      return path;
-    };
-    for (;;) {
-      const { root, members } = electronMemberPath(current);
-      if (members.some((member) => member === null)) return finish(undefined);
-      suffix = [...(members as readonly string[]), ...suffix];
-      if (t.isSequenceExpression(root)) {
-        const value = root.expressions.at(-1);
-        if (value === undefined) return finish(undefined);
-        current = value;
-        continue;
+  const intrinsicPath =
+    options?.intrinsicPath ??
+    ((node: t.Node): readonly string[] | undefined => {
+      let current = node;
+      const visited = new Set<string>();
+      const pending: { id: string; suffixLength: number }[] = [];
+      let suffix: readonly string[] = [];
+      const finish = (
+        path: readonly string[] | undefined,
+      ): readonly string[] | undefined => {
+        for (const binding of pending)
+          intrinsicBindings.set(
+            binding.id,
+            path === undefined
+              ? null
+              : path.slice(0, path.length - binding.suffixLength),
+          );
+        return path;
+      };
+      for (;;) {
+        const { root, members } = electronMemberPath(current);
+        if (members.some((member) => member === null)) return finish(undefined);
+        suffix = [...(members as readonly string[]), ...suffix];
+        if (t.isSequenceExpression(root)) {
+          const value = root.expressions.at(-1);
+          if (value === undefined) return finish(undefined);
+          current = value;
+          continue;
+        }
+        for (const global of ["Object", "Function", "Reflect"])
+          if (isUnshadowedGlobal(root, state, global))
+            return finish(["intrinsic", global, ...suffix]);
+        for (const global of ["globalThis", "global", "window", "self"])
+          if (isUnshadowedGlobal(root, state, global))
+            return finish(["intrinsic", ...suffix]);
+        if (!t.isIdentifier(root)) return finish(undefined);
+        const binding = resolveSemanticBindingState(state, root, root.name);
+        const cached =
+          binding === undefined
+            ? undefined
+            : intrinsicBindings.get(binding.bindingId);
+        if (cached !== undefined)
+          return finish(cached === null ? undefined : [...cached, ...suffix]);
+        const initializer = semanticStableInitializer(binding, state);
+        if (
+          binding === undefined ||
+          initializer === undefined ||
+          initializer.projection.some((segment) => segment === null) ||
+          visited.has(binding.bindingId)
+        )
+          return finish(undefined);
+        visited.add(binding.bindingId);
+        pending.push({ id: binding.bindingId, suffixLength: suffix.length });
+        suffix = [...initializer.projection.map(String), ...suffix];
+        current = initializer.node;
       }
-      for (const global of ["Object", "Function", "Reflect"])
-        if (isUnshadowedGlobal(root, state, global))
-          return finish(["intrinsic", global, ...suffix]);
-      for (const global of ["globalThis", "global", "window", "self"])
-        if (isUnshadowedGlobal(root, state, global))
-          return finish(["intrinsic", ...suffix]);
-      if (!t.isIdentifier(root)) return finish(undefined);
-      const binding = resolveSemanticBindingState(state, root, root.name);
-      const cached =
-        binding === undefined
-          ? undefined
-          : intrinsicBindings.get(binding.bindingId);
-      if (cached !== undefined)
-        return finish(cached === null ? undefined : [...cached, ...suffix]);
-      const initializer = semanticStableInitializer(binding, state);
-      if (
-        binding === undefined ||
-        initializer === undefined ||
-        initializer.projection.some((segment) => segment === null) ||
-        visited.has(binding.bindingId)
-      )
-        return finish(undefined);
-      visited.add(binding.bindingId);
-      pending.push({ id: binding.bindingId, suffixLength: suffix.length });
-      suffix = [...initializer.projection.map(String), ...suffix];
-      current = initializer.node;
-    }
-  };
+    });
 
   // A nominal alias path is sufficient for conservative mutation lookup, but
   // helper proof also needs each read to follow initialization. An alias copy
@@ -239,10 +247,39 @@ export const createSemanticModuleInterop = (
   ): boolean => {
     let current = unwrapJavaScriptExpression(node).node;
     let currentPath = path;
+    const aliases = new Set<string>();
     for (;;) {
+      current = unwrapJavaScriptExpression(current).node;
+      if (t.isSequenceExpression(current)) {
+        const value = current.expressions.at(-1);
+        if (value === undefined) return true;
+        current = value;
+        continue;
+      }
       const method = currentPath.at(-1);
       const invocationMethod =
         method === "bind" || method === "call" || method === "apply";
+      // Recover the member read at an alias initializer before examining its
+      // base capture. Copying a callable does not recapture its original owner.
+      if (invocationMethod && t.isIdentifier(current)) {
+        const binding = resolveSemanticBindingState(
+          state,
+          current,
+          current.name,
+        );
+        const initializer = semanticStableInitializer(binding, state);
+        if (
+          binding !== undefined &&
+          initializer !== undefined &&
+          initializer.projection.length === 0 &&
+          (initializer.node.end ?? Infinity) < (current.start ?? -1) &&
+          !aliases.has(binding.bindingId)
+        ) {
+          aliases.add(binding.bindingId);
+          current = initializer.node;
+          continue;
+        }
+      }
       if (
         invocationMethod &&
         (t.isMemberExpression(current) || t.isOptionalMemberExpression(current))
@@ -323,7 +360,7 @@ export const createSemanticModuleInterop = (
       const { root, members } = electronMemberPath(current.callee);
       let bindTarget = root;
       let bindingArguments: JavaScriptIntrinsicInvocation["arguments"] =
-        current.arguments;
+        expandJavaScriptInvocationArguments(current.arguments);
       let captured = capturedIntrinsic(current.callee);
       let terminal = captured?.path.at(-1) === "bind";
       let path: readonly string[] | undefined = captured?.path.slice(0, -1);

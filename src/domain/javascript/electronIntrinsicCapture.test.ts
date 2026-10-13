@@ -61,6 +61,36 @@ describe("captured intrinsic invocation reads", () => {
   });
 
   it.each([
+    'const invoke = define.call; invoke(null,metadata,"x",{value:1});',
+    'const invoke = define.call; invoke.call(define,null,metadata,"x",{value:1});',
+    '(0, define.call).call(define,null,metadata,"x",{value:1});',
+    'const invoke = (0, define.call); const again = invoke; again.call(define,null,metadata,"x",{value:1});',
+  ])("preserves the base capture through an invocation value: %s", (invoke) => {
+    const result = analyzeJavaScriptStaticSource(`
+      const define = Object.defineProperty;
+      Object.defineProperty = replacement;
+      const metadata = {}; ${invoke}
+      ${CAPTURED_INTEROP} ${WINDOW}
+    `);
+    expect(result.electron.browser_windows).toHaveLength(1);
+  });
+
+  it.each(["define", "Function.prototype"])(
+    "retains an overwritten invocation member through an alias from %s",
+    (owner) => {
+      const result = analyzeJavaScriptStaticSource(`
+        const define = Object.defineProperty;
+        Object.defineProperty = replacement;
+        ${owner}.call = replacement;
+        const invoke = define.call;
+        const metadata = {}; invoke.call(define,null,metadata,"x",{value:1});
+        ${CAPTURED_INTEROP} ${WINDOW}
+      `);
+      expect(result.electron.browser_windows).toEqual([]);
+    },
+  );
+
+  it.each([
     ["call", 'define.call(null,metadata,"x",{value:1});'],
     ["apply", 'define.apply(null,[metadata,"x",{value:1}]);'],
     [
