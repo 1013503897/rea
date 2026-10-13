@@ -94,13 +94,21 @@ finally:
 it.runIf(process.platform === "linux")(
   "does not treat runtime names in another process's arguments as a runtime",
   async () => {
+    const directory = await createTestTempDirectory("rea-runtime-arguments-");
+    const procRoot = join(directory, "proc");
+    await mkdir(procRoot);
     const observer = new URL(
       "../../../scripts/lib/clean-linux-hopper-runtime.mjs",
       import.meta.url,
     ).href;
     const code = `
+      import { mkdir, symlink } from "node:fs/promises";
+      import { join } from "node:path";
       const { assertCleanLinuxHopperRuntime } = await import(${JSON.stringify(observer)});
-      await assertCleanLinuxHopperRuntime([]);
+      const entry = join(${JSON.stringify(procRoot)}, String(process.pid));
+      await mkdir(entry);
+      await symlink(`/proc/${String(process.pid)}/cmdline`, join(entry, "cmdline"));
+      await assertCleanLinuxHopperRuntime([], ${JSON.stringify(procRoot)});
       console.log('clean');
     `;
     const { stdout } = await execFileAsync(
@@ -109,6 +117,7 @@ it.runIf(process.platform === "linux")(
         "--input-type=module",
         "-e",
         code,
+        procRoot,
         "Xvfb",
         "/opt/hopper/bin/Hopper",
         "hopper-demo-x11.py",
@@ -123,6 +132,8 @@ it.runIf(process.platform === "linux")(
   "distinguishes an ordinary Node script with the helper's filename",
   async () => {
     const directory = await createTestTempDirectory("rea-runtime-arguments-");
+    const procRoot = join(directory, "proc");
+    await mkdir(procRoot);
     const script = join(directory, "hopper-demo-x11.py");
     const observer = new URL(
       "../../../scripts/lib/clean-linux-hopper-runtime.mjs",
@@ -131,10 +142,14 @@ it.runIf(process.platform === "linux")(
     await writeFile(
       script,
       `
-      import(${JSON.stringify(observer)}).then(async ({ assertCleanLinuxHopperRuntime }) => {
-        await assertCleanLinuxHopperRuntime([]);
+      import { mkdir, symlink } from "node:fs/promises";
+      import { join } from "node:path";
+      const entry = join(${JSON.stringify(procRoot)}, String(process.pid));
+      await mkdir(entry);
+      await symlink(`/proc/${String(process.pid)}/cmdline`, join(entry, "cmdline"));
+      const { assertCleanLinuxHopperRuntime } = await import(${JSON.stringify(observer)});
+      await assertCleanLinuxHopperRuntime([], ${JSON.stringify(procRoot)});
         console.log('clean');
-      });
     `,
     );
     const { stdout } = await execFileAsync(process.execPath, [script], {
