@@ -52,15 +52,22 @@ public class ReaSwiftDecoderRegressions extends HeadlessScript {
             "malformed small-string UTF-8 was accepted");
         rejectLarge("rea_swift_decoder_bad_terminator", 0xd000000000000003L);
         rejectLarge("rea_swift_decoder_bad_large_utf8", 0x1000000000000001L);
-        Object exhausted = decode(copied, 0);
-        require(literals(exhausted).isEmpty(), "capacity failure published decoded small text");
+        // Zero covers provenance-state exhaustion; 8192 admits both register
+        // cache entries and then rejects the retained literal/text charge.
+        assertCapacityOmission(copied, 0);
+        assertCapacityOmission(copied, 8192);
+        require(getScriptArgs().length == 1, "Expected owned result path");
+        Files.writeString(Path.of(getScriptArgs()[0]), "REA_SWIFT_DECODER_SAFEGUARDS_OK\n");
+    }
+
+    private void assertCapacityOmission(Function function, long remaining) throws Exception {
+        Object exhausted = decode(function, remaining);
+        require(literals(exhausted).isEmpty(), "capacity failure published decoded small text at budget " + remaining);
         JsonArray omitted = omissions(exhausted);
-        require(omitted.size() == 1, "capacity failure did not stop subsequent use sites");
+        require(omitted.size() == 1, "capacity failure did not stop subsequent use sites at budget " + remaining);
         JsonObject omission = omitted.get(0).getAsJsonObject();
         require(omission.get("reason").getAsString().equals("capacity"), "capacity omission lost its reason");
         require(!omission.has("value"), "omission claimed a retained literal value");
-        require(getScriptArgs().length == 1, "Expected owned result path");
-        Files.writeString(Path.of(getScriptArgs()[0]), "REA_SWIFT_DECODER_SAFEGUARDS_OK\n");
     }
 
     private Object decode(Function function, long remaining) throws Exception {

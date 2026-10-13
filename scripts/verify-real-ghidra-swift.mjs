@@ -16,6 +16,11 @@ import { promisify } from "node:util";
 import { Client } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import { inspectGhidraInstallation } from "../dist/ghidra/GhidraInstallation.js";
+import { cleanupOwnedProcessGroup } from "../dist/process/ProcessOwnership.js";
+import {
+  ProviderProcessSupervisor,
+  spawnOwnedProviderProcess,
+} from "../dist/process/ProviderProcess.js";
 import { toolContract } from "../dist/contracts/toolContracts.js";
 import { requireMcpOperationResult } from "./lib/mcp-verifier-results.mjs";
 import { createVerifierRun, completeVerifierRun } from "./lib/verifier-run.mjs";
@@ -63,6 +68,7 @@ const literalAssembly = fileURLToPath(
 const literalObject = join(root, "decoder-safeguards.o");
 const reports = [];
 let literalReport;
+let decoderCleaned = true;
 try {
   await execute("swiftc", ["-O", "-g", source, "-o", binary], {
     timeout: 60_000,
@@ -180,7 +186,7 @@ try {
 } finally {
   await client.close();
   await transport.close();
-  await rm(root, { recursive: true, force: true });
+  if (decoderCleaned) await rm(root, { recursive: true, force: true });
 }
 console.log(
   JSON.stringify(
@@ -277,30 +283,89 @@ async function verifyDecoderSafeguards() {
     join(scripts, "ReaSwiftDecoderRegressions.java"),
   );
   const report = join(root, "decoder-safeguards.txt");
-  await execute(
-    installation.analyzeHeadlessPath,
-    [
-      root,
-      "decoder-regressions",
-      "-import",
-      literalBinary,
-      "-scriptPath",
-      scripts,
-      "-postScript",
-      "ReaSwiftDecoderRegressions.java",
-      report,
-      "-deleteProject",
-      "-max-cpu",
-      "2",
-    ],
-    {
-      env: { ...process.env, JAVA_HOME: installation.javaHome },
-      timeout: 120_000,
-      maxBuffer: 8 * 1024 * 1024,
-    },
-  );
+  await runDecoderProbe(scripts, report);
   assert.equal(
     await readFile(report, "utf8"),
     "REA_SWIFT_DECODER_SAFEGUARDS_OK\n",
   );
+}
+
+async function runDecoderProbe(scripts, report) {
+  const controller = new AbortController();
+  let interrupt;
+  const interrupted = new Promise((resolve) => {
+    interrupt = () => {
+      controller.abort(new Error("Swift decoder probe interrupted"));
+      resolve(false);
+    };
+  });
+  process.on("SIGINT", interrupt);
+  process.on("SIGTERM", interrupt);
+  let supervisor;
+  try {
+    const launch = await spawnOwnedProviderProcess({
+      command: installation.analyzeHeadlessPath,
+      arguments: [
+        root,
+        "decoder-regressions",
+        "-import",
+        literalBinary,
+        "-scriptPath",
+        scripts,
+        "-postScript",
+        "ReaSwiftDecoderRegressions.java",
+        report,
+        "-deleteProject",
+        "-max-cpu",
+        "2",
+      ],
+      runId: run.run_id,
+      expectedCommand: null,
+      env: { JAVA_HOME: installation.javaHome },
+      signal: controller.signal,
+    });
+    decoderCleaned = false;
+    supervisor = new ProviderProcessSupervisor(
+      {
+        ...launch,
+        ownsProcessLifetime: true,
+        cleanup: () => cleanupOwnedProcessGroup(launch.ownership),
+      },
+      { maxDiagnosticBytes: 8 * 1024 * 1024 },
+    );
+    assert.ok(
+      await Promise.race([supervisor.waitForExit(120_000), interrupted]),
+      controller.signal.aborted
+        ? "Swift decoder probe interrupted"
+        : "Swift decoder probe timed out",
+    );
+    assert.ok(
+      await supervisor.waitForOutputClose(1_000),
+      "Swift decoder probe output did not close",
+    );
+    const snapshot = supervisor.snapshot();
+    assert.equal(
+      snapshot.exitCode,
+      0,
+      `${snapshot.stdout.text}\n${snapshot.stderr.text}`,
+    );
+    assert.ok(
+      !snapshot.diagnosticTruncated,
+      "Swift decoder probe exceeded its diagnostic capacity",
+    );
+  } finally {
+    try {
+      if (supervisor !== undefined) {
+        const stopped = await supervisor.stop();
+        decoderCleaned = stopped.status === "verified-cleanup";
+        assert.ok(
+          decoderCleaned,
+          `Owned Ghidra cleanup incomplete; retained ${root}: ${JSON.stringify(stopped)}`,
+        );
+      }
+    } finally {
+      process.off("SIGINT", interrupt);
+      process.off("SIGTERM", interrupt);
+    }
+  }
 }
