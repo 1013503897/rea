@@ -62,7 +62,7 @@ const largeUniversalTarget = async (
     bytes.writeUInt32BE(cpu, entry);
     bytes.writeUInt32BE(offset, entry + 8);
     bytes.writeUInt32BE(size, entry + 12);
-    bytes.writeUInt32BE(14, entry + 16);
+    bytes.writeUInt32BE(12, entry + 16);
     bytes.fill(0x11 * (index + 1), offset, offset + size);
     thinMach(0xfeedfacf, cpu).copy(bytes, offset);
   });

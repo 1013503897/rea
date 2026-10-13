@@ -35,11 +35,17 @@ export const openRootArtifact = async (
     const changed =
       admission === "inventoried" &&
       (primary instanceof NonRegularFileReadError ||
+        primary instanceof RegularFileChangedError ||
         (primary instanceof Error &&
           "code" in primary &&
-          ["ENOENT", "ENOTDIR", "ELOOP", "EISDIR", "ENOTFILE"].includes(
-            String(primary.code),
-          )));
+          [
+            "ENOENT",
+            "ENOTDIR",
+            "ELOOP",
+            "EISDIR",
+            "ENOTFILE",
+            "ESTALE",
+          ].includes(String(primary.code))));
     // Normalize the primary failure before cleanup so failed closes keep both facts.
     const failure =
       signal?.aborted === true

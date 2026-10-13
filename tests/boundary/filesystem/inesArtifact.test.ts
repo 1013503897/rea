@@ -496,7 +496,14 @@ it.each(["removed", "directory", "malformed"])(
   },
 );
 
-it.each(["EISDIR", "ENOTFILE", "EACCES", "cancelled"])(
+it.each([
+  "EISDIR",
+  "ENOTFILE",
+  "ESTALE",
+  "EACCES",
+  "cancelled",
+  ...(process.platform === "win32" ? ["changed metadata"] : []),
+])(
   "preserves the %s admission meaning while reopening extraction",
   async (code) => {
     const root = await createTestTempDirectory("rea-ines-reopen-error-");
@@ -514,6 +521,12 @@ it.each(["EISDIR", "ENOTFILE", "EACCES", "cancelled"])(
     const stat = vi
       .spyOn(prototype, "stat")
       .mockImplementationOnce(async function (this: FileHandle, ...args) {
+        if (code === "changed metadata") {
+          const metadata = await originalStat.call(this, ...args);
+          // Change the real file between descriptor stat and admission lstat.
+          await writeFile(path, "replacement cartridge");
+          return metadata;
+        }
         if (code !== "cancelled")
           throw Object.assign(new Error("injected admission failure"), {
             code,
