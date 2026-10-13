@@ -38,3 +38,6 @@ published files/images and fragment IDs rather than treating a successful build
 as sufficient link verification. Normalize references to docs/public at the
 renderer boundary, where VitePress publishes them at the site root. Preserve a
 legacy managed/native fragment alias while retaining the existing heading.
+Run this verification in documentation CI and the manual documentation build.
+Changes to the verifier itself must select the documentation lane; cover this
+using the actual CI planner against an isolated Git fixture.

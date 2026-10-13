@@ -23,6 +23,15 @@ Follow-up: [task-scoped preset lifecycle verification](preset-lifecycle.md) chec
 real Ghidra profile/snapshot boundaries, startup cancellation and retained cleanup
 retry while preserving defaults and distinguishing verification from performance.
 
+Follow-up: [EVM descriptor lifecycle acceptance](evm-lifecycle.md) verifies actual
+worker replies, late SDK cancellation, permission-induced cleanup failures,
+healthy WASM peers and old CLI parity with explicit runtime and platform scope.
+
+Follow-up: [managed artifact delivery and retained views](managed-artifact-summary.md)
+records two shipped assembly checks, previous-runtime portable Evidence, and four
+actual Codex trials. Selected replies shrink substantially; observed model input
+tokens increase and latency is mixed, so model-token savings are not claimed.
+
 The 12 detailed checkpoint receipts were archived byte-for-byte before removal
 from the final PR tree. The archive `review-receipts-00d51e0fc-20261012` is in the
 private experiment lab outside the checkout; its `archive-index.json` records

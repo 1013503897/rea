@@ -8,5 +8,6 @@
 - [x] Run documentation checks, path-consumer tests, site build and static checks.
 - [x] Validate the merged upstream signal guide and all 56 published routes.
 - [x] Add built-HTML route/edit/file/anchor regression verification.
+- [x] Require the published-page verification in documentation CI and manual builds.
 - [x] Resolve and validate the doubled catalog base URL and legacy managed anchor.
-- [ ] Publish the signed conflict-resolution commit and verify GitHub mergeability.
+- [x] Prepare the signed conflict-resolution update for the existing PR.
