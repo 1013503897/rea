@@ -31,7 +31,10 @@ if (mode === "exit") process.exit(73);
 if (mode === "silent") setInterval(() => undefined, 1_000);
 else {
   await rm(endpointPath, { force: true });
+  const sockets = new Set();
   const server = createServer((socket) => {
+    sockets.add(socket);
+    socket.once("close", () => sockets.delete(socket));
     socket.setEncoding("utf8");
     const state = {
       buffer: { value: "" },
@@ -44,6 +47,11 @@ else {
       targetSha256,
     };
     socket.on("data", (chunk) => onSocketData(socket, server, chunk, state));
+  });
+  process.on("message", (message) => {
+    if (message !== "disconnect") return;
+    for (const socket of sockets) socket.destroy();
+    process.send?.({ event: "disconnected" });
   });
   if (transport === "unix-socket") server.listen(endpointPath);
   else {
@@ -231,6 +239,8 @@ const sessionInfo = ({
     "resolve_containing_procedure",
     "search_procedures",
     "search_strings",
+    "set_address_name",
+    "set_addresses_names",
     "annotate_native_function",
     "inspect_native_data_type",
     "inspect_native_instruction",
@@ -246,7 +256,12 @@ const sessionInfo = ({
     "xrefs",
   ].filter(
     (value) =>
-      transport === "unix-socket" || value !== "annotate_native_function",
+      transport === "unix-socket" ||
+      ![
+        "annotate_native_function",
+        "set_address_name",
+        "set_addresses_names",
+      ].includes(value),
   ),
   target: {
     name: "fixture",

@@ -6,7 +6,6 @@ import {
   AnalysisInputError,
   AnalysisUnsupportedTargetError,
 } from "../../domain/analysisErrorCore.js";
-import type { JsonValue } from "../../domain/jsonValue.js";
 import { projectPlistValue } from "../../domain/apple/plistValue.js";
 import { createPlistNumberProjection } from "../../domain/apple/plistNumbers.js";
 import {
@@ -28,6 +27,10 @@ import { ArtifactReaderFailure } from "../ArtifactReader.js";
 import type { ArtifactEntry } from "../ArtifactReader.js";
 
 import { decodeXmlPlistText } from "../../domain/propertyListXmlText.js";
+import {
+  hasBinaryPlistSignature,
+  hasNibArchiveSignature,
+} from "../../domain/apple/appleArchiveFormat.js";
 import { estimateBinaryPlistExpansion } from "./InterfaceBuilderDecodeBudget.js";
 
 const MAX_BYTES = 64 * 1024 * 1024;
@@ -41,30 +44,37 @@ export const decodeKeyedArchiveBytes = (
 ) => {
   if (bytes.length > MAX_BYTES)
     throw new RangeError("Keyed archive exceeds 64 MiB");
-  if (bytes.subarray(0, 10).toString("ascii") === "NIBArchive")
+  if (hasNibArchiveSignature(bytes))
     throw new KeyedArchiveKindError(
       "Selected file is a compiled NIBArchive, not a Foundation plist archive; decode it with decode_interface_builder",
       "nib-archive",
     );
-  const binary = bytes.subarray(0, 8).toString("ascii") === "bplist00";
+  const binary = hasBinaryPlistSignature(bytes);
   const xmlText = binary ? undefined : decodeXmlPlistText(bytes);
   // plist.parseBinary recurses on every object reference and copies shared
   // containers, so a few hundred bytes can exhaust memory or the stack.
   // RangeError reports a resource limit; a reference cycle is malformed.
-  if (binary)
-    estimateBinaryPlistExpansion(bytes, MAX_DECODE_BYTES, {
-      budget: "the keyed archive decode budget",
-      fail: (kind, message) =>
-        kind === "cycle"
-          ? new TypeError(
-              "binary plist object references form a cycle, which a property list cannot represent",
-            )
-          : new RangeError(message),
-      bounds: "decoder",
-    });
-  const parsed = binary
-    ? { value: parseBinary(bytes), omittedPrototypeKeys: 0 }
-    : parseXmlPropertyList(xmlText ?? "");
+  const binaryExpansion = binary
+    ? estimateBinaryPlistExpansion(bytes, MAX_DECODE_BYTES, {
+        budget: "the keyed archive decode budget",
+        fail: (kind, message) =>
+          kind === "cycle"
+            ? new TypeError(
+                "binary plist object references form a cycle, which a property list cannot represent",
+              )
+            : new RangeError(message),
+        bounds: "decoder",
+      })
+    : undefined;
+  const parsed =
+    binaryExpansion !== undefined
+      ? {
+          value: parseBinary(bytes),
+          omittedPrototypeKeys: binaryExpansion.binaryPrototypeKeyObserved
+            ? null
+            : 0,
+        }
+      : parseXmlPropertyList(xmlText ?? "");
   const { value: plistValue, unknownRealCount } = projectPlistValue(
     parsed.value,
   );

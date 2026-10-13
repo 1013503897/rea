@@ -1,4 +1,5 @@
 import type { ArtifactInventorySnapshot } from "../../domain/artifactInventorySnapshot.js";
+import type { JsonValue } from "../../domain/jsonValue.js";
 import { compositeKey } from "../../domain/unicodeCodePointOrder.js";
 import {
   completeApplicationCoverage,
@@ -65,6 +66,7 @@ export interface AstEdgeInput {
 
 /** Inferred static relationship edge values. */
 export interface InferenceEdgeInput extends AstEdgeInput {
+  readonly limitations?: readonly string[];
   readonly relation:
     | "imports"
     | "loads"
@@ -99,6 +101,8 @@ export interface UnavailableParseInput {
   readonly asset: ApplicationNode;
   readonly operation: string;
   readonly limitation: string;
+  readonly failure?: JsonValue;
+  readonly limits?: JavaScriptArtifactGraphCoverage["limits"];
 }
 
 /** Add a direct artifact-containment edge. */
@@ -159,6 +163,9 @@ export const addStaticInferenceEdge = (
       range: input.range,
       operation: "map-static-relationship",
       coverage: input.coverage,
+      ...(input.limitations === undefined
+        ? {}
+        : { limitations: input.limitations }),
     }),
   });
 };
@@ -182,12 +189,15 @@ export const addUnavailableStaticParseScope = (
           path: input.file.path,
           operation: input.operation,
           limitation: input.limitation,
+          ...(input.failure === undefined
+            ? {}
+            : { analysis_failure: input.failure }),
         },
         evidence: unavailableAstEvidence({
           sha256: input.file.sha256,
           path: input.file.path,
           operation: input.operation,
-          coverage: partialApplicationCoverage([], null),
+          coverage: partialApplicationCoverage(input.limits ?? [], null),
           limitation: input.limitation,
         }),
       },
@@ -341,7 +351,7 @@ export const resolveArtifactPath = (
   specifier: string,
   sourcePath: string,
   files: ReadonlyMap<string, JavaScriptArtifactFile>,
-  moduleKind?: "import" | "require",
+  moduleKind?: "import" | "require" | "compiler-dependent",
 ): string | null =>
   resolveArtifactPathByContext({
     declaredPath: specifier,

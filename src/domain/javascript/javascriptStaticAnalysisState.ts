@@ -1,4 +1,5 @@
 import type * as t from "@babel/types";
+import type { JavaScriptRpcScan } from "./javascriptRpcEndpoints.js";
 
 import type {
   JavaScriptBundlerRegistration,
@@ -9,6 +10,7 @@ import type {
   JavaScriptStaticStorage,
 } from "./javascriptStaticAnalysisTypes.js";
 import type {
+  ElectronCallPath,
   ElectronBrowserWindowFinding,
   ElectronContextBridgeFinding,
   ElectronIpcFinding,
@@ -35,6 +37,8 @@ export interface LocatedJavaScriptFinding<Value> {
 
 /** Mutable collections used during one inert AST traversal. */
 export interface JavaScriptAnalysisAccumulator {
+  electronCallPaths?: readonly ElectronCallPath[];
+  electronCallPathLimitReached?: boolean;
   readonly references: LocatedJavaScriptFinding<JavaScriptStaticReference>[];
   readonly endpoints: LocatedJavaScriptFinding<JavaScriptStaticEndpoint>[];
   readonly storage: LocatedJavaScriptFinding<JavaScriptStaticStorage>[];
@@ -57,6 +61,7 @@ export interface JavaScriptAnalysisAccumulator {
 
 /** Shared source and accumulator for helper inspections. */
 export interface JavaScriptFindingContext {
+  readonly rpcScan: JavaScriptRpcScan;
   readonly source: string;
   readonly accumulator: JavaScriptAnalysisAccumulator;
   readonly openReceiverFacts?: ReadonlyMap<
@@ -68,8 +73,8 @@ export interface JavaScriptFindingContext {
     | "local-indexed-db"
     | "local-cache-storage"
   >;
-  /** Electron export paths for renamed call roots, by identifier offset. */
-  readonly electronBindings?: ReadonlyMap<number, string>;
+  /** Proven Electron export path segments by root offset. */
+  readonly electronBindings?: ReadonlyMap<number, readonly string[]>;
 }
 
 /** Candidate import, require, worker, or service-worker reference. */

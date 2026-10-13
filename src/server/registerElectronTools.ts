@@ -18,6 +18,7 @@ import {
   listElectronTargets,
 } from "../application/javascript/ElectronObservationService.js";
 import { analyzeJavaScriptApplicationValidated } from "../application/javascript/JavaScriptApplicationService.js";
+import type { ArtifactResourceScope } from "../artifacts/ArtifactResourceScope.js";
 import { reconcileJavaScriptRuntimeEvidenceValidated } from "../application/javascript/JavaScriptRuntimeReconciliationService.js";
 import type { ProgressReporter } from "../application/ProgressReporter.js";
 import { toolContract } from "../contracts/toolContracts.js";
@@ -25,7 +26,6 @@ import type { ToolContract } from "../contracts/toolContractTypes.js";
 import type { AnalysisError } from "../domain/analysisErrorBase.js";
 import type { Evidence } from "../domain/evidence.js";
 import type { Result } from "../domain/result.js";
-import { inspectElectronPageInputSchema } from "../domain/javascript/electronObservation.js";
 import type { Logger } from "pino";
 import { mcpProgressReporter } from "./mcpProgress.js";
 import { logToolExecution } from "./toolLogging.js";
@@ -34,6 +34,7 @@ import type { WithAdmittedAnalysis } from "./analysisAdmission.js";
 import { runAdmittedToolOperation } from "./admittedToolOperation.js";
 
 interface ElectronToolRegistration {
+  readonly artifactResources: ArtifactResourceScope;
   readonly logger: Logger;
   readonly observationLoadFailure?: OptionalProviderLoadFailure | undefined;
   readonly activeLoadFailure?: OptionalProviderLoadFailure | undefined;
@@ -84,13 +85,11 @@ export const registerElectronTools = (
         registration,
         inspectContract,
         { input, context },
-        async (parsed, { signal, progress }) => {
-          const request = inspectElectronPageInputSchema.parse(parsed);
-          return inspectElectronPage(options.electron, request, {
+        (parsed, { signal, progress }) =>
+          inspectElectronPage(options.electron, parsed, {
             signal,
             progress,
-          });
-        },
+          }),
       ),
   );
   server.registerTool(
@@ -104,6 +103,7 @@ export const registerElectronTools = (
         async ({ detail, ...request }, { signal, progress }) => {
           const analyzed = await analyzeJavaScriptApplicationValidated(
             request,
+            options.artifactResources,
             { signal, progress },
           );
           return detail === "summary" && analyzed.ok
@@ -181,8 +181,24 @@ const runElectronTool = async <Input>(
           progress: mcpProgressReporter(context),
         }),
       );
-      if (!result.ok)
+      if (!result.ok) {
+        const partial = result.error.partialObservation;
+        if (
+          partial !== undefined &&
+          "evidence_id" in partial &&
+          typeof partial.evidence_id === "string"
+        ) {
+          const recorded = options.recordEvidence?.(partial);
+          if (recorded !== undefined)
+            return options.delivery.toRecordedPartialErrorToolResult(
+              result.error,
+              partial.evidence_id,
+              recorded,
+              contract.returnsTargetContent,
+            );
+        }
         return options.delivery.toCallToolResult(result, contract);
+      }
       const recorded = options.recordEvidence?.(result.value);
       return options.delivery.toEvidenceToolResult(
         result.value,

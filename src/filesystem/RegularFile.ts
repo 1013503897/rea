@@ -1,6 +1,8 @@
 import { constants } from "node:fs";
 import type { BigIntStats, Stats } from "node:fs";
-import { open, type FileHandle } from "node:fs/promises";
+import { lstat, open, type FileHandle } from "node:fs/promises";
+
+import { OwnedFileHandle } from "./OwnedFileHandle.js";
 
 /** Identifies a selected path that cannot be read as one regular file. */
 export class NonRegularFileReadError extends Error {
@@ -13,6 +15,24 @@ export class NonRegularFileReadError extends Error {
     super(`Selected input must be a regular file: ${path}`);
     this.name = "NonRegularFileReadError";
     this.code = directory ? "EISDIR" : "ENOTFILE";
+  }
+}
+
+/** Admission failed and the opened descriptor could not be confirmed closed. */
+export class RegularFileAdmissionFailure extends Error {
+  override readonly cause: unknown;
+
+  constructor(
+    readonly path: string,
+    admissionCause: unknown,
+    readonly cleanupCause: unknown,
+    readonly owner: OwnedFileHandle,
+  ) {
+    super(
+      `Selected input failed admission and its descriptor close failed: ${path}`,
+    );
+    this.name = "RegularFileAdmissionFailure";
+    this.cause = admissionCause;
   }
 }
 
@@ -47,15 +67,30 @@ export const openRegularFile = async (
       (constants.O_NOCTTY ?? 0) |
       (options.symlinks === "reject" ? (constants.O_NOFOLLOW ?? 0) : 0),
   );
+  const owner = new OwnedFileHandle(handle);
   try {
     options.signal?.throwIfAborted();
     const metadata = await handle.stat();
     options.signal?.throwIfAborted();
     if (!metadata.isFile())
       throw new NonRegularFileReadError(path, metadata.isDirectory());
+    // O_NOFOLLOW is unavailable on Windows. Recheck the name only on hosts
+    // where open could have followed a symlink, while the descriptor is owned.
+    if (options.symlinks === "reject" && (constants.O_NOFOLLOW ?? 0) === 0) {
+      const named = await lstat(path);
+      options.signal?.throwIfAborted();
+      if (named.isSymbolicLink())
+        throw new NonRegularFileReadError(path, false);
+      if (!sameRegularFileState(metadata, named))
+        throw new RegularFileChangedError(path);
+    }
     return handle;
   } catch (cause: unknown) {
-    await handle.close().catch(() => undefined);
+    try {
+      await owner.close();
+    } catch (cleanupCause: unknown) {
+      throw new RegularFileAdmissionFailure(path, cause, cleanupCause, owner);
+    }
     throw cause;
   }
 };
@@ -70,5 +105,8 @@ export const sameRegularFileState = (
   expected.ino === observed.ino &&
   expected.size === observed.size &&
   expected.mode === observed.mode &&
-  expected.mtimeMs === observed.mtimeMs &&
-  expected.ctimeMs === observed.ctimeMs;
+  ("mtimeNs" in expected && "mtimeNs" in observed
+    ? expected.mtimeNs === observed.mtimeNs &&
+      expected.ctimeNs === observed.ctimeNs
+    : expected.mtimeMs === observed.mtimeMs &&
+      expected.ctimeMs === observed.ctimeMs);
