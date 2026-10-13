@@ -14,7 +14,6 @@ import { promisify } from "node:util";
 import { expect, it } from "vitest";
 
 import { assertCleanLinuxHopperRuntime } from "../../../scripts/lib/clean-linux-hopper-runtime.mjs";
-import { completeVerifierRun } from "../../../scripts/lib/verifier-run.mjs";
 import { cleanupOwnedProcessGroup } from "../../../src/process/ProcessOwnership.js";
 import { createTestTempDirectory } from "../../fixtures/temporaryDirectory.js";
 
@@ -138,6 +137,94 @@ it.runIf(process.platform === "linux")(
   },
 );
 
+const launchReapedOrphan = (runId: string, parentCode: string) => {
+  // The short-lived Node launcher still exits before observation. A retained
+  // subreaper adopts its child and waits after owned cleanup, even when the
+  // container's PID 1 does not reap. It is a sibling of the verifier below.
+  const reaper = execFileAsync(
+    "/usr/bin/python3",
+    [
+      "-c",
+      `
+import ctypes, json, os, subprocess, sys
+libc = ctypes.CDLL(None, use_errno=True)
+if libc.prctl(36, 1, 0, 0, 0) != 0: # PR_SET_CHILD_SUBREAPER
+    raise OSError(ctypes.get_errno(), "PR_SET_CHILD_SUBREAPER")
+launcher = subprocess.run(sys.argv[1:], capture_output=True, text=True, check=True)
+child = json.loads(launcher.stdout)
+try:
+    print(json.dumps(child), flush=True)
+    sys.stdin.buffer.read(1)
+finally:
+    os.waitpid(child["pid"], 0)
+`,
+      process.execPath,
+      "-e",
+      parentCode,
+    ],
+    {
+      env: { ...process.env, REA_PROCESS_RUN_ID: runId },
+      timeout: 40_000,
+    },
+  );
+  const ready = new Promise<{ pid: number; parentPid: number }>(
+    (resolve, reject) => {
+      reaper.child.stdout?.once("data", (data: Buffer) => {
+        try {
+          resolve(JSON.parse(data.toString()));
+        } catch (error) {
+          reject(error);
+        }
+      });
+      reaper.then(
+        () => reject(new Error("Fixture reaper exited before readiness")),
+        reject,
+      );
+    },
+  );
+  return { reaper, ready };
+};
+
+const observeFromSeparateVerifier = async (
+  runId: string,
+  launcherPaths: string[],
+) => {
+  const observer = new URL(
+    "../../../scripts/lib/clean-linux-hopper-runtime.mjs",
+    import.meta.url,
+  ).href;
+  const verifierRun = new URL(
+    "../../../scripts/lib/verifier-run.mjs",
+    import.meta.url,
+  ).href;
+  const { stdout: observed } = await execFileAsync(
+    process.execPath,
+    [
+      "--input-type=module",
+      "-e",
+      `
+const { assertCleanLinuxHopperRuntime } = await import(${JSON.stringify(observer)});
+const { completeVerifierRun } = await import(${JSON.stringify(verifierRun)});
+const { process_lineage } = await completeVerifierRun({
+  run_id: ${JSON.stringify(runId)}, verifier_pid: process.pid, parent_pid: process.ppid,
+});
+let refusal;
+try { await assertCleanLinuxHopperRuntime(${JSON.stringify(launcherPaths)}); }
+catch (error) { refusal = error.message; }
+console.log(JSON.stringify({ process_lineage, refusal }));
+`,
+    ],
+    { timeout: 10_000 },
+  );
+  return JSON.parse(observed) as {
+    process_lineage: {
+      status: string;
+      descendants: { pid: number }[];
+    };
+    refusal?: string;
+  };
+};
+
 it.runIf(process.platform === "linux").each([
   ["Xvfb-named Node", null, true],
   ["Python helper", [], true],
@@ -208,17 +295,10 @@ it.runIf(process.platform === "linux").each([
       };
       ${pythonMode ? "child.stdout.once('data', ready);" : `child.once(${JSON.stringify(alternateMode ? "spawn" : "message")}, ready);`}
     `;
-    const parent = execFileAsync(process.execPath, ["-e", parentCode], {
-      env: { ...process.env, REA_PROCESS_RUN_ID: runId },
-      timeout: 10_000,
-    });
-    const parentPid = parent.child.pid;
-    if (parentPid === undefined)
-      throw new Error("Fixture parent did not spawn");
+    const { reaper, ready } = launchReapedOrphan(runId, parentCode);
     let orphanPid: number | undefined;
     try {
-      const { stdout } = await parent;
-      const { pid } = JSON.parse(stdout) as { pid: number };
+      const { pid, parentPid } = await ready;
       orphanPid = pid;
       const { stdout: coordinates } = await execFileAsync("ps", [
         "-p",
@@ -231,18 +311,8 @@ it.runIf(process.platform === "linux").each([
         .split(/\s+/u)
         .map(Number);
       expect(currentParent).not.toBe(parentPid);
+      expect(currentParent).toBe(reaper.child.pid);
       expect(group).toBe(pid);
-
-      const lineage = await completeVerifierRun({
-        run_id: runId,
-        verifier_pid: process.pid,
-        parent_pid: process.ppid,
-      });
-      expect(lineage.process_lineage.status).toBe("verified");
-      if (lineage.process_lineage.status === "verified")
-        expect(
-          lineage.process_lineage.descendants.some((p) => p.pid === pid),
-        ).toBe(false);
 
       if (alternateMode) {
         const commandLine = await readFile(
@@ -261,14 +331,18 @@ it.runIf(process.platform === "linux").each([
           commandLine.split("\0").slice(0, pythonOptions.length + 2),
         ).toEqual([command, ...pythonOptions, helper]);
       }
-      const observation = assertCleanLinuxHopperRuntime(
-        alternateMode ? [launcher] : [],
-      );
+      const { process_lineage: lineage, refusal } =
+        await observeFromSeparateVerifier(
+          runId,
+          alternateMode ? [launcher] : [],
+        );
+      expect(lineage.status).toBe("verified");
+      expect(lineage.descendants.some((p) => p.pid === pid)).toBe(false);
       if (retained)
-        await expect(observation).rejects.toThrow(
+        expect(refusal).toBe(
           "Clean Linux runner retained a Hopper demo process",
         );
-      else await expect(observation).resolves.toBeUndefined();
+      else expect(refusal).toBeUndefined();
       // Observation must not terminate the fixture, even though it resembles Xvfb.
       const { stdout: alive } = await execFileAsync("ps", [
         "-p",
@@ -278,13 +352,22 @@ it.runIf(process.platform === "linux").each([
       ]);
       expect(alive.trim()).not.toMatch(/^Z/u);
     } finally {
-      if (orphanPid !== undefined) {
-        const cleanup = await cleanupOwnedProcessGroup({
-          runId,
-          leaderPid: orphanPid,
-          processGroupId: orphanPid,
-        });
-        expect(cleanup.cleaned, JSON.stringify(cleanup)).toBe(true);
+      try {
+        if (orphanPid !== undefined) {
+          const cleanup = await cleanupOwnedProcessGroup({
+            runId,
+            leaderPid: orphanPid,
+            processGroupId: orphanPid,
+          });
+          expect(cleanup.cleaned, JSON.stringify(cleanup)).toBe(true);
+        }
+      } finally {
+        reaper.child.stdin?.end("reap");
+        await reaper;
+        if (orphanPid !== undefined)
+          await expect(
+            readFile(`/proc/${String(orphanPid)}/stat`, "utf8"),
+          ).rejects.toMatchObject({ code: "ENOENT" });
       }
     }
   },
