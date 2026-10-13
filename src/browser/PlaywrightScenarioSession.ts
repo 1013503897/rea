@@ -151,9 +151,10 @@ export class PlaywrightScenarioSession implements BrowserScenarioSessionPort {
         options.signal,
       );
     } catch (cause: unknown) {
+      // Resource release outlives the cancelled request, including retained retries.
       const lateCleanup = () =>
         opening.then(
-          (lateOpened) => lateOpened.cleanup.close(undefined, options.signal),
+          (lateOpened) => lateOpened.cleanup.close(),
           () => undefined,
         );
       options.retainCleanup?.(() =>
@@ -286,7 +287,6 @@ export class PlaywrightScenarioSession implements BrowserScenarioSessionPort {
             events === undefined
               ? undefined
               : () => events?.finish() ?? Promise.resolve(),
-            options.signal,
           );
         } catch (failure: unknown) {
           browserFailure = { cause: failure };

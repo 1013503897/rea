@@ -215,6 +215,8 @@ export const artifactInventoryResultSchema = z.object({
 export const artifactInventoryOutputSchema =
   artifactInventoryResultSchema.extend({
     coverage_status: artifactInventoryCoverageSchema,
+    // JSON output may omit container facts, but cannot carry an undefined member.
+    ines: inesInventorySchema.exactOptional(),
   });
 export type ArtifactInventoryOutput = z.infer<
   typeof artifactInventoryOutputSchema

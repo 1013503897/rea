@@ -120,8 +120,7 @@ export const artifactInspectionOutputSchema =
       .array(
         artifactInspectionResultSchema.shape.substeps.element.safeExtend({
           evidence: evidenceSchema.safeExtend({
-            normalized_result:
-              artifactInventoryOutputSchema.and(jsonValueSchema),
+            normalized_result: artifactInventoryOutputSchema,
           }),
         }),
       )
