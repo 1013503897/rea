@@ -778,7 +778,7 @@ jobs:
   required:
     name: CI required
     # Report failed dependencies, but release superseded PR concurrency slots.
-    if: ${{ !cancelled() }}
+    if: ${{ always() }}
     needs:
       [
         changes,
