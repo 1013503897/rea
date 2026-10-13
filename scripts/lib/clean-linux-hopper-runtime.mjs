@@ -44,6 +44,7 @@ export const assertCleanLinuxHopperRuntime = async (
       ? []
       : [process.env.HOPPER_LAUNCHER_PATH]),
   ],
+  procRoot = "/proc",
 ) => {
   const launchers = [];
   for (const path of launcherPaths) {
@@ -56,20 +57,23 @@ export const assertCleanLinuxHopperRuntime = async (
   // /proc exposes the executed file even when argv[0] names a removed symlink.
   // Compare file identity, not a display path or a process name.
   let inspectionError;
-  for (const entry of await readdir("/proc", { withFileTypes: true })) {
+  for (const entry of await readdir(procRoot, { withFileTypes: true })) {
     if (!entry.isDirectory() || !/^\d+$/u.test(entry.name)) continue;
     let retainedRuntime;
     try {
       // procfs preserves argument boundaries. A caller merely mentioning a
       // runtime in its script text or other arguments is not that runtime.
-      const commandLine = await readFile(`/proc/${entry.name}/cmdline`, "utf8");
+      const commandLine = await readFile(
+        `${procRoot}/${entry.name}/cmdline`,
+        "utf8",
+      );
       const arguments_ = commandLine.split("\0");
       let kernelCommand;
       if (commandLine.length === 0) {
         // Zombies have neither arguments nor an executable link, but keep
         // their kernel command name until their parent reaps them.
         kernelCommand = (
-          await readFile(`/proc/${entry.name}/comm`, "utf8")
+          await readFile(`${procRoot}/${entry.name}/comm`, "utf8")
         ).replace(/\n$/u, "");
         if (/^python3(?:\.\d+)?$/u.test(kernelCommand))
           throw new Error(
@@ -88,7 +92,7 @@ export const assertCleanLinuxHopperRuntime = async (
           basename(pythonScriptOperand(arguments_) ?? "") ===
             "hopper-demo-x11.py");
       if (!retainedRuntime && launchers.length > 0) {
-        const executable = await stat(`/proc/${entry.name}/exe`, {
+        const executable = await stat(`${procRoot}/${entry.name}/exe`, {
           bigint: true,
         });
         retainedRuntime = launchers.some(
@@ -100,7 +104,7 @@ export const assertCleanLinuxHopperRuntime = async (
       // Other users' process facts may be unreadable. The setup lane launches
       // providers as the caller; unreadable caller-owned processes fail closed.
       if (error?.code === "EACCES") {
-        const owner = await stat(`/proc/${entry.name}`).catch((cause) => {
+        const owner = await stat(`${procRoot}/${entry.name}`).catch((cause) => {
           if (cause?.code === "ENOENT") return undefined;
           throw cause;
         });

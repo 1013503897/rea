@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import {
   chmod,
   copyFile,
+  mkdir,
   readFile,
   symlink,
   unlink,
@@ -28,6 +29,8 @@ it.runIf(process.platform === "linux").each([
   "observes an unreaped %s without signaling or reaping it",
   async (name, refusal) => {
     const directory = await createTestTempDirectory("rea-runtime-zombie-");
+    const procRoot = join(directory, "proc");
+    await mkdir(procRoot);
     const executable = join(directory, name);
     await copyFile("/usr/bin/true", executable);
     await chmod(executable, 0o700);
@@ -64,9 +67,13 @@ finally:
       zombiePid = await ready;
       expect(Number.isSafeInteger(zombiePid)).toBe(true);
       const prefix = `/proc/${String(zombiePid)}`;
+      const procEntry = join(procRoot, String(zombiePid));
+      await mkdir(procEntry);
+      for (const name of ["cmdline", "comm"])
+        await symlink(`${prefix}/${name}`, join(procEntry, name));
       expect(await readFile(`${prefix}/cmdline`, "utf8")).toBe("");
       expect((await readFile(`${prefix}/comm`, "utf8")).trim()).toBe(name);
-      const observation = assertCleanLinuxHopperRuntime([]);
+      const observation = assertCleanLinuxHopperRuntime([], procRoot);
       if (refusal === undefined)
         await expect(observation).resolves.toBeUndefined();
       else await expect(observation).rejects.toThrow(refusal);
@@ -188,6 +195,7 @@ finally:
 const observeFromSeparateVerifier = async (
   runId: string,
   launcherPaths: string[],
+  procRoot: string,
 ) => {
   const observer = new URL(
     "../../../scripts/lib/clean-linux-hopper-runtime.mjs",
@@ -209,7 +217,7 @@ const { process_lineage } = await completeVerifierRun({
   run_id: ${JSON.stringify(runId)}, verifier_pid: process.pid, parent_pid: process.ppid,
 });
 let refusal;
-try { await assertCleanLinuxHopperRuntime(${JSON.stringify(launcherPaths)}); }
+try { await assertCleanLinuxHopperRuntime(${JSON.stringify(launcherPaths)}, ${JSON.stringify(procRoot)}); }
 catch (error) { refusal = error.message; }
 console.log(JSON.stringify({ process_lineage, refusal }));
 `,
@@ -249,6 +257,8 @@ it.runIf(process.platform === "linux").each([
     const childCode =
       "process.title = 'Xvfb'; setInterval(() => {}, 1000); process.send('ready');";
     const directory = await createTestTempDirectory("rea-clean-runtime-test-");
+    const procRoot = join(directory, "proc");
+    await mkdir(procRoot);
     const launcher = join(directory, "Hopper");
     const alternate = join(directory, "Hopper-alternate");
     const helper = join(directory, "hopper-demo-x11.py");
@@ -268,7 +278,10 @@ it.runIf(process.platform === "linux").each([
     }
     // The fixture must be the cause of a refusal; a retained host runtime
     // would otherwise mask a broken classification or executable-identity check.
-    await assertCleanLinuxHopperRuntime(alternateMode ? [launcher] : []);
+    await assertCleanLinuxHopperRuntime(
+      alternateMode ? [launcher] : [],
+      procRoot,
+    );
     const command = alternateMode
       ? alternate
       : pythonMode
@@ -303,6 +316,10 @@ it.runIf(process.platform === "linux").each([
     try {
       const { pid, parentPid } = await ready;
       orphanPid = pid;
+      const procEntry = join(procRoot, String(pid));
+      await mkdir(procEntry);
+      for (const name of ["cmdline", "comm", "exe"])
+        await symlink(`/proc/${String(pid)}/${name}`, join(procEntry, name));
       const { stdout: coordinates } = await execFileAsync("ps", [
         "-p",
         String(pid),
@@ -338,6 +355,7 @@ it.runIf(process.platform === "linux").each([
         await observeFromSeparateVerifier(
           runId,
           alternateMode ? [launcher] : [],
+          procRoot,
         );
       expect(lineage.status).toBe("verified");
       expect(lineage.descendants.some((p) => p.pid === pid)).toBe(false);
