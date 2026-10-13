@@ -5,7 +5,7 @@ summary documentation, current translations and unknown-head pagination contract
 
 - Documentation facts and README consistency checks passed.
 - Production VitePress build passed.
-- Independent built-HTML verification passed for 56 stable public routes,
+- Independent built-HTML verification passed for 57 stable public routes,
   56 physical source-edit links and 507 distinct internal file/anchor targets.
 - The new regression caught a doubled catalog base path and a missing historical
   managed/native fragment. Both were corrected without weakening assertions.
@@ -17,7 +17,7 @@ summary documentation, current translations and unknown-head pagination contract
   host run passed without changing timeouts or assertions.
 - After the subsequent upstream advance, 14 tests across unknown-head pagination,
   workflow replay and target-content framing passed. Static checks, documentation
-  facts and all 56 published routes passed again against that base.
+  facts and all 57 published routes passed again against that base.
 - Documentation CI and the manual build require the built-page verifier.
   An actual CI-planner regression ensures edits to the verifier select that lane.
 
