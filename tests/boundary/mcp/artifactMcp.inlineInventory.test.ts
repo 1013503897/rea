@@ -1,4 +1,3 @@
-import { jsonValueSchema } from "../../../src/domain/jsonValue.js";
 import { parseMcpToolError } from "../../fixtures/mcpToolError.js";
 import { readFile, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -27,6 +26,7 @@ import {
   artifactInventoryResultSchema,
   type ArtifactInventoryResult,
 } from "../../../src/domain/artifactGraph.js";
+import { jsonValueSchema } from "../../../src/domain/jsonValue.js";
 import {
   analysisViewResultSchema,
   type AnalysisViewResult,

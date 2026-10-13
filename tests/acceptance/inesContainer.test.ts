@@ -7,7 +7,7 @@ import {
   artifactInspectionResultSchema,
 } from "../../src/domain/artifactInspection.js";
 import {
-  artifactInventoryResultSchema,
+  artifactInventoryOutputSchema,
   artifactExtractionResultSchema,
 } from "../../src/domain/artifactGraph.js";
 import { analysisViewResultSchema } from "../../src/domain/analysisView/analysisView.js";
@@ -36,9 +36,14 @@ const inventoryFrom = (input: unknown) => {
   const substep = inspection.substeps[0];
   if (substep === undefined) throw new Error("Missing inventory substep");
   parseEvidence(substep.evidence);
-  return artifactInventoryResultSchema.parse(
+  const inventory = artifactInventoryOutputSchema.parse(
     substep.evidence.normalized_result,
   );
+  expect(inventory.coverage_status).toBe("complete");
+  expect(inventory.limitations).toContainEqual(
+    expect.stringContaining("CPU bank mappings"),
+  );
+  return inventory;
 };
 
 cliTest(

@@ -41,7 +41,7 @@ import {
   hashStableRootArtifact,
   hashStableRootArtifactHandle,
 } from "./hashStableRootArtifact.js";
-import { createReader, inventoryLimitations } from "./reader.js";
+import { createReader, inventoryAssessment } from "./reader.js";
 import {
   scanReader,
   type PendingIntegrityContradiction,
@@ -269,6 +269,12 @@ const buildInventorySnapshot = async (
     orderedOccurrences,
     orderedEdges,
   });
+  const assessment = inventoryAssessment(
+    rootFormat,
+    reader,
+    integrityContradictions,
+    input.caseCollisionLimitation,
+  );
   return {
     manifest,
     ...(reader instanceof InesArtifactReader && rootDigest !== null
@@ -279,12 +285,8 @@ const buildInventorySnapshot = async (
     edges: orderedEdges,
     provenance: reader?.provenance() ?? [],
     integrity_contradictions: integrityContradictions,
-    limitations: buildLimitations(
-      rootFormat,
-      reader,
-      integrityContradictions,
-      input.caseCollisionLimitation,
-    ),
+    coverage_status: assessment.coverage_status,
+    limitations: assessment.limitations,
   };
 };
 
@@ -397,18 +399,3 @@ const buildManifest = ({
     occurrence_count: orderedOccurrences.length,
     edge_count: orderedEdges.length,
   });
-
-const buildLimitations = (
-  rootFormat: ArtifactOccurrence["artifact_format"],
-  reader: ArtifactReader | undefined,
-  integrityContradictions: readonly IntegrityContradiction[],
-  caseCollisionLimitation: string | undefined,
-): string[] => [
-  ...inventoryLimitations(rootFormat, reader),
-  ...(caseCollisionLimitation === undefined ? [] : [caseCollisionLimitation]),
-  ...(integrityContradictions.length === 0
-    ? []
-    : [
-        `${String(integrityContradictions.length)} integrity contradiction(s) were recorded; mismatched content is observed-untrusted.`,
-      ]),
-];
