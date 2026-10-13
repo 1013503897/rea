@@ -1,7 +1,7 @@
 # Verification after upstream integration
 
-Integrated upstream 82cfcee19f18b0eeae9a330ba04e0411cdf85225, preserving its
-new signal-recording guide, managed summary documentation and current translations.
+Integrated upstream c462a4ebd, preserving its new signal-recording guide, managed
+summary documentation, current translations and unknown-head pagination contract.
 
 - Documentation facts and README consistency checks passed.
 - Production VitePress build passed.
@@ -15,6 +15,9 @@ new signal-recording guide, managed summary documentation and current translatio
   ten files. CLI runs need process-table access for actual ownership/cleanup
   verification; restricted execution failed with spawn EPERM, while the normal
   host run passed without changing timeouts or assertions.
+- After the subsequent upstream advance, 14 tests across unknown-head pagination,
+  workflow replay and target-content framing passed. Static checks, documentation
+  facts and all 56 published routes passed again against that base.
 - Documentation CI and the manual build require the built-page verifier.
   An actual CI-planner regression ensures edits to the verifier select that lane.
 
