@@ -166,7 +166,7 @@ export const parseBinaryTarget = async (
       const artifactFormat =
         targetKind === "database"
           ? undefined
-          : await detectArtifactFormat(path, handle, signal);
+          : await detectArtifactFormat(path, handle, metadata, signal);
       if (
         targetKind === "database" ||
         (targetKind === undefined &&
