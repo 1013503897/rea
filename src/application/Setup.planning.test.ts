@@ -160,7 +160,7 @@ describe("setup workflow", () => {
       "registration fields that do not parse are removed",
     );
     expect(result.plannedActions[0]?.detail).toContain(
-      "A tools value is removed.",
+      "Invalid Codex tools values are removed; valid per-tool approval maps are kept.",
     );
     expect(host.hopperInstalls).toBe(0);
     expect(host.configurations).toBe(0);

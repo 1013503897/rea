@@ -59,7 +59,11 @@ it.each([
     "codex",
     "toml",
     "toml",
-    { tool_timeout_sec: 900, enabled_tools: ["analyze_function"] },
+    {
+      tool_timeout_sec: 900,
+      enabled_tools: ["analyze_function"],
+      tools: { binary_session: { approval_mode: "approve" } },
+    },
   ],
   ["grok_build", "grok", "grok", { tool_timeout_sec: 900 }],
   ["hermes", "hermes", "hermes", { timeout: 600, connect_timeout: 60 }],

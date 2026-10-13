@@ -22,6 +22,19 @@ export const registrationSchema = z
 
 const codexRegistrationSchema = registrationSchema.extend({
   tool_timeout_sec: z.number().optional(),
+  tools: z
+    .record(
+      z.string(),
+      z
+        .object({
+          approval_mode: z
+            .enum(["auto", "prompt", "writes", "approve"])
+            .optional(),
+          output_token_limit: z.number().int().positive().optional(),
+        })
+        .strict(),
+    )
+    .optional(),
   required: z.boolean().optional(),
   cwd: z.string().optional(),
   env_vars: z.array(z.string()).optional(),

@@ -1561,7 +1561,7 @@ const registrationManagedKey = (
   Object.hasOwn(REGISTRATION_LAUNCHER_KEYS, key) ||
   Object.hasOwn(REGISTRATION_REMOTE_KEYS, key) ||
   !registrationFieldAccepted(dialect, key, value) ||
-  (key === "tools" && !keepsCopilotTools(dialect)) ||
+  (key === "tools" && dialect !== "toml" && !keepsCopilotTools(dialect)) ||
   (key === "enabled" && value === false) ||
   (key === "enable" && value === false && dialect === "zcode") ||
   (key === "disabled" && value === true && !keepsGrokDisabledFlag(dialect));
@@ -1625,7 +1625,11 @@ export const describeClientRegistrationRetention = (
   const removed = keepsGrokDisabledFlag(dialect)
     ? "Remote-server keys, an enabled: false switch, and registration fields that do not parse are removed. A boolean disabled value is kept."
     : "Remote-server keys, switches that turn the server off, and registration fields that do not parse are removed.";
-  const tools = keepsCopilotTools(dialect) ? "" : " A tools value is removed.";
+  const tools = keepsCopilotTools(dialect)
+    ? ""
+    : dialect === "toml"
+      ? " Invalid Codex tools values are removed; valid per-tool approval maps are kept."
+      : " A tools value is removed.";
   const replacement =
     replaced.length === 0
       ? `${removed}${tools}`
