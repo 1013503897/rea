@@ -25,6 +25,7 @@ export const SCOPES = {
     "tests/boundary/cli/nativePlistSelectionFailureCli.test.ts",
     "tests/boundary/cli/nativeDemangleCli.test.ts",
     "tests/boundary/mcp/nativeDemangleMcp.test.ts",
+    "tests/boundary/mcp/nativeMachoSummaryMcp.test.ts",
     "tests/boundary/providers/native/nativeSignatureTargetBinding.test.ts",
     "tests/boundary/cli/nativeSignatureCli.test.ts",
     "tests/boundary/mcp/nativeSignatureTargetBindingMcp.test.ts",
