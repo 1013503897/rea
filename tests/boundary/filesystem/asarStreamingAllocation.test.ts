@@ -325,7 +325,9 @@ describe("ASAR read failures", () => {
   it.skipIf(process.platform === "win32")(
     "closes the opened unpacked file and retains ASAR context when handle stat fails",
     async () => {
-      const { archive, unpackedPath, identity } = await createUnpackedFixture("rea-asar-unpacked-stat-");
+      const { archive, unpackedPath, identity } = await createUnpackedFixture(
+        "rea-asar-unpacked-stat-",
+      );
       const ioError = Object.assign(new Error("device stat failed"), {
         code: "EIO",
         errno: -5,
@@ -387,7 +389,9 @@ describe("ASAR read failures", () => {
 it.skipIf(process.platform === "win32")(
   "never treats an invalidated unpacked handle as proof of cleanup recovery",
   async () => {
-    const { archive, unpackedPath, identity } = await createUnpackedFixture("rea-asar-invalidated-handle-");
+    const { archive, unpackedPath, identity } = await createUnpackedFixture(
+      "rea-asar-invalidated-handle-",
+    );
     const statFailure = Object.assign(new Error("unpacked metadata failed"), {
       code: "EIO",
       errno: -5,
@@ -450,7 +454,9 @@ it.skipIf(process.platform === "win32")(
 it.skipIf(process.platform === "win32")(
   "retries cleanup when cancellation arrives immediately after unpacked stat",
   async () => {
-    const { archive, unpackedPath, identity } = await createUnpackedFixture("rea-asar-unpacked-abort-stat-");
+    const { archive, unpackedPath, identity } = await createUnpackedFixture(
+      "rea-asar-unpacked-abort-stat-",
+    );
     const controller = new AbortController();
     let closeCount = 0;
     const reader = new AsarArtifactReader(archive, {
@@ -497,7 +503,9 @@ it.skipIf(process.platform === "win32")(
 it.skipIf(process.platform === "win32")(
   "preserves an unpacked identity failure when closing its handle fails",
   async () => {
-    const { archive, unpackedPath, identity } = await createUnpackedFixture("rea-asar-unpacked-identity-");
+    const { archive, unpackedPath, identity } = await createUnpackedFixture(
+      "rea-asar-unpacked-identity-",
+    );
     const closeError = new Error("first close failed");
     let closeCount = 0;
     const reader = new AsarArtifactReader(archive, {
@@ -547,7 +555,9 @@ it.skipIf(process.platform === "win32")(
 it.skipIf(process.platform === "win32")(
   "retains unpacked handles before retrying snapshot cleanup failures",
   async () => {
-    const { archive, unpackedPath, identity } = await createUnpackedFixture("rea-asar-combined-cleanup-");
+    const { archive, unpackedPath, identity } = await createUnpackedFixture(
+      "rea-asar-combined-cleanup-",
+    );
     const closeError = new Error("unpacked close denied");
     const snapshotError = new Error("snapshot removal denied");
     let closeCount = 0;
