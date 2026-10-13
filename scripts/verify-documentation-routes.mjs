@@ -46,17 +46,24 @@ while (directories.length > 0) {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     const path = resolve(directory, entry.name);
     if (entry.isDirectory()) directories.push(path);
-    else if (entry.isFile() && entry.name.endsWith(".html")) htmlPages.push(path);
+    else if (entry.isFile() && entry.name.endsWith(".html"))
+      htmlPages.push(path);
   }
 }
 for (const page of htmlPages.sort()) {
-  const route = page.slice(output.length + 1).split(sep).join("/");
+  const route = page
+    .slice(output.length + 1)
+    .split(sep)
+    .join("/");
   const html = await readFile(page, "utf8");
   // The configured home layout and generated 404 render no edit action.
   // Their outgoing links still participate in the same all-page scan.
   if (route !== "404.html" && route !== "index.html") {
     const source = physicalEditSource(html, route);
-    assert.ok((await stat(source)).isFile(), route + ": edit link source is missing");
+    assert.ok(
+      (await stat(source)).isFile(),
+      route + ": edit link source is missing",
+    );
     sourceLinks++;
   }
   for (const match of html.matchAll(
@@ -97,7 +104,10 @@ function physicalEditSource(html, route) {
   );
   assert.ok(edit, route + ": missing physical-source edit link");
   const source = resolve(documentation, decodeURIComponent(edit[1]));
-  assert.ok(source.startsWith(documentation + sep), route + ": source escaped documentation root");
+  assert.ok(
+    source.startsWith(documentation + sep),
+    route + ": source escaped documentation root",
+  );
   return source;
 }
 console.log(
