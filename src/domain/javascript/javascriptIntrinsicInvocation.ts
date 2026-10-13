@@ -106,6 +106,7 @@ export const resolveJavaScriptIntrinsicInvocation = (
         );
         if (method === "call" || method === "apply") {
           const bound = boundIntrinsic(callee.object);
+          if (explicitReceiver && !t.isExpression(receiver)) return undefined;
           if (
             bound !== undefined &&
             intrinsicReadChanged(callee, [...bound.path, method])
