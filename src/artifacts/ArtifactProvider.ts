@@ -346,11 +346,10 @@ class ArtifactClient implements AnalysisClient {
       this.target.sourcePath ?? this.target.path,
       inventory.manifest,
     );
-    const { ines, ...inventoryGraph } = inventory;
     const inventoryEvidence = createEvidence(subject, ARTIFACT_GRAPH_PROVIDER, {
       operation: "inventory_artifact",
       parameters: inventoryParameters,
-      result: { ...inventoryGraph, ...(ines === undefined ? {} : { ines }) },
+      result: inventory,
       rawResult: null,
       limitations: inventory.limitations,
       // The nested inventory already names every occurrence's logical path.
