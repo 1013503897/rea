@@ -1355,7 +1355,7 @@ public final class ReaGhidraBridge extends HeadlessScript {
         );
         if (swift && aarch64) {
             limitations.add(
-                "Swift String literals are decoded from constant register pairs at calls, returns and paired stores; literals stored one word at a time, chosen by two conditional selects, or built at runtime are not reported."
+                "Swift String literals are decoded from constant register pairs at calls, returns and paired stores; literals stored one word at a time, chosen by conditional selects, passed through unresolved jumps, or built at runtime are not reported."
             );
             if (swiftLiterals.omissions().size() > 0) {
                 limitations.add(
@@ -3539,12 +3539,11 @@ public final class ReaGhidraBridge extends HeadlessScript {
         for (PcodeOp operation : instruction.getPcode()) {
             if (operation.getOpcode() == PcodeOp.RETURN) returns = true;
         }
-        // A jump leaves the function only when every resolved target is outside its body; a
-        // computed jump without resolved targets is an indirect tail call.
+        // A jump is a proven tail call only when it has resolved targets and all leave the
+        // body. A targetless computed jump can still dispatch inside the function.
         Address[] targets = instruction.getFlows();
-        boolean tailCall = flow.isJump() && !flow.isConditional() && (targets.length == 0
-            ? flow.isComputed()
-            : Arrays.stream(targets).allMatch(target -> !function.getBody().contains(target)));
+        boolean tailCall = flow.isJump() && !flow.isConditional() && targets.length > 0 &&
+            Arrays.stream(targets).allMatch(target -> !function.getBody().contains(target));
         if (!flow.isCall() && !returns && !tailCall) return pairs;
         // A String occupies two consecutive registers among x0-x7, or x0 and x1 when returned.
         int lastFirstRegister = returns ? 0 : 6;
@@ -3674,7 +3673,8 @@ public final class ReaGhidraBridge extends HeadlessScript {
      * to six escaped JSON characters ("\\u0000") held as UTF-16 in Gson's growing writer buffer
      * (up to twice its length), again in the returned String, and once more as UTF-8 on the
      * socket. Each record also pays a fixed cost for its map key, JSON members, addresses, words
-     * and their serialized form, so many empty or small literals are bounded too.
+     * and their serialized form, so many empty or small literals are bounded too. Retained
+     * provenance-cache entries draw on that same fixed-state allowance.
      */
     private static final class SwiftLiteralBudget {
         private static final long BYTES_PER_LITERAL_BYTE = 2 + 6 * 2 * 2 + 6 * 2 + 6;
