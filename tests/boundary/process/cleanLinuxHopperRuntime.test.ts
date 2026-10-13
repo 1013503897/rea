@@ -108,6 +108,7 @@ it.runIf(process.platform === "linux")(
       const entry = join(${JSON.stringify(procRoot)}, String(process.pid));
       await mkdir(entry);
       await symlink("/proc/" + process.pid + "/cmdline", join(entry, "cmdline"));
+      await symlink("/proc/" + process.pid + "/comm", join(entry, "comm"));
       await assertCleanLinuxHopperRuntime([], ${JSON.stringify(procRoot)});
       console.log('clean');
     `;
@@ -145,6 +146,7 @@ it.runIf(process.platform === "linux")(
       const entry = join(${JSON.stringify(procRoot)}, String(process.pid));
       await mkdir(entry);
       await symlink("/proc/" + process.pid + "/cmdline", join(entry, "cmdline"));
+      await symlink("/proc/" + process.pid + "/comm", join(entry, "comm"));
       const { assertCleanLinuxHopperRuntime } = await import(${JSON.stringify(observer)});
       await assertCleanLinuxHopperRuntime([], ${JSON.stringify(procRoot)});
       console.log('clean');
