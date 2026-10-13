@@ -64,8 +64,8 @@ Source-owned byte fixtures verify original offsets and hashes, extraction and
 byte-exact reconstruction, CLI/stdio MCP parity, malformed/unsupported inputs,
 failed target-switch recovery, cancellation and source identity. These checks
 do not establish emulator behavior or compatibility with every historical ROM.
-The workflow has been executed on native Windows x64; Linux and macOS execution
-remain unverified for this increment.
+The portable CLI/stdio MCP acceptance and source-identity checks run in Linux
+and macOS CI. The same workflows have also been executed on native Windows x64.
 
 Format references: [iNES](https://www.nesdev.org/wiki/INES) and
 [NES 2.0](https://www.nesdev.org/wiki/NES_2.0).
