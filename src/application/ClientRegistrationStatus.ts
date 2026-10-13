@@ -14,7 +14,10 @@ import { resolve } from "node:path";
 
 import { z } from "zod";
 
-import { registrationSchema, registrationSchemaFor } from "./ClientRegistrationShape.js";
+import {
+  registrationSchema,
+  registrationSchemaFor,
+} from "./ClientRegistrationShape.js";
 import { PRODUCT_IDENTITY } from "../identity.js";
 import { MCP_STARTUP_POLICY } from "../mcpStartupPolicy.js";
 import {
@@ -322,7 +325,9 @@ const parseRegistration = (
       args,
     });
   }
-  const registration = registrationSchemaFor(client.format ?? "json").parse(value);
+  const registration = registrationSchemaFor(client.format ?? "json").parse(
+    value,
+  );
   if (
     (client.format === "vscode" || client.format === "copilot_cli") &&
     registration.type !== "stdio"
