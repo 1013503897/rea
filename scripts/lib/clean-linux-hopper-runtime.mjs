@@ -68,18 +68,19 @@ export const assertCleanLinuxHopperRuntime = async (
         "utf8",
       );
       const arguments_ = commandLine.split("\0");
-      let kernelCommand;
-      if (commandLine.length === 0) {
-        // Zombies have neither arguments nor an executable link, but keep
-        // their kernel command name until their parent reaps them.
-        kernelCommand = (
-          await readFile(`${procRoot}/${entry.name}/comm`, "utf8")
-        ).replace(/\n$/u, "");
-        if (/^python3(?:\.\d+)?$/u.test(kernelCommand))
-          throw new Error(
-            "Cannot identify a command-less Python process on the clean Linux runner",
-          );
-      }
+      // The kernel command field identifies renamed runtime processes such
+      // as Xvfb. Keep it separate from arguments so ordinary script text does
+      // not count as a retained runtime.
+      const kernelCommand = (
+        await readFile(`${procRoot}/${entry.name}/comm`, "utf8")
+      ).replace(/\n$/u, "");
+      if (
+        commandLine.length === 0 &&
+        /^python3(?:\.\d+)?$/u.test(kernelCommand)
+      )
+        throw new Error(
+          "Cannot identify a command-less Python process on the clean Linux runner",
+        );
       retainedRuntime =
         kernelCommand === "Hopper" ||
         kernelCommand === "Xvfb" ||
