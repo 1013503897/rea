@@ -23,7 +23,7 @@ import { toolContract } from "../../src/contracts/toolContracts.js";
 import { buildBinary } from "plist";
 
 cliTest(
-  "extracts replacement iNES bytes from an already open plist through MCP",
+  "refuses extraction after an already open plist is replaced through MCP",
   async () => {
     const root = await createTestTempDirectory("rea-ines-plist-refresh-");
     const path = join(root, "source.bin");
@@ -40,27 +40,10 @@ cliTest(
     const bytes = inesFixture();
     await writeFile(path, bytes);
     const extracted = await call("extract_artifact", {});
-    expect(
-      extracted.isError,
-      JSON.stringify(extracted.structuredContent),
-    ).not.toBe(true);
-    const result = artifactExtractionResultSchema.parse(
-      parseEvidence(extracted.structuredContent).normalized_result,
+    expect(extracted.isError).toBe(true);
+    expect(JSON.stringify(parseMcpToolError(extracted))).toContain(
+      "Active artifact digest changed",
     );
-    try {
-      expect(result.manifest.root_format).toBe("ines");
-      expect(
-        Buffer.concat(
-          await Promise.all(
-            ["header.bin", "prg/000.bin", "prg/001.bin", "chr/000.bin"].map(
-              (part) => readFile(join(result.output_root, part)),
-            ),
-          ),
-        ),
-      ).toEqual(bytes);
-    } finally {
-      await rm(result.output_root, { recursive: true, force: true });
-    }
     await call("close_binary", {});
   },
 );

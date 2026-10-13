@@ -13,6 +13,7 @@ import {
 import { artifactExtractionResultSchema } from "../../../../src/domain/artifactGraph.js";
 import { projectAnalysisError } from "../../../../src/domain/analysisErrorProjection.js";
 import { createTestTempDirectory } from "../../../fixtures/temporaryDirectory.js";
+import { artifactGraphRootSha256 } from "../../../fixtures/artifactGraphRootSha256.js";
 import { DirectoryArtifactReader } from "../../../../src/artifacts/DirectoryArtifactReader.js";
 
 it.each(["file", "directory"] as const)(
@@ -180,12 +181,12 @@ const inventoriedExtraction = async (source: string, output: string) => {
     );
 };
 
-const extract = (source: string, output: string) =>
+const extract = async (source: string, output: string) =>
   new ArtifactProvider(process.env)
     .createClient({
       path: source,
       sourcePath: source,
-      sha256: "0".repeat(64),
+      sha256: await artifactGraphRootSha256(source),
       kind: "archive",
       format: "asar",
     })

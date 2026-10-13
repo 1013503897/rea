@@ -13,6 +13,8 @@ export const STRICT_INTEGRITY_POLICY: ArtifactIntegrityPolicy = {
 /** Options shared by artifact inventory scans. */
 export interface ArtifactInventoryOptions {
   readonly resourceScope: ArtifactResourceScope;
+  /** Bind a session-owned leaf inventory to the admitted root digest. */
+  readonly expectedRootSha256?: string | undefined;
   readonly signal?: AbortSignal | undefined;
   readonly integrity?: ArtifactIntegrityPolicy | undefined;
   readonly environment?: Readonly<NodeJS.ProcessEnv> | undefined;

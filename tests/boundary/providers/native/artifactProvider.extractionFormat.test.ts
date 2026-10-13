@@ -7,6 +7,7 @@ import { buildBinary } from "plist";
 
 import { writeOrderedZip } from "../../../fixtures/artifactEntryOrder.js";
 import { createTestTempDirectory } from "../../../fixtures/temporaryDirectory.js";
+import { artifactGraphRootSha256 } from "../../../fixtures/artifactGraphRootSha256.js";
 
 import { parseBinaryTarget } from "../../../../src/application/BinaryTargetResolver.js";
 import { inesFixture } from "../../../fixtures/ines.js";
@@ -122,9 +123,9 @@ describe("artifact extraction format support", () => {
     const alias = join(root, "Alias.dmg");
     await symlink(image, alias);
     const output = join(root, "output");
-    const extract = (signal?: AbortSignal) =>
+    const extract = async (signal?: AbortSignal) =>
       new ArtifactProvider(process.env)
-        .createClient(archiveTarget(alias, "dmg"))
+        .createClient(await archiveTarget(alias, "dmg"))
         .execute(
           "extract_artifact",
           artifactExtractionExecutionSchema.parse({ output_root: output }),
@@ -158,7 +159,7 @@ describe("artifact extraction format support", () => {
       );
       await writeOrderedZip(archive, ["payload.txt"]);
       const result = await new ArtifactProvider(process.env)
-        .createClient(archiveTarget(archive, format))
+        .createClient(await archiveTarget(archive, format))
         .execute(
           "extract_artifact",
           artifactExtractionExecutionSchema.parse({
@@ -176,13 +177,13 @@ describe("artifact extraction format support", () => {
   );
 });
 
-const archiveTarget = (
+const archiveTarget = async (
   path: string,
   format: Extract<BinaryTarget, { kind: "archive" }>["format"],
-): BinaryTarget => ({
+): Promise<BinaryTarget> => ({
   path,
   sourcePath: path,
-  sha256: "0".repeat(64),
+  sha256: await artifactGraphRootSha256(path),
   kind: "archive",
   format,
 });

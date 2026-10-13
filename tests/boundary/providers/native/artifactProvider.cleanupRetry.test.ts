@@ -10,6 +10,7 @@ import { AsarArtifactReader } from "../../../../src/artifacts/AsarArtifactReader
 import { SafeOutputTree } from "../../../../src/artifacts/SafeOutputTree.js";
 import { ProviderCleanupError } from "../../../../src/domain/providerCleanupError.js";
 import { createTestTempDirectory } from "../../../fixtures/temporaryDirectory.js";
+import { artifactGraphRootSha256 } from "../../../fixtures/artifactGraphRootSha256.js";
 
 const deferred = () => {
   let resolve: () => void = () => {};
@@ -29,11 +30,11 @@ const createArchive = async () => {
   return { root, archive };
 };
 
-const createClient = (path: string) =>
+const createClient = async (path: string) =>
   new ArtifactProvider(process.env).createClient({
     path,
     sourcePath: path,
-    sha256: "0".repeat(64),
+    sha256: await artifactGraphRootSha256(path),
     kind: "archive",
     format: "asar",
   });
@@ -41,7 +42,7 @@ const createClient = (path: string) =>
 it("retains a failed reader close, blocks new work, and retries the same reader", async () => {
   const { root, archive } = await createArchive();
   const output = join(root, "output");
-  const client = createClient(archive);
+  const client = await createClient(archive);
   const originalClose = AsarArtifactReader.prototype.close;
   const closeOwners: AsarArtifactReader[] = [];
   let readerCloseBlocked = true;
@@ -107,7 +108,7 @@ it("retains a failed reader close, blocks new work, and retries the same reader"
 it("retains a failed rollback owner and preserves the materialization failure", async () => {
   const { root, archive } = await createArchive();
   const output = join(root, "output");
-  const client = createClient(archive);
+  const client = await createClient(archive);
   const originalWrite = SafeOutputTree.prototype.write;
   const originalRollback = SafeOutputTree.prototype.rollback;
   const rollbackOwners: SafeOutputTree[] = [];
@@ -174,7 +175,7 @@ it.skipIf(process.platform === "win32")(
     const { root, archive } = await createArchive();
     const output = join(root, "output");
     const blocker = join(output, "unowned.txt");
-    const client = createClient(archive);
+    const client = await createClient(archive);
     const prototypeHandle = await open(join(root, "prototype-handle"), "w");
     const handlePrototype = Object.getPrototypeOf(prototypeHandle) as Pick<
       typeof prototypeHandle,
@@ -215,7 +216,7 @@ it.skipIf(process.platform === "win32")(
 it("waits for admitted extraction before close and rejects later work", async () => {
   const { root, archive } = await createArchive();
   const output = join(root, "output");
-  const client = createClient(archive);
+  const client = await createClient(archive);
   const originalWrite = SafeOutputTree.prototype.write;
   const started = deferred();
   const finish = deferred();
