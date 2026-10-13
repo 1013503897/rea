@@ -30,9 +30,10 @@ it
       await chmod(launcher, 0o700);
       await symlink(launcher, alternate);
     }
-    // A rejection must come from the fixture we are about to launch. An
-    // existing Xvfb would otherwise mask a broken executable-identity check.
-    await assertCleanLinuxHopperRuntime(alternateMode ? [launcher] : []);
+    // A rejection must come from the fixture we are about to launch. The
+    // command scan excludes an existing named demo process, while the copied
+    // launcher's new inode cannot already be executing.
+    await assertCleanLinuxHopperRuntime([]);
     const command = alternateMode ? alternate : process.execPath;
     const arguments_ = alternateMode ? ["30"] : ["-e", childCode];
     const parentCode = `
