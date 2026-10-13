@@ -7,7 +7,6 @@ import {
   readFile,
   symlink,
   unlink,
-  writeFile,
 } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -107,7 +106,7 @@ it.runIf(process.platform === "linux")(
       const { assertCleanLinuxHopperRuntime } = await import(${JSON.stringify(observer)});
       const entry = join(${JSON.stringify(procRoot)}, String(process.pid));
       await mkdir(entry);
-      await symlink(`/proc/${String(process.pid)}/cmdline`, join(entry, "cmdline"));
+      await symlink("/proc/" + process.pid + "/cmdline", join(entry, "cmdline"));
       await assertCleanLinuxHopperRuntime([], ${JSON.stringify(procRoot)});
       console.log('clean');
     `;
@@ -139,22 +138,21 @@ it.runIf(process.platform === "linux")(
       "../../../scripts/lib/clean-linux-hopper-runtime.mjs",
       import.meta.url,
     ).href;
-    await writeFile(
-      script,
-      `
+    const code = `
       import { mkdir, symlink } from "node:fs/promises";
       import { join } from "node:path";
       const entry = join(${JSON.stringify(procRoot)}, String(process.pid));
       await mkdir(entry);
-      await symlink(`/proc/${String(process.pid)}/cmdline`, join(entry, "cmdline"));
+      await symlink("/proc/" + process.pid + "/cmdline", join(entry, "cmdline"));
       const { assertCleanLinuxHopperRuntime } = await import(${JSON.stringify(observer)});
       await assertCleanLinuxHopperRuntime([], ${JSON.stringify(procRoot)});
-        console.log('clean');
-    `,
+      console.log('clean');
+    `;
+    const { stdout } = await execFileAsync(
+      process.execPath,
+      ["--input-type=module", "--eval", code, script],
+      { timeout: 10_000 },
     );
-    const { stdout } = await execFileAsync(process.execPath, [script], {
-      timeout: 10_000,
-    });
     expect(stdout.trim()).toBe("clean");
   },
 );
