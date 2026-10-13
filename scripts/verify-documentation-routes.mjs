@@ -71,7 +71,11 @@ for (const page of htmlPages.sort()) {
   )) {
     const destination = match[1].replaceAll("&amp;", "&");
     const url = new URL(destination, origin + "/rea/" + route);
-    if (url.origin !== origin || !url.pathname.startsWith("/rea/")) continue;
+    if (url.origin !== origin) continue;
+    assert.ok(
+      url.pathname.startsWith("/rea/"),
+      route + ": local link escaped site base " + destination,
+    );
     const key = url.pathname + url.hash;
     if (checked.has(key)) continue;
     checked.add(key);

@@ -76,6 +76,7 @@ because scripts, package consumers and release history depend on them. Change
 canonical sources and regenerate; do not fix a generated projection by hand.
 
 Run `npm run docs:check` for documentation facts and generated consistency, and
-`npm run docs:build` for the complete production site and dead-link validation.
+`npm run verify:docs:routes` to build the complete production site and check local
+links, anchors and physical edit targets.
 When a physical path moves, also run the tests that read it. Follow
 [development checks](testing.md#developer-commands) before requesting review.
