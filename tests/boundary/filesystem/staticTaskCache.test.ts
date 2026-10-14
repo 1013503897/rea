@@ -239,6 +239,27 @@ it.each([
     diagnostic: "TS2322",
     invalidatesCompile: false,
   },
+  {
+    label: "source declaration",
+    path: "src/types.d.mts",
+    content: "export type SourceValue = 2;\n",
+    diagnostic: "TS2322",
+    invalidatesCompile: true,
+  },
+  {
+    label: "test declaration",
+    path: "tests/types.d.cts",
+    content: 'export type TestValue = "shadow";\n',
+    diagnostic: "TS2322",
+    invalidatesCompile: false,
+  },
+  {
+    label: "script declaration",
+    path: "scripts/value.d.cts",
+    content: 'export type ScriptValue = "shadow";\n',
+    diagnostic: "TS2322",
+    invalidatesCompile: false,
+  },
 ])(
   "rejects a changed $label after warming real compiler tasks",
   async ({ path, content, diagnostic, invalidatesCompile }) => {
@@ -275,7 +296,11 @@ it.each([
     );
     await writeFile(
       join(root, "src/main.ts"),
-      "export const value: number = 1;\n",
+      'import type { SourceValue } from "./types.mjs";\nexport const value: SourceValue = 1;\n',
+    );
+    await writeFile(
+      join(root, "src/types.d.mts"),
+      "export type SourceValue = 1;\n",
     );
     await writeFile(
       join(root, "docs/.vitepress/helper.ts"),
@@ -299,7 +324,15 @@ it.each([
     );
     await writeFile(
       join(root, "tests/use-script.ts"),
-      'import type { ApiScope } from "../scripts/api.mjs";\nexport const scope: ApiScope = "root";\n',
+      'import type { ApiScope } from "../scripts/api.mjs";\nimport type { TestValue } from "./types.cjs";\nimport type { ScriptValue } from "../scripts/value.cjs";\nexport const scope: ApiScope = "root";\nexport const testValue: TestValue = "root";\nexport const scriptValue: ScriptValue = "root";\n',
+    );
+    await writeFile(
+      join(root, "tests/types.d.cts"),
+      'export type TestValue = "root";\n',
+    );
+    await writeFile(
+      join(root, "scripts/value.d.cts"),
+      'export type ScriptValue = "root";\n',
     );
     await workflowGit(root, ["init", "--initial-branch=main"]);
     await workflowGit(root, ["add", "."]);
