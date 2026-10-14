@@ -9,6 +9,7 @@ import {
   parseClientConfiguration,
 } from "../../../src/application/ClientConfigurationDocument.js";
 import { readClientRegistrationStatuses } from "../../../src/application/ClientRegistrationStatus.js";
+import { npxRegistrationCommand } from "../../../src/application/ClientRegistrationIdentity.js";
 import {
   clientConfigurationAligned,
   configureClientConfiguration,
@@ -16,6 +17,7 @@ import {
 } from "../../../src/application/SetupClientConfiguration.js";
 import { systemUninstallHost } from "../../../src/application/Uninstall.js";
 import { supportedClients } from "../../../src/application/SupportedClients.js";
+import { PRODUCT_IDENTITY } from "../../../src/identity.js";
 import { createTestTempDirectory } from "../../fixtures/temporaryDirectory.js";
 
 describe.each([
@@ -137,8 +139,9 @@ it("restores original BOM-prefixed JSONC bytes after update and removal", async 
   await mkdir(dirname(client.configPath), { recursive: true });
   await writeFile(client.configPath, original);
 
-  const firstCommand = [join(home, "bin", "rea"), "mcp"];
-  const updatedCommand = [join(home, "updated", "bin", "rea"), "mcp"];
+  // Both launchers establish ownership; arbitrary absolute prefixes do not.
+  const firstCommand = npxRegistrationCommand();
+  const updatedCommand = [PRODUCT_IDENTITY.cliBinary, "mcp"];
   expect(
     await configureClientConfiguration(client, {}, firstCommand),
   ).toMatchObject({ status: "configured" });
