@@ -90,10 +90,14 @@ try {
   await appendFile(modifiedHopper, new Uint8Array([0]));
   await chmod(modifiedHopper, 0o700);
   try {
-    await execFileAsync(command, ["analyze", "/usr/bin/true"], {
-      env: { ...process.env, HOPPER_LAUNCHER_PATH: modifiedHopper },
-      timeout: 30_000,
-    });
+    await execFileAsync(
+      command,
+      ["analyze", "/usr/bin/true", "--provider", "hopper", "--json"],
+      {
+        env: { ...process.env, HOPPER_LAUNCHER_PATH: modifiedHopper },
+        timeout: 30_000,
+      },
+    );
     throw new Error("modified Hopper build was not rejected");
   } catch (error) {
     if (
