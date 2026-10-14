@@ -231,6 +231,7 @@ const optionalHopperVersionCheck = async (
     details: inspected.ok
       ? {
           reported_release_version: inspected.value.version,
+          launcher_sha256: inspected.value.sha256,
           primary_fingerprint: inspected.value.primaryFingerprint,
           source: inspected.value.source,
         }

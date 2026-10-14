@@ -228,7 +228,7 @@ export class LinuxHopperPublisher {
         return err(
           new HopperReleaseError(
             "integrity",
-            "The signed package launcher does not match main_exe_hash in the release feed.",
+            `The signed ${family} package launcher SHA-256 ${mainExeHash} differs from the release main_exe_hash ${release.main_exe_hash}.`,
           ),
         );
       retainProof(packageProofs, proofKey, verified.value);

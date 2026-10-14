@@ -253,7 +253,13 @@ describe("Linux signed cache tampering", () => {
             undefined,
             f.publicKey,
           ),
-        ).toMatchObject({ ok: false, error: { reason: "integrity" } });
+        ).toMatchObject({
+          ok: false,
+          error: {
+            reason: "integrity",
+            message: expect.stringContaining(f.release.main_exe_hash),
+          },
+        });
         expect(
           await f.publisher.verifyArchive(
             "deb",
