@@ -17,8 +17,10 @@ import {
 } from "../../../../src/hopper/BridgeLauncher.js";
 
 import { ProviderProcessSupervisor } from "../../../../src/process/ProviderProcess.js";
+import { ok } from "../../../../src/domain/result.js";
 
 const execFileAsync = promisify(execFile);
+const verifiedSha256 = "0".repeat(64);
 const demoHelperPath = fileURLToPath(
   new URL("../../../../scripts/hopper-demo-x11.py", import.meta.url),
 );
@@ -40,7 +42,7 @@ describe("Hopper bridge launcher selection", () => {
     "/usr/local/bin/hopper",
     "/workspace/bin/hopper-wrapper",
   ])(
-    "routes launcher spelling %s through the explicitly selected pinned adapter",
+    "routes launcher spelling %s through the explicitly selected demo adapter",
     (path) => {
       expect(usesLinuxDemo(options(path))).toBe(true);
     },
@@ -71,6 +73,7 @@ describe("Hopper bridge launcher selection", () => {
       },
       ["--analysis"],
       "user-mount-namespace",
+      verifiedSha256,
     );
 
     expect(launch).toMatchObject({
@@ -90,6 +93,8 @@ describe("Hopper bridge launcher selection", () => {
         "--mount-private-x11",
         "--hopper",
         "/opt/hopper/bin/Hopper",
+        "--expected-launcher-sha256",
+        verifiedSha256,
         "--socket",
         "/tmp/rea-fixture/bridge.sock",
         "--",
@@ -113,6 +118,7 @@ describe("Hopper bridge launcher selection", () => {
         },
         [],
         "direct",
+        verifiedSha256,
       ),
     ).toMatchObject({
       command: "/usr/bin/python3",
@@ -123,6 +129,8 @@ describe("Hopper bridge launcher selection", () => {
         "direct",
         "--hopper",
         "/opt/hopper/bin/Hopper",
+        "--expected-launcher-sha256",
+        verifiedSha256,
         "--socket",
         "/tmp/rea-fixture/bridge.sock",
         "--",
@@ -131,7 +139,7 @@ describe("Hopper bridge launcher selection", () => {
     });
   });
 
-  it("rejects an unpinned wrapper before executing it", async () => {
+  it("rejects launcher bytes changed since publisher verification before executing them", async () => {
     const directory = await createTestTempDirectory("rea-hopper-wrapper-");
     const wrapper = join(directory, "hopper-wrapper");
     const marker = join(directory, "executed");
@@ -145,6 +153,8 @@ describe("Hopper bridge launcher selection", () => {
             demoHelperPath,
             "--hopper",
             wrapper,
+            "--expected-launcher-sha256",
+            verifiedSha256,
             "--socket",
             join(directory, "bridge.sock"),
             "--",
@@ -218,6 +228,14 @@ it.skipIf(process.platform !== "linux")(
         ),
       },
       {
+        verifyLinuxLauncher: async () =>
+          ok({
+            sha256: verifiedSha256,
+            version: "fixture",
+            primaryFingerprint: "0".repeat(40),
+            signingFingerprint: "1".repeat(40),
+            source: "signed_package_cache",
+          }),
         selectPrivateDisplay: async () => ({
           ok: true,
           strategy: "direct",
