@@ -4,10 +4,13 @@ import {
   type ChildProcessWithoutNullStreams,
   type SpawnOptionsWithoutStdio,
 } from "node:child_process";
+import { appendFileSync } from "node:fs";
+import { basename, join, resolve } from "node:path";
 
 import { test as base } from "vitest";
 
 const SHUTDOWN_GRACE_MS = 1_000;
+let diagnosticSequence = 0;
 
 /** Captured output and termination state from one child process. */
 export interface ProcessResult {
@@ -93,11 +96,61 @@ export const createTestProcessRegistry = (): TestProcesses => {
     spawn,
     run: async (command, arguments_, options = {}) => {
       const { input, timeoutMs, ...spawnOptions } = options;
-      const child = spawn(command, arguments_, spawnOptions);
+      // Temporary investigation only: no arguments, output, or environment are
+      // persisted. Keep the original process deadline and result oracle.
+      const diagnostics = process.env.REA_CI_PROCESS_DIAGNOSTICS;
+      const cli =
+        command === process.execPath &&
+        arguments_[0] === resolve("scripts/rea.mjs");
+      const id = `${process.pid}-${++diagnosticSequence}`;
+      const started = performance.now();
+      const record = (event: string, details: object = {}): void => {
+        if (diagnostics === undefined) return;
+        appendFileSync(
+          join(diagnostics, "process.jsonl"),
+          `${JSON.stringify({
+            id,
+            event,
+            elapsedMs: performance.now() - started,
+            cli,
+            command: cli ? arguments_[1] : basename(command),
+            invalidDemangle: arguments_.includes("$s4main\n3FooV"),
+            ...details,
+          })}\n`,
+        );
+      };
+      const child = spawn(
+        command,
+        cli && diagnostics !== undefined
+          ? [
+              "--report-on-signal",
+              "--report-exclude-env",
+              "--report-exclude-network",
+              `--report-directory=${diagnostics}`,
+              ...arguments_,
+            ]
+          : arguments_,
+        spawnOptions,
+      );
+      record("spawn", { pid: child.pid, timeoutMs });
+      const reportTimer =
+        cli && diagnostics !== undefined
+          ? setTimeout(() => {
+              record("diagnostic-signal");
+              child.kill("SIGUSR2");
+            }, 15_000)
+          : undefined;
+      reportTimer?.unref();
       const stdout: Buffer[] = [];
       const stderr: Buffer[] = [];
-      child.stdout.on("data", (chunk: Buffer) => stdout.push(chunk));
-      child.stderr.on("data", (chunk: Buffer) => stderr.push(chunk));
+      child.stdout.on("data", (chunk: Buffer) => {
+        if (stdout.length === 0) record("first-stdout");
+        stdout.push(chunk);
+      });
+      child.stderr.on("data", (chunk: Buffer) => {
+        if (stderr.length === 0) record("first-stderr");
+        stderr.push(chunk);
+      });
       if (input === undefined) child.stdin.end();
       else child.stdin.end(input);
 
@@ -108,6 +161,7 @@ export const createTestProcessRegistry = (): TestProcesses => {
           ? undefined
           : setTimeout(() => {
               timedOut = true;
+              record("deadline");
               child.kill("SIGTERM");
               killTimeout = setTimeout(() => {
                 child.kill("SIGKILL");
@@ -127,8 +181,14 @@ export const createTestProcessRegistry = (): TestProcesses => {
           }),
         );
       }).finally(() => {
+        if (reportTimer !== undefined) clearTimeout(reportTimer);
         if (timeout !== undefined) clearTimeout(timeout);
         if (killTimeout !== undefined) clearTimeout(killTimeout);
+      });
+      record("close", {
+        exitCode: result.exitCode,
+        signal: result.signal,
+        timedOut,
       });
       if (timedOut) {
         throw new Error(`Test process exceeded its ${timeoutMs}ms deadline`, {
