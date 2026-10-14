@@ -17,7 +17,32 @@ import {
 } from "../../../../src/hopper/BridgeLauncher.js";
 
 import { ProviderProcessSupervisor } from "../../../../src/process/ProviderProcess.js";
-import { ok } from "../../../../src/domain/result.js";
+import { err, ok } from "../../../../src/domain/result.js";
+
+import { HopperReleaseError } from "../../../../src/application/HopperReleaseFeed.js";
+import { projectAnalysisError } from "../../../../src/domain/analysisErrorProjection.js";
+
+const readyDirectDisplay = async () =>
+  ({
+    ok: true,
+    strategy: "direct",
+    diagnostic: {
+      component: "hopper_private_display",
+      operation: "probe",
+      status: "ready",
+      failure_code: null,
+      reason: "ready",
+      socket_directory: "/tmp/.X11-unix",
+      socket_directory_mode: "1777",
+      mount_read_only: false,
+      effective_socket_directory_mode: "1777",
+      effective_mount_read_only: false,
+      wsl: false,
+      strategy: "direct",
+      fallback_reason: null,
+      xvfb_stderr_bytes: 0,
+    },
+  }) as const;
 
 const execFileAsync = promisify(execFile);
 const verifiedSha256 = "0".repeat(64);
@@ -236,26 +261,7 @@ it.skipIf(process.platform !== "linux")(
             signingFingerprint: "1".repeat(40),
             source: "signed_package_cache",
           }),
-        selectPrivateDisplay: async () => ({
-          ok: true,
-          strategy: "direct",
-          diagnostic: {
-            component: "hopper_private_display",
-            operation: "probe",
-            status: "ready",
-            failure_code: null,
-            reason: "ready",
-            socket_directory: "/tmp/.X11-unix",
-            socket_directory_mode: "1777",
-            mount_read_only: false,
-            effective_socket_directory_mode: "1777",
-            effective_mount_read_only: false,
-            wsl: false,
-            strategy: "direct",
-            fallback_reason: null,
-            xvfb_stderr_bytes: 0,
-          },
-        }),
+        selectPrivateDisplay: readyDirectDisplay,
       },
     );
     const launched = await launcher.launch({
@@ -276,5 +282,45 @@ it.skipIf(process.platform !== "linux")(
       await supervisor.stop();
       await launched.value.releaseLease?.();
     }
+  },
+);
+
+it.skipIf(process.platform !== "linux")(
+  "preserves a publisher rejection through the public error without inventing a helper exit",
+  async () => {
+    const directory = await createTestTempDirectory("rea-publisher-rejection-");
+    const targetPath = join(directory, "target");
+    await writeFile(targetPath, "fixture target");
+    const rejected = new HopperReleaseError(
+      "unsupported_hopper_build",
+      "Fixture launcher is outside verified releases",
+    );
+    const launcher = new HopperApplicationLauncher(
+      { ...options("/unused/Hopper"), targetPath },
+      {
+        selectPrivateDisplay: readyDirectDisplay,
+        verifyLinuxLauncher: async () => err(rejected),
+      },
+    );
+    const result = await launcher.launch({
+      directory,
+      socketPath: join(directory, "bridge.sock"),
+      token: "fixture-token",
+      runId: randomUUID(),
+    });
+    if (result.ok) throw new Error("Unverified launcher started");
+    const projected = projectAnalysisError(result.error);
+    expect(projected).toMatchObject({
+      code: "provider_unavailable",
+      details: {
+        stage: "launch",
+        launch_rejection: {
+          boundary: "publisher_verification",
+          reason: rejected.reason,
+        },
+      },
+    });
+    expect(projected.details).not.toHaveProperty("exit_code");
+    expect(projected.details).not.toHaveProperty("launcher");
   },
 );

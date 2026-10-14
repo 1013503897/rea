@@ -232,6 +232,10 @@ export class HopperApplicationLauncher implements BridgeLauncher {
                 new HopperStartError({
                   userMessage: inspected.error.message,
                   cause: inspected.error,
+                  launchRejection: {
+                    boundary: "publisher_verification",
+                    reason: inspected.error.reason,
+                  },
                 }),
               );
         expectedLinuxSha256 = inspected.value.sha256;
