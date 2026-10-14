@@ -21,8 +21,18 @@ import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import { verifyCompleteToolCatalog } from "./lib/verify-package-core.mjs";
 import { verifyPackageUpdate } from "./verify-package-update.mjs";
 import { completeVerifierRun, createVerifierRun } from "./lib/verifier-run.mjs";
+import { profile, trace } from "./lib/temporary-ci-profile.mjs";
 
-const exec = promisify(execFile);
+const execute = promisify(execFile);
+const exec = (command, args, options) =>
+  profile(`process:${args[1] ?? "script"}`, () =>
+    execute(command, args, options),
+  );
+trace("verifier:start", {
+  explicitCache:
+    process.env.npm_config_cache !== undefined ||
+    process.env.NPM_CONFIG_CACHE !== undefined,
+});
 const verifierRun = createVerifierRun();
 const root = process.cwd();
 const workspace = await mkdtemp(join(tmpdir(), "rea-windows-package-"));
@@ -97,12 +107,14 @@ try {
   });
   const client = new Client({ name: "rea-windows-package", version: "1.0.0" });
   let toolCount = 0;
+  trace("mcp:start");
   try {
     await client.connect(server);
     toolCount = (await verifyCompleteToolCatalog(client)).length;
   } finally {
     await client.close();
   }
+  trace("mcp:complete");
 
   const home = join(workspace, "home");
   const setupEnvironment = {
@@ -213,16 +225,18 @@ try {
       ["install", "--global", "--ignore-scripts", "--prefix", prefix, tarball],
       workspace,
     );
-  const update = await verifyPackageUpdate({
-    prefix,
-    packageRoot:
-      process.platform === "win32"
-        ? join(prefix, "node_modules", "rea-agents")
-        : join(prefix, "lib", "node_modules", "rea-agents"),
-    tarball,
-    workspace,
-    environment,
-  });
+  const update = await profile("update", () =>
+    verifyPackageUpdate({
+      prefix,
+      packageRoot:
+        process.platform === "win32"
+          ? join(prefix, "node_modules", "rea-agents")
+          : join(prefix, "lib", "node_modules", "rea-agents"),
+      tarball,
+      workspace,
+      environment,
+    }),
+  );
 
   report = {
     ok: true,
@@ -236,8 +250,11 @@ try {
     update,
   };
 } finally {
-  await rm(workspace, { recursive: true, force: true });
+  await profile("cleanup", () =>
+    rm(workspace, { recursive: true, force: true }),
+  );
 }
+trace("verifier:complete");
 process.stdout.write(
   `${JSON.stringify({ verifier_run: await completeVerifierRun(verifierRun), ...report })}\n`,
 );

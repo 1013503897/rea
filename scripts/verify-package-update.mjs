@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { exec, json } from "./lib/verify-package-core.mjs";
+import { trace } from "./lib/temporary-ci-profile.mjs";
 
 /** Exercise the packaged updater with real npm and a local release registry fixture. */
 export async function verifyPackageUpdate({
@@ -14,6 +15,9 @@ export async function verifyPackageUpdate({
   workspace,
   environment,
 }) {
+  let upstreamRequests = 0;
+  let upstreamBytes = 0;
+  let upstreamMilliseconds = 0;
   const metadataPath = join(packageRoot, "package.json");
   const metadata = json(await readFile(metadataPath, "utf8"));
   const archive = await readFile(tarball);
@@ -56,12 +60,24 @@ export async function verifyPackageUpdate({
       response.setHeader("Content-Type", "application/json");
       response.end("{}");
     } else {
+      const started = performance.now();
+      upstreamRequests += 1;
       const upstream = await fetch(`https://registry.npmjs.org${request.url}`);
       response.writeHead(upstream.status, {
         "Content-Type":
           upstream.headers.get("content-type") ?? "application/octet-stream",
       });
-      response.end(Buffer.from(await upstream.arrayBuffer()));
+      const bytes = Buffer.from(await upstream.arrayBuffer());
+      upstreamBytes += bytes.length;
+      const durationMs = performance.now() - started;
+      upstreamMilliseconds += durationMs;
+      trace("registry:upstream", {
+        durationMs,
+        bytes: bytes.length,
+        status: upstream.status,
+        tarball: pathname.endsWith(".tgz"),
+      });
+      response.end(bytes);
     }
   }
   await new Promise((resolveListen, reject) => {
@@ -126,7 +142,12 @@ export async function verifyPackageUpdate({
       `
 import { runUpdate } from ${JSON.stringify(pathToFileURL(join(packageRoot, "dist/application/Update.js")).href)};
 import { systemUpdateHost } from ${JSON.stringify(pathToFileURL(join(packageRoot, "dist/application/UpdateRuntime.js")).href)};
+import { profile } from ${JSON.stringify(new URL("./lib/temporary-ci-profile.mjs", import.meta.url).href)};
 const host = systemUpdateHost(${JSON.stringify(packageRoot)}, ${JSON.stringify(home)});
+for (const name of Object.keys(host)) {
+  const operation = host[name];
+  if (typeof operation === "function") host[name] = (...args) => profile("updater:" + name, () => Reflect.apply(operation, host, args));
+}
 const result = await runUpdate(${JSON.stringify(previousVersion)}, host, "structured");
 process.stdout.write(JSON.stringify(result));
 if (result.status === "failed") process.exitCode = 1;
@@ -177,6 +198,11 @@ if (result.status === "failed") process.exitCode = 1;
       maintenance_read_only: true,
     };
   } finally {
+    trace("registry:summary", {
+      upstreamRequests,
+      upstreamBytes,
+      upstreamMilliseconds,
+    });
     server.closeAllConnections();
     await new Promise((resolveClose, reject) =>
       server.close((error) =>
