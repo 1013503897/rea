@@ -238,10 +238,20 @@ export class NativeWindowsUiProvider implements AnalysisProvider {
         return incomplete.length === 0
           ? ok(null)
           : err(
-              incompleteExecutableIdentityCleanupError({
-                reason: incomplete.map((cleanup) => cleanup.reason).join("; "),
-                resources: incomplete.flatMap((cleanup) => cleanup.resources),
-              }),
+              new AnalysisOutputError(
+                OPERATION,
+                "Selected-window capture resource cleanup remains incomplete.",
+                {
+                  cleanup: {
+                    reason: incomplete
+                      .map((cleanup) => cleanup.reason)
+                      .join("; "),
+                    resources: incomplete.flatMap(
+                      (cleanup) => cleanup.resources,
+                    ),
+                  },
+                },
+              ),
             );
       },
     };

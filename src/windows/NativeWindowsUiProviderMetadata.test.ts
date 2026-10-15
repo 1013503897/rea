@@ -24,3 +24,21 @@ it("requires affirmative inspected capture support on the shipped Windows archit
     }))[0],
   ).toMatchObject({ available: false, reason: "artifact unavailable" });
 });
+
+it("keeps retryable admission unavailable until a fresh successful snapshot", () => {
+  let readiness: WindowsWindowCaptureLoadResult = {
+    available: false,
+    reason: "Private runtime admission is still unresolved",
+    retryable: true,
+  };
+  const first = nativeWindowsUiCapabilities("win32", "x64", () => readiness);
+  expect(first[0]).toMatchObject({
+    available: false,
+    reason: readiness.reason,
+  });
+  readiness = loaded();
+  expect(
+    nativeWindowsUiCapabilities("win32", "x64", () => readiness)[0],
+  ).toMatchObject({ available: true });
+  expect(first[0]).toMatchObject({ available: false });
+});

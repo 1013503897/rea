@@ -23,9 +23,7 @@ export const nativeWindowsUiCapabilities = (
 ): readonly CapabilityDescriptor[] => {
   const loaded =
     platform === "win32" && architecture === "x64" ? load() : undefined;
-  const captureReady =
-    loaded?.available === true ||
-    (loaded?.available === false && loaded.retryable === true);
+  const captureReady = loaded?.available === true;
   const availability =
     platform === "win32" && architecture === "x64"
       ? captureReady

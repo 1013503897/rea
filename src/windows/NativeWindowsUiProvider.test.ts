@@ -9,6 +9,7 @@ import type { BinaryTarget } from "../domain/binaryTargetTypes.js";
 import { MAX_WINDOWS_WINDOW_PNG_BYTES } from "../domain/native/windowsWindowScreenshot.js";
 import { OwnedFileHandle } from "../filesystem/OwnedFileHandle.js";
 import { RegularFileAdmissionFailure } from "../filesystem/RegularFile.js";
+import * as execution from "./WindowsWindowCaptureExecution.js";
 import {
   captureWindowsWindowScreenshot,
   hashWindowsCaptureExecutable,
@@ -54,6 +55,33 @@ const host = (
     sha256: SHA256,
   }),
   ...overrides,
+});
+
+it("attributes a helper-only close failure to selected-window resources", async () => {
+  const observation = {
+    reason: "Owned capture Job cleanup remains pending",
+    resources: ["capture-run:42"],
+  };
+  const cleanup = vi
+    .spyOn(execution, "retryWindowsCaptureCleanup")
+    .mockResolvedValue(observation);
+  try {
+    const client = new NativeWindowsUiProvider(
+      {},
+      host(),
+      "linux",
+    ).createClient(TARGET);
+    expect(await client.close()).toMatchObject({
+      ok: false,
+      error: {
+        _tag: "AnalysisOutputError",
+        reason: "Selected-window capture resource cleanup remains incomplete.",
+        cleanup: observation,
+      },
+    });
+  } finally {
+    cleanup.mockRestore();
+  }
 });
 
 it("captures only an HWND whose live executable identity matches the active PE target", async () => {
