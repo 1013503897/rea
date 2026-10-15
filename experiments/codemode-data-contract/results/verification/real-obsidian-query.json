@@ -1,0 +1,33 @@
+{
+  "scope": "Real shipped Obsidian via production MCP and experimental async SDK; deterministic boundary verification, not agent sampling.",
+  "artifact_sha256": "146ef8470d8cbb4a6db209bdc19bf2bad13350444186c0fd93c31087b142b92f",
+  "parent_evidence_id": "ev_b8ba4b3a03879f44d3e9421e9eb85c252e1f856dd4134514bf8aceae137e2c4f",
+  "matching_module_count": 23,
+  "external_specifiers": {
+    "original-fs": 2,
+    "util": 1,
+    "child_process": 1,
+    "crypto": 1,
+    "net": 1,
+    "path": 3,
+    "fs": 3,
+    "os": 2,
+    "electron": 2,
+    "url": 1
+  },
+  "legacy_structured_bytes": 338208,
+  "typed_structured_bytes": 23402,
+  "query_roundtrip_seconds": {
+    "first": 0.10101697500795126,
+    "repeated": [
+      0.012236309936270118,
+      0.014560489100404084
+    ]
+  },
+  "sdk_pages": 4,
+  "early_exit_calls": 1,
+  "missing_parent_explicit_error": true,
+  "source_partiality_preserved": true,
+  "cache": "Same retained snapshot; no new query cache introduced. First query is after preparation, not cold analysis.",
+  "measured_agent_tokens": null
+}

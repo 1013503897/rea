@@ -1,0 +1,21 @@
+{
+  "obsidian-dependencies": {
+    "artifact_sha256": "146ef8470d8cbb4a6db209bdc19bf2bad13350444186c0fd93c31087b142b92f",
+    "external_specifiers": {
+      "original-fs": 2,
+      "url": 1,
+      "net": 1,
+      "os": 2,
+      "path": 3,
+      "fs": 3,
+      "util": 1,
+      "child_process": 1,
+      "electron": 2,
+      "crypto": 1
+    },
+    "module_identity_count": 23,
+    "external_module_count": 10,
+    "inventory_exhausted": true,
+    "runtime_load_proven": false
+  }
+}

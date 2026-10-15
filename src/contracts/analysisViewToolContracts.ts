@@ -94,6 +94,24 @@ export const ANALYSIS_VIEW_TOOL_CONTRACTS = [
           },
         },
       },
+      {
+        title:
+          "Read typed module reference facts from retained application Evidence",
+        input: {
+          source: {
+            kind: "retained-evidence",
+            evidence_id: RETAINED_EXAMPLE_ID,
+          },
+          view: {
+            kind: "javascript",
+            collection: "modules",
+            projection: "references",
+            where: { path: "main.js", kind: "javascript-module" },
+            offset: 0,
+            limit: 64,
+          },
+        },
+      },
     ],
   },
 ] as const satisfies readonly ToolContract[];

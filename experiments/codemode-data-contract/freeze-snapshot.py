@@ -75,6 +75,7 @@ def main():
                    'preparation_seconds': time.monotonic() - tick,
                    'retention': 'Regenerable full bundle is temporary, intentionally not archived; summary, hashes and model results are retained.'}
     plan = {'scope': 'One additional exact-snapshot pair, prompted by observed dynamic parent-budget differences; adaptive and reported separately.',
+            'oracle_scope': json.loads((args.data / 'dependencies/plan.json').read_text())['oracle_scope'],
             'interface': 'typed-result', 'model': 'gpt-5.6-terra', 'reasoning': 'high',
             'changes': 'Exact shared snapshot and consistent Result for code calls/SDK; exploratory combined iteration, not a causal attribution to either change alone.',
             'snapshot': preparation,

@@ -2,6 +2,7 @@
 
 Status: experimental query/client implemented on this branch; not integrated upstream.
 Tracking: [experiment #4063](https://github.com/morluto/rea/issues/4063).
+Executed findings: [results and limitations](results-2026-10-15.md).
 The original design sketch below predates the implementation; its future names
 are illustrative. The implemented surface is described first.
 

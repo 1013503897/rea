@@ -1,0 +1,124 @@
+{
+  "scope": "One additional exact-snapshot pair, prompted by observed dynamic parent-budget differences; adaptive and reported separately.",
+  "oracle_scope": "Separate retained producer Evidence consistency, not independent semantic validation",
+  "trials": [
+    {
+      "trial": "obsidian-dependencies-direct",
+      "arm": "direct",
+      "task": "obsidian-dependencies",
+      "answer_type": "dict",
+      "status": "answered",
+      "treatment_valid": true,
+      "checks": {
+        "artifact_sha256": true,
+        "external_specifiers": true,
+        "module_identity_count": true,
+        "external_module_count": false,
+        "inventory_exhausted": true,
+        "runtime_load_proven": true,
+        "frozen_task": true,
+        "evidence_ids": true,
+        "limitations_present": true
+      },
+      "facts_pass": false,
+      "usage": {
+        "input_tokens": 50946,
+        "cached_input_tokens": 0,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 621,
+        "reasoning_output_tokens": 210
+      },
+      "uncached_input_tokens": 50946,
+      "usage_complete": true,
+      "rounds": 3,
+      "max_request_input_tokens": 22205,
+      "model_observation_bytes": 36265,
+      "discovery_rounds": 1,
+      "discovery_response_bytes": 12815,
+      "elapsed_seconds": 75.62706461409107,
+      "whole_scope_seconds": 75.98,
+      "preparation_seconds": 11.738821058999747,
+      "question_seconds": 63.88824355509132,
+      "resources_verified_at_payload_exit": true,
+      "cpu_seconds_at_payload_exit": 16.797005,
+      "peak_bytes_at_payload_exit": 1085665280,
+      "resource_events_at_payload_exit": {
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        },
+        "pids.events": {
+          "max": 0
+        }
+      },
+      "resource_abort": null,
+      "backend_calls": 2,
+      "code_actions": 0,
+      "success": false
+    },
+    {
+      "trial": "obsidian-dependencies-code",
+      "arm": "code",
+      "task": "obsidian-dependencies",
+      "answer_type": "dict",
+      "status": "answered",
+      "treatment_valid": true,
+      "checks": {
+        "artifact_sha256": true,
+        "external_specifiers": true,
+        "module_identity_count": true,
+        "external_module_count": true,
+        "inventory_exhausted": true,
+        "runtime_load_proven": true,
+        "frozen_task": true,
+        "evidence_ids": true,
+        "limitations_present": true
+      },
+      "facts_pass": true,
+      "usage": {
+        "input_tokens": 45898,
+        "cached_input_tokens": 0,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 1224,
+        "reasoning_output_tokens": 520
+      },
+      "uncached_input_tokens": 45898,
+      "usage_complete": true,
+      "rounds": 3,
+      "max_request_input_tokens": 16831,
+      "model_observation_bytes": 13607,
+      "discovery_rounds": 1,
+      "discovery_response_bytes": 12815,
+      "elapsed_seconds": 54.84650936489925,
+      "whole_scope_seconds": 55.214,
+      "preparation_seconds": 11.076980335987173,
+      "question_seconds": 43.769529028912075,
+      "resources_verified_at_payload_exit": true,
+      "cpu_seconds_at_payload_exit": 15.920245,
+      "peak_bytes_at_payload_exit": 1082523648,
+      "resource_events_at_payload_exit": {
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        },
+        "pids.events": {
+          "max": 0
+        }
+      },
+      "resource_abort": null,
+      "backend_calls": 2,
+      "code_actions": 1,
+      "success": true
+    }
+  ],
+  "accepted_shapes": "node_ids may be a list or a mapping of kinds to lists; sender_validation_observations may be a count object; limitations may be prose or a string list. Exact facts still required.",
+  "narrative_review": "Required separately: supporting IDs alone do not establish claim-level support."
+}

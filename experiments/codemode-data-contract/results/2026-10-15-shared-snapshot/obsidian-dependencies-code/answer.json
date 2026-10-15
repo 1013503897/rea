@@ -1,0 +1,27 @@
+{
+  "external_specifiers": {
+    "original-fs": 2,
+    "util": 1,
+    "child_process": 1,
+    "crypto": 1,
+    "net": 1,
+    "path": 3,
+    "fs": 3,
+    "os": 2,
+    "electron": 2,
+    "url": 1
+  },
+  "module_identity_count": 23,
+  "external_module_count": 10,
+  "inventory_exhausted": true,
+  "runtime_load_proven": false,
+  "artifact_sha256": "146ef8470d8cbb4a6db209bdc19bf2bad13350444186c0fd93c31087b142b92f",
+  "evidence_ids": [
+    "ev_e199c55478af3a4d877b8f690a6e5ed8cd1b32659411ab1a4cb351d62438a720",
+    "ev_faea596d8c9779fd463185bad16bcba6faa1acda9bb77df2446c109a9c4c9204"
+  ],
+  "limitations": [
+    "Inert static-reference inventory only; it does not prove runtime loading or execution.",
+    "Inventory exhaustion applies to retained javascript-module identities at main.js; source and semantic coverage remain partial."
+  ]
+}

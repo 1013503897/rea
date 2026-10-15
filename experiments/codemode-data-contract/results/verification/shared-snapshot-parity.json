@@ -1,0 +1,13 @@
+{
+  "scope": "Exact same canonical query Evidence observed in both shared-snapshot arms; code executed filtering and aggregation, not a raw-reply wrapper.",
+  "parent_evidence_id": "ev_e199c55478af3a4d877b8f690a6e5ed8cd1b32659411ab1a4cb351d62438a720",
+  "query_evidence_id": "ev_faea596d8c9779fd463185bad16bcba6faa1acda9bb77df2446c109a9c4c9204",
+  "structured_evidence_sha256": "3a28e15eb86930ae13c1e3480b8a9a49915856c7b4c21a2aac12787b9d76f72c",
+  "structured_replies_identical": true,
+  "matching_rows": 23,
+  "code_cell_status": "completed",
+  "code_cell_backend_calls": 1,
+  "code_computed_external_module_count": 10,
+  "direct_reported_external_module_count": 11,
+  "oracle_scope": "Producer-consistency task facts, not independent semantic extractor verification."
+}
