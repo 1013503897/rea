@@ -1,0 +1,20 @@
+{
+  "files_sha256": {
+    "plan.json": "6133eb62e3a7dc377c6010796f7940f1ac95abfba614aa14c0198cfc2b4a6d98",
+    "oracles.json": "8268cc5f2a1522cc89a3366c551ab1bbf293968b4c60b1dc26d1224c1cf25005",
+    "review.json": "a4de0e2ecc83bf9f4a148f2840d6e487e0331d7d696c9fea7a5cea468d795d40",
+    "obsidian-dependencies.json": "17dd78b27ebc6b9553c93ebd7850e2e99d5a557f4a8b065a846dec88acf1d6bf",
+    "obsidian-dependencies-direct/trajectory.jsonl": "e487ce85899dc57a00ddda34d61e650b7673ed2014f0df3445392ee3fc998beb",
+    "obsidian-dependencies-direct/resources.json": "abd27560d57ffa34d833b9a159af2d360f7f65f82e34e069241e00576ad26094",
+    "obsidian-dependencies-direct/evidence-index.json": "0bac98486805f1894993afdd8f8ac6ad914cab6afbadf0735c89297c1d770025",
+    "obsidian-dependencies-direct/answer.json": "c8392d3d8ea30ed17df04961cd627f4b2068fc51e06c7ef0b6046f912baf8457",
+    "obsidian-dependencies-direct/receipt.json": "5cb70c6442ebfc5f47d88cc83b45071452e965ff94491114f184d05a7c30a361",
+    "obsidian-dependencies-code/trajectory.jsonl": "d60ded4d0e6bccb305820426e4aebe1a98ef09a2f5367077ed9441d1cbf45854",
+    "obsidian-dependencies-code/resources.json": "6bfa829e7dae807fd77a311703fccd1010233400bf41cfd0e0474aacef451534",
+    "obsidian-dependencies-code/evidence-index.json": "bbd751bc73ab5a446dff8e673936a87cb4b598a5d8908c1e595744d16f7829b1",
+    "obsidian-dependencies-code/answer.json": "13ffd1acc1cfa22dd7833c85c3cf058f490a16cb8967c9e736689d7a5beb89cc",
+    "obsidian-dependencies-code/receipt.json": "d4511361a05b6c0f8e0734f5b25b96541cca24304d632212a2a4dd997c25ab29"
+  },
+  "retention": "Tasks, oracles, sampling actions/CLI events, usage, failures, response digests and resources. No original applications/captures or full producer payloads.",
+  "replay_limit": "Regenerate new captures and oracles for a fresh cohort. Historical live web captures are not byte-reproducible and are intentionally not archived."
+}

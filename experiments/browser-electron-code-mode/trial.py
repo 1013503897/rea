@@ -29,6 +29,8 @@ def main():
     parser.add_argument('--max-rounds', type=int, default=10)
     parser.add_argument('--compositional-followup', action='store_true',
                         help='Permit direct batches and explicitly require code-side projection')
+    parser.add_argument('--interface', choices=['current', 'typed'], default='current',
+                        help='Typed enables canonical module references, narrow discovery and async SDK in both arms')
     args = parser.parse_args()
     if not args.output.is_absolute() or not args.quickjs.is_absolute():
         parser.error('--output and --quickjs must be absolute paths')
@@ -75,14 +77,20 @@ def main():
     schema_path.write_text(encode(schema))
     backend_settings = {'runtime': str(root), 'output': str(args.output / 'backend'),
                         'tools': task['tools'], 'quickjs': str(args.quickjs)}
+    if args.interface == 'typed':
+        backend_settings['code_api'] = 'typed-async'
     settings_path = args.output / 'backend-settings.json'
     settings_path.write_text(encode(backend_settings))
     backend = None
     child = None
     backend_errors = None
     started = time.monotonic()
-    source_digests = {name: hashlib.sha256(Path(__file__).with_name(name).read_bytes()).hexdigest()
-                      for name in ['trial.py', 'backend.mjs']}
+    source_digests = {name: hashlib.sha256((root / name).read_bytes()).hexdigest()
+                      for name in ['experiments/browser-electron-code-mode/trial.py',
+                                   'experiments/browser-electron-code-mode/backend.mjs',
+                                   'experiments/codemode-data-contract/client.mjs',
+                                   'experiments/codemode-data-contract/discovery.mjs']
+                      if (root / name).exists()}
     rounds = []
     status = 'incomplete'
     preparation_seconds = None
@@ -145,6 +153,12 @@ def main():
                     'Do not print complete raw REA envelopes or irrelevant observations. '
                     'Compose multiple calls in one cell when their arguments can be obtained from earlier results. '
                 )
+            if args.interface == 'typed':
+                protocol = protocol.replace(
+                    'Use synchronous rea.call(name,args) and rea.describe(name); no await is necessary or supported.',
+                    'Cells are async functions. Use await rea.call(name,args), rea.describe(name), '
+                    'and the typed rea.javascript client documented by inspect_analysis_view. '
+                    'Use ordinary async/await and for await loops.')
         base = protocol + '\nTool menu: ' + encode(menu) + '\nQuestion: ' + task['question']
         history = [{'bootstrap': bootstrap}]
         for index in range(1, args.max_rounds + 1):
@@ -257,6 +271,7 @@ def main():
                            'revision': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip(),
                            'task_sha256': hashlib.sha256(args.task.read_bytes()).hexdigest(),
                            'compositional_followup': args.compositional_followup,
+                           'interface': args.interface,
                            'max_rounds': args.max_rounds,
                            'sources_sha256_at_start': source_digests}
                 (args.output / 'receipt.json').write_text(json.dumps(receipt, indent=2) + '\n')

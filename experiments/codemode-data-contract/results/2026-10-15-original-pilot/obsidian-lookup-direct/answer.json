@@ -1,0 +1,22 @@
+{
+  "artifact_sha256": "146ef8470d8cbb4a6db209bdc19bf2bad13350444186c0fd93c31087b142b92f",
+  "requested_paths": [
+    "package.json",
+    "main.js"
+  ],
+  "unselected_files": 36,
+  "parsed_javascript_files": 1,
+  "browser_windows": 2,
+  "ipc_operations": 47,
+  "main_handlers": 47,
+  "evidence_ids": [
+    "ev_6f45b0dc7cf03f8a362fccc1693d31302c7d05bc2796427823bb515d44e6e177",
+    "ev_abc62503dd2fa6d17f3d29101c4f25de71dbc27c2745661aca4eb77035e0eba2"
+  ],
+  "limitations": [
+    "Static selected-source extraction; observations do not establish runtime behavior.",
+    "36 inventoried files were outside the selected analysis scope.",
+    "Application and semantic graph coverage are partial; main.js semantic graph was resource-constrained.",
+    "JavaScript was parsed inertly and never executed."
+  ]
+}

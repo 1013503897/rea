@@ -1,0 +1,124 @@
+{
+  "scope": "Exploratory follow-up, one dependent-read task and one pair; no statistical claim",
+  "oracle_scope": "Separate retained producer Evidence consistency, not independent semantic validation",
+  "trials": [
+    {
+      "trial": "obsidian-dependencies-code",
+      "arm": "code",
+      "task": "obsidian-dependencies",
+      "answer_type": "str",
+      "status": "answered",
+      "treatment_valid": true,
+      "checks": {
+        "artifact_sha256": false,
+        "external_specifiers": false,
+        "module_identity_count": false,
+        "external_module_count": false,
+        "inventory_exhausted": false,
+        "runtime_load_proven": false,
+        "frozen_task": true,
+        "evidence_ids": false,
+        "limitations_present": false
+      },
+      "facts_pass": false,
+      "usage": {
+        "input_tokens": 86794,
+        "cached_input_tokens": 28160,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2333,
+        "reasoning_output_tokens": 920
+      },
+      "uncached_input_tokens": 58634,
+      "usage_complete": true,
+      "rounds": 4,
+      "max_request_input_tokens": 26515,
+      "model_observation_bytes": 48318,
+      "discovery_rounds": 1,
+      "discovery_response_bytes": 27999,
+      "elapsed_seconds": 136.63398639601655,
+      "whole_scope_seconds": 136.984,
+      "preparation_seconds": 19.817954760044813,
+      "question_seconds": 116.81603163597174,
+      "resources_verified_at_payload_exit": true,
+      "cpu_seconds_at_payload_exit": 30.942221,
+      "peak_bytes_at_payload_exit": 1203978240,
+      "resource_events_at_payload_exit": {
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        },
+        "pids.events": {
+          "max": 0
+        }
+      },
+      "resource_abort": null,
+      "backend_calls": 3,
+      "code_actions": 2,
+      "success": false
+    },
+    {
+      "trial": "obsidian-dependencies-direct",
+      "arm": "direct",
+      "task": "obsidian-dependencies",
+      "answer_type": "dict",
+      "status": "answered",
+      "treatment_valid": true,
+      "checks": {
+        "artifact_sha256": true,
+        "external_specifiers": true,
+        "module_identity_count": true,
+        "external_module_count": true,
+        "inventory_exhausted": true,
+        "runtime_load_proven": true,
+        "frozen_task": true,
+        "evidence_ids": true,
+        "limitations_present": true
+      },
+      "facts_pass": true,
+      "usage": {
+        "input_tokens": 195311,
+        "cached_input_tokens": 23808,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 5264,
+        "reasoning_output_tokens": 1316
+      },
+      "uncached_input_tokens": 171503,
+      "usage_complete": true,
+      "rounds": 5,
+      "max_request_input_tokens": 106066,
+      "model_observation_bytes": 402200,
+      "discovery_rounds": 1,
+      "discovery_response_bytes": 27999,
+      "elapsed_seconds": 223.7188864540076,
+      "whole_scope_seconds": 224.162,
+      "preparation_seconds": 74.04508336109575,
+      "question_seconds": 149.67380309291184,
+      "resources_verified_at_payload_exit": true,
+      "cpu_seconds_at_payload_exit": 67.006095,
+      "peak_bytes_at_payload_exit": 1187274752,
+      "resource_events_at_payload_exit": {
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        },
+        "pids.events": {
+          "max": 0
+        }
+      },
+      "resource_abort": null,
+      "backend_calls": 29,
+      "code_actions": 0,
+      "success": true
+    }
+  ],
+  "accepted_shapes": "node_ids may be a list or a mapping of kinds to lists; sender_validation_observations may be a count object; limitations may be prose or a string list. Exact facts still required.",
+  "narrative_review": "Required separately: supporting IDs alone do not establish claim-level support."
+}

@@ -1,0 +1,21 @@
+{
+  "authorization_established": false,
+  "application_behavior_fully_covered": false,
+  "sender_validation_observations": {
+    "count": 1,
+    "interpretation": "A static sender/frame/URL/origin check was observed; this does not establish enforced authorization for every handler at runtime."
+  },
+  "unselected_files": 36,
+  "artifact_sha256": "146ef8470d8cbb4a6db209bdc19bf2bad13350444186c0fd93c31087b142b92f",
+  "evidence_ids": [
+    "ev_6e485e2dcd2439c0a55380488b9fc3a781269665a28bbc34670da79797f1ecbe",
+    "ev_dac1268d8376469317eeca2b1ceaacc4b987f5b34b7b964567eec9b683151605"
+  ],
+  "limitations": [
+    "Selected-source analysis left 36 inventoried files unselected.",
+    "Application and semantic coverage are partial; main.js semantic graph was resource-constrained.",
+    "Static Electron relationships do not prove runtime registration, reachability, or enforcement.",
+    "Sender checks are observations only and do not prove a complete authorization policy."
+  ],
+  "reason": "The analysis reported 47 static main-handler candidates and one sender-validation observation, but partial selected-source/static coverage and the lack of runtime enforcement proof mean it cannot establish that every Obsidian IPC handler authorizes its sender. Incomplete coverage does not establish an absent check or a vulnerability."
+}

@@ -62,6 +62,9 @@ def main():
         known = set()
         for path in (directory / 'backend').glob('call-*.json'):
             known.update(evidence_ids(json.loads(path.read_text())))
+        saved_index = directory / 'evidence-index.json'
+        if not (directory / 'backend').exists() and saved_index.exists():
+            known.update(json.loads(saved_index.read_text())['successful_evidence_ids'])
         ids = answer.get('evidence_ids')
         checks['evidence_ids'] = isinstance(ids, list) and bool(ids) and all(
             isinstance(value, str) and value in known for value in ids)
@@ -72,13 +75,18 @@ def main():
             and all(isinstance(item, str) and bool(item.strip()) for item in limitations))
         # Narrative honesty is separately reviewed from the complete retained answer.
         resources = None
-        for line in (args.cohort / (label + '.log')).read_text().splitlines():
+        log = args.cohort / (label + '.log')
+        lines = log.read_text().splitlines() if log.exists() else []
+        for line in lines:
             try:
                 value = json.loads(line)
             except ValueError:
                 continue
             if isinstance(value, dict) and 'resource_scope' in value:
                 resources = value
+        if resources is None and (directory / 'resources.json').exists():
+            records = json.loads((directory / 'resources.json').read_text())
+            resources = records[-1] if records else None
         payload = (resources or {}).get('payload_resource_observation')
         verified = (resources or {}).get('payload_resource_observation_verified') is True
         observed_usage = [step['usage'] for step in receipt['rounds'] if step.get('usage') is not None]
@@ -107,7 +115,9 @@ def main():
                   'peak_bytes_at_payload_exit': payload['memory_peak_bytes'] if verified else None,
                   'resource_events_at_payload_exit': payload['resource_events'] if verified else None,
                   'resource_abort': (resources or {}).get('abort'),
-                  'backend_calls': len((directory / 'backend/calls.jsonl').read_text().splitlines()),
+                  'backend_calls': (len((directory / 'backend/calls.jsonl').read_text().splitlines())
+                                    if (directory / 'backend/calls.jsonl').exists()
+                                    else len(json.loads(saved_index.read_text())['producer_response_files'])),
                   'code_actions': sum(step.get('action_kind') == 'code' for step in receipt['rounds'])}
         result['success'] = result['facts_pass'] and receipt['treatment_valid'] and verified and not result['resource_abort']
         results.append(result)

@@ -1,0 +1,57 @@
+{
+  "trials": [
+    {
+      "task": "obsidian-lookup",
+      "arm": "direct",
+      "task_file": "obsidian-lookup.json",
+      "task_sha256": "15ee74eb8718372d48c5c51b9dc6b10fa525ccf03a6d6f8fce3f93764f243368"
+    },
+    {
+      "task": "obsidian-lookup",
+      "arm": "code",
+      "task_file": "obsidian-lookup.json",
+      "task_sha256": "15ee74eb8718372d48c5c51b9dc6b10fa525ccf03a6d6f8fce3f93764f243368"
+    },
+    {
+      "task": "obsidian-identities",
+      "arm": "code",
+      "task_file": "obsidian-identities.json",
+      "task_sha256": "046266d4ede77baa44646231f8d0d646444e31e130fc7d6b34ff334caed5e43d"
+    },
+    {
+      "task": "obsidian-identities",
+      "arm": "direct",
+      "task_file": "obsidian-identities.json",
+      "task_sha256": "046266d4ede77baa44646231f8d0d646444e31e130fc7d6b34ff334caed5e43d"
+    },
+    {
+      "task": "excalidraw-network",
+      "arm": "direct",
+      "task_file": "excalidraw-network.json",
+      "task_sha256": "89d087a5b39097b390a5cfaf1f0f32925854cfd590fffb60dd9a56099ea7fb1b"
+    },
+    {
+      "task": "excalidraw-network",
+      "arm": "code",
+      "task_file": "excalidraw-network.json",
+      "task_sha256": "89d087a5b39097b390a5cfaf1f0f32925854cfd590fffb60dd9a56099ea7fb1b"
+    },
+    {
+      "task": "obsidian-unknown",
+      "arm": "code",
+      "task_file": "obsidian-unknown.json",
+      "task_sha256": "2c73dc6269025d2c55d675b12794af3461c5aaadf2371719bb3405975a8fb9ad"
+    },
+    {
+      "task": "obsidian-unknown",
+      "arm": "direct",
+      "task_file": "obsidian-unknown.json",
+      "task_sha256": "2c73dc6269025d2c55d675b12794af3461c5aaadf2371719bb3405975a8fb9ad"
+    }
+  ],
+  "repetitions": 1,
+  "scope": "Eight-trial exploratory pilot, four questions, two artifacts",
+  "oracle_scope": "HAR grouping independently decoded from original HAR. Obsidian counts/identities are consistency checks against separately retained production Evidence, not an independent proof of semantic extractor correctness.",
+  "artifact_sha256": "146ef8470d8cbb4a6db209bdc19bf2bad13350444186c0fd93c31087b142b92f",
+  "capture_sha256": "680483155d4e0d4a67aca437de5309e741580f4710c170de508b8d0bd9fdb9e9"
+}

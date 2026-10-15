@@ -1,0 +1,82 @@
+[
+  {
+    "resource_scope": "rea-efficiency-264d830d7254482e82583e320b4e6d55.scope",
+    "peak_cgroup_bytes_sampled": 1150828544,
+    "elapsed_seconds": 224.162,
+    "abort": null,
+    "hard_memory_bytes": 8589934592,
+    "early_stop_bytes": 6442450944,
+    "cpu_quota_percent": 100,
+    "cpu_affinity": [
+      15
+    ],
+    "task_ceiling": 192,
+    "peak_tasks_sampled": 91,
+    "resource_events_last_observed": {
+      "memory.events": {
+        "low": 0,
+        "high": 0,
+        "max": 0,
+        "oom": 0,
+        "oom_kill": 0,
+        "oom_group_kill": 0
+      },
+      "pids.events": {
+        "max": 0
+      }
+    },
+    "resource_events_final": null,
+    "resource_counters_verified": false,
+    "cpu_stat_last_observed": {
+      "usage_usec": 67007292,
+      "user_usec": 56374112,
+      "system_usec": 10633180,
+      "nr_periods": 2171,
+      "nr_throttled": 1,
+      "throttled_usec": 2331,
+      "nr_bursts": 0,
+      "burst_usec": 0
+    },
+    "payload_resource_observation": {
+      "phase": "payload-exited-observer-alive",
+      "ownership_token": "rea-efficiency-264d830d7254482e82583e320b4e6d55.scope",
+      "payload_exit_code": 0,
+      "observer_pid": 2684334,
+      "remaining_processes": [
+        2684334
+      ],
+      "payload_cleanup_verified": true,
+      "cpu_stat": {
+        "usage_usec": 67006095,
+        "user_usec": 56372914,
+        "system_usec": 10633180,
+        "nr_periods": 2170,
+        "nr_throttled": 1,
+        "throttled_usec": 2331,
+        "nr_bursts": 0,
+        "burst_usec": 0
+      },
+      "memory_peak_bytes": 1187274752,
+      "control_group": "user.slice/user-1004.slice/user@1004.service/app.slice/rea-efficiency-264d830d7254482e82583e320b4e6d55.scope",
+      "resource_events": {
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        },
+        "pids.events": {
+          "max": 0
+        }
+      }
+    },
+    "payload_resource_observation_verified": true,
+    "payload_observation_scope": "Counters at payload exit while observer remains alive; not final whole-scope counters.",
+    "payload_observer_sources_sha256": {
+      "resource-run.py": "7728862171415e7dee2c11af2ead2b9a54265fccaf82a7113956d36b29065e33",
+      "resource_payload.py": "6f089e645459eba80c5d73e39c21606c78173a44daf49fabc3b88c4631ce51c6"
+    }
+  }
+]

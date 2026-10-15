@@ -5,6 +5,8 @@ import { performance } from "node:perf_hooks";
 import { resolve } from "node:path";
 import { Client } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
+import { createJavaScriptClient } from "../codemode-data-contract/client.mjs";
+import { moduleReferenceDiscovery } from "../codemode-data-contract/discovery.mjs";
 
 const settings = JSON.parse(await readFile(process.argv[2], "utf8"));
 await mkdir(settings.output, { recursive: true, mode: 0o700 });
@@ -27,6 +29,7 @@ const closeClient = async () => {
   }
 };
 let contracts;
+let narrowDiscovery;
 try {
   await client.connect(transport);
   transport.stderr?.resume();
@@ -34,6 +37,8 @@ try {
   contracts = allTools.filter(({ name }) => settings.tools.includes(name));
   if (contracts.length !== settings.tools.length)
     throw new Error("Unknown allowed tool");
+  if (settings.code_api === "typed-async")
+    narrowDiscovery = await moduleReferenceDiscovery(settings.runtime);
 } catch (error) {
   try {
     await closeClient();
@@ -96,6 +101,10 @@ const call = async (name, args) => {
 };
 
 const describe = (name) => {
+  if (narrowDiscovery && name === "inspect_analysis_view")
+    return narrowDiscovery;
+  if (name === "inspect_analysis_view.complete" && narrowDiscovery)
+    name = "inspect_analysis_view";
   const contract = contracts.find((tool) => tool.name === name);
   if (!contract) throw new Error("Unknown allowed tool");
   return {
@@ -103,6 +112,62 @@ const describe = (name) => {
     description: contract.description,
     inputSchema: contract.inputSchema,
   };
+};
+
+const asyncInvoke = (vm, pending, deferreds) =>
+  vm.newFunction("__call", (handle) => {
+    // Start the host operation while its argument is alive. Guest promises
+    // resolve between job drains, avoiding asyncify suspension in a job.
+    const request = JSON.parse(vm.getString(handle));
+    const deferred = vm.newPromise();
+    deferreds.push(deferred);
+    const work = (async () => {
+      let value;
+      try {
+        value = {
+          ok: true,
+          value: await call(request.name, request.arguments),
+        };
+      } catch (error) {
+        value = { ok: false, error: String(error) };
+      }
+      const serialized = vm.newString(JSON.stringify(value));
+      try {
+        deferred.resolve(serialized);
+      } finally {
+        serialized.dispose();
+      }
+    })().finally(() => pending.delete(work));
+    pending.add(work);
+    return deferred.handle;
+  });
+
+const settleCellPromise = async (vm, promise, pending, waited) => {
+  try {
+    while (true) {
+      const state = vm.getPromiseState(promise);
+      if (state.type !== "pending")
+        return state.type === "fulfilled"
+          ? { value: state.value }
+          : { error: state.error };
+      if (vm.runtime.hasPendingJob()) {
+        const jobs = vm.runtime.executePendingJobs();
+        if (jobs.error) return { error: jobs.error };
+      } else if (pending.size) {
+        const waiting = performance.now();
+        await Promise.race(pending);
+        waited(performance.now() - waiting);
+      } else {
+        return {
+          error: vm.newError(
+            "Cell awaits an unsettled promise with no pending host operation",
+          ),
+        };
+      }
+    }
+  } finally {
+    promise.dispose();
+  }
 };
 
 const execute = async (source) => {
@@ -121,10 +186,13 @@ const execute = async (source) => {
   let outputBytes = 0;
   const printed = [];
   const before = ordinal;
+  const asynchronous = settings.code_api === "typed-async";
+  const pending = new Set();
+  const deferreds = [];
   vm.runtime.setInterruptHandler(
     () => performance.now() - started - suspended > 5_000,
   );
-  const invoke = vm.newAsyncifiedFunction("__call", async (handle) => {
+  const invokeSync = async (handle) => {
     const { name, arguments: args } = JSON.parse(vm.getString(handle));
     const pending = performance.now();
     let value;
@@ -135,7 +203,10 @@ const execute = async (source) => {
     }
     suspended += performance.now() - pending;
     return vm.newString(JSON.stringify(value));
-  });
+  };
+  const invoke = asynchronous
+    ? asyncInvoke(vm, pending, deferreds)
+    : vm.newAsyncifiedFunction("__call", invokeSync);
   const docs = vm.newFunction("__describe", (handle) =>
     vm.newString(JSON.stringify(describe(vm.getString(handle)))),
   );
@@ -152,22 +223,31 @@ const execute = async (source) => {
     vm.setProp(vm.global, "__call", invoke);
     vm.setProp(vm.global, "__describe", docs);
     vm.setProp(vm.global, "print", print);
+    const callSource = asynchronous
+      ? "async call(name,args) { const response=JSON.parse(await __call(JSON.stringify({name,arguments:args}))); if(!response.ok) throw new Error(response.error); return response.value; },"
+      : "call(name,args) { const response=JSON.parse(__call(JSON.stringify({name,arguments:args}))); if(!response.ok) throw new Error(response.error); return response.value; },";
     vm.unwrapResult(
       vm.evalCode(`
       const rea = {
-        call(name, args) {
-          const response = JSON.parse(__call(JSON.stringify({name, arguments: args})));
-          if (!response.ok) throw new Error(response.error);
-          return response.value;
-        },
+        ${callSource}
         describe(name) { return JSON.parse(__describe(name)); }
       };
+      ${asynchronous ? `rea.javascript = (${createJavaScriptClient.toString()})(rea.call);` : ""}
     `),
     ).dispose();
-    const result = await vm.evalCodeAsync(
-      `(() => {\n${source}\n})()`,
+    let result = await vm.evalCodeAsync(
+      `(${asynchronous ? "async " : ""}() => {\n${source}\n})()`,
       "agent-cell.js",
     );
+    if (asynchronous && !result.error)
+      result = await settleCellPromise(
+        vm,
+        result.value,
+        pending,
+        (milliseconds) => {
+          suspended += milliseconds;
+        },
+      );
     if (result.error) {
       const error = vm.dump(result.error);
       result.error.dispose();
@@ -181,6 +261,9 @@ const execute = async (source) => {
     result.value.dispose();
     return { status: "completed", printed, backend_calls: ordinal - before };
   } finally {
+    // If a cell throws after starting reads, retain ownership until all complete.
+    if (pending.size) await Promise.allSettled(pending);
+    for (const deferred of deferreds) deferred.dispose();
     invoke.dispose();
     docs.dispose();
     print.dispose();
@@ -197,7 +280,10 @@ try {
       if (request.kind === "menu")
         response = contracts.map(({ name, description }) => ({
           name,
-          description: description.split(". ")[0],
+          description:
+            name === "inspect_analysis_view" && narrowDiscovery
+              ? narrowDiscovery.description
+              : description.split(". ")[0],
         }));
       else if (request.kind === "docs") response = describe(request.tool);
       else if (request.kind === "call")

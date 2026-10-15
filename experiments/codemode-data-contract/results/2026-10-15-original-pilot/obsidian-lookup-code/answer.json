@@ -1,0 +1,21 @@
+{
+  "requested_paths": [
+    "package.json",
+    "main.js"
+  ],
+  "unselected_files": 36,
+  "parsed_javascript_files": 1,
+  "browser_windows": 2,
+  "ipc_operations": 47,
+  "main_handlers": 47,
+  "artifact_sha256": "146ef8470d8cbb4a6db209bdc19bf2bad13350444186c0fd93c31087b142b92f",
+  "evidence_ids": [
+    "ev_58f30aa076f6509b25beff544db33760f72ccd23799988fad7d76ca07eef209f"
+  ],
+  "limitations": [
+    "Static extractor observations only; no target code was executed.",
+    "Analysis was selected-source: 36 inventoried files were outside scope.",
+    "Application and semantic graph coverage are partial; main.js semantic graph was resource-constrained.",
+    "Static Electron relationships and handler registrations do not prove runtime execution, reachability, or enforcement."
+  ]
+}

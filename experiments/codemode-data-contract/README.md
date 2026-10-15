@@ -1,6 +1,9 @@
 # Code-friendly JavaScript investigation data: design prototype
 
-Status: proposed contract and recorded-Evidence probe, not a shipped API.
+Status: experimental query/client implemented on this branch; not integrated upstream.
+Tracking: [experiment #4063](https://github.com/morluto/rea/issues/4063).
+The original design sketch below predates the implementation; its future names
+are illustrative. The implemented surface is described first.
 Source inspection: fresh main `d7651b6a0`, 2026-10-15. This follows the
 `experiment/browser-electron-codemode-20261015` pilot, commit `6494c98c6`.
 
@@ -8,6 +11,131 @@ The design question is whether REA's investigation data and contracts can make
 ordinary agent-written JavaScript useful. Adding an executor around existing
 MCP calls does not resolve untyped results, repetitive envelopes, missing list
 fields, ambiguous paths, or identity transcription.
+
+## Implemented prototype
+
+The canonical `inspect_analysis_view` contract now accepts:
+
+```json
+{
+  "source": { "kind": "retained-evidence", "evidence_id": "<parent>" },
+  "view": {
+    "kind": "javascript",
+    "collection": "modules",
+    "projection": "references",
+    "where": { "path": "main.js", "kind": "javascript-module" },
+    "offset": 0,
+    "limit": 64
+  }
+}
+```
+
+The typed `rows` contain canonical node identity, exact/unknown path, retained
+source-range count and unique observation authority/state/confidence triples.
+`source_coverage` preserves selection, application/semantic bounds and unknown
+counts independently of filtered-page coverage. Omitted filters select all;
+`path: null` selects unknown paths and `path: ""` selects empty references.
+Paths can match several identities. Original module items remain accessible.
+The owner scans the immutable graph once and allocates only the requested rows;
+it does not allocate a full matching inventory or source-range arrays.
+
+The experimental [client](client.mjs) borrows canonical TypeScript types;
+[discovery](discovery.mjs) generates narrow JSON Schemas from named canonical
+schemas, with complete original discovery still available. Both direct and
+code treatments receive the same discovery and backend. The client uses normal
+`await` and `for await`; failures are explicit `Result` values. Its page iterator
+binds parent and filters; offsets refer to that immutable query. This prototype
+uses existing offsets, not the originally proposed opaque cursors. No query
+cache, report-retention API, IPC/network redesign or production executor was
+added. General agent code is confined to the opt-in experimental host.
+
+```js
+const app = rea.javascript.fromEvidence(parentEvidenceId);
+const counts = {};
+const evidenceIds = [];
+for await (const result of app.modules.pages({
+  where: { path: "main.js", kind: "javascript-module" },
+})) {
+  if (!result.ok) throw new Error(JSON.stringify(result.error));
+  evidenceIds.push(result.value.evidence_id);
+  for (const row of result.value.page.rows) {
+    const id = row.identity;
+    if (id.strategy === "artifact-local-key" &&
+        id.namespace === "unresolved-semantic-module" &&
+        id.key.startsWith("external:")) {
+      const name = id.key.slice(9);
+      counts[name] = (counts[name] ?? 0) + row.retained_source_range_count;
+    }
+  }
+}
+print({ counts, evidenceIds }); // derived output; not minted source Evidence
+```
+
+`verify.py` compares this actual public MCP query against all selected original
+items from the real Obsidian ASAR, then checks four SDK pages, early exit and
+missing-parent errors. The executed run matched all 23 module identities and
+ten external specifiers/counts, retaining 36 unselected files. Full structured
+replies were 338,208 bytes for the legacy page/items and 23,402 for the new query.
+First retained-query round trip was 0.101 s; repeated reads were 0.012/0.015 s.
+Whole verification used 21.167 s wall, 20.906 s CPU and 1,167,003,648 bytes peak
+at verified payload exit. These are boundary/projection measurements, not agent
+performance or a new cache speedup.
+
+## Reproducing and retaining experiments
+
+Use pinned Node/npm and `npm ci && npm run build:cached`. Install
+`quickjs-emscripten@0.31.0` in an isolated temporary prefix, not production deps.
+Run heavy commands serially under `../analysis-efficiency/resource-run.py
+--memory-gib 8 --observe-payload-exit -- COMMAND...`: one CPU, 8 GiB whole
+process-family cap, 6 GiB early stop and no swap. Browser acquisition requires
+its explicitly selected executable and the existing 256-task ceiling.
+
+Download the official [Obsidian 1.14.4 ASAR gzip](https://github.com/obsidianmd/obsidian-releases/releases/download/v1.14.4/obsidian-1.14.4.asar.gz)
+and decompress to `DATA/artifacts/obsidian-1.14.4.asar`. Gzip SHA-256 is
+`d1ed428c363968774f0f3906e67d8a53a058ece0b6cdd924b07865977b2ada21`;
+ASAR SHA-256 is
+`146ef8470d8cbb4a6db209bdc19bf2bad13350444186c0fd93c31087b142b92f`.
+No target code is executed by the static acquisition or analysis.
+
+1. `acquire-oracle.py --data DATA` regenerates selected-source producer facts.
+2. `../browser-electron-code-mode/capture-web.mjs DATA/excalidraw-proxy ABS_CHROMIUM`
+   (run with Node) records the real Excalidraw startup in an owned empty-profile,
+   TLS-verified, sandboxed browser. It contacts the public site. A new capture
+   has a new digest/oracle; the historical live-web bytes are not reproducible.
+3. Run the original `prepare.py --data DATA` and `prepare_dependencies.py --data
+   DATA` in `../browser-electron-code-mode/` to regenerate plans/oracles.
+4. This directory's `prepare.py --data DATA --output COHORT` freezes the new
+   typed-interface tasks, oracle, counterbalanced order and source fingerprints.
+5. For every plan entry run the existing `trial.py` under the supervisor with
+   `--interface typed --compositional-followup --max-rounds 16`, the declared
+   `--arm`, `--task`, fresh `--output COHORT/TASK-ARM`, and absolute `--quickjs`.
+   Save supervisor output to `COHORT/TASK-ARM.log`.
+6. Run the original `review.py --cohort COHORT`; manually check support,
+   limitations and whether code actually composed/filter/grouped facts.
+7. `retain.py --cohort COHORT --output SAVED` saves task/oracle, actual model
+   actions and CLI events/usage, answers, failures, Evidence-response digests
+   and resource receipts, with a byte checksum manifest. It never recursively
+   copies profiles, auth, configuration, applications, HARs or full producer
+   payloads. `review.py` can regrade saved records using the Evidence index.
+
+Recorded snapshots under [results/](results/) are excluded from reformatting
+because task hashes and recorded-byte manifests must remain stable. Downloadable
+applications and regenerable bulky Evidence are intentionally not archived.
+The retained model sampling/results are valuable non-regenerable observations;
+identical future model outputs or original live-web captures are not promised.
+Keep original failures. Historical pilot results are a separate cohort, not a
+third randomized arm of the new comparison. A fresh model process with full
+history per action remains an external controlled protocol; this is not a
+native Codex tool-host latency benchmark.
+
+Generate/check the client's declarations without a second hand-maintained schema:
+
+```sh
+node_modules/.bin/tsc --ignoreConfig --allowJs --checkJs --declaration \
+  --emitDeclarationOnly --outDir .cache/codemode-sdk --target ES2023 \
+  --lib ES2023 --types node --module NodeNext --moduleResolution NodeNext \
+  --strict --skipLibCheck experiments/codemode-data-contract/client.mjs
+```
 
 ## Observed contract problems
 

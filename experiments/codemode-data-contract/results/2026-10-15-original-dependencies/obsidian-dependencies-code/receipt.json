@@ -1,0 +1,92 @@
+{
+  "arm": "code",
+  "task": "obsidian-dependencies",
+  "status": "answered",
+  "model": "gpt-5.6-terra",
+  "reasoning": "high",
+  "treatment_valid": true,
+  "native_tool_calls": 0,
+  "usage": {
+    "input_tokens": 86794,
+    "cached_input_tokens": 28160,
+    "cache_write_input_tokens": 0,
+    "output_tokens": 2333,
+    "reasoning_output_tokens": 920
+  },
+  "rounds": [
+    {
+      "round": 1,
+      "model_seconds": 16.21683260903228,
+      "prompt_bytes": 16952,
+      "exit_code": 0,
+      "usage": {
+        "input_tokens": 13636,
+        "cached_input_tokens": 0,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 79,
+        "reasoning_output_tokens": 53
+      },
+      "action_kind": "docs",
+      "action_seconds": 0.0013813499826937914,
+      "observation_bytes": 27999
+    },
+    {
+      "round": 2,
+      "model_seconds": 22.197809166042134,
+      "prompt_bytes": 45033,
+      "exit_code": 0,
+      "usage": {
+        "input_tokens": 20497,
+        "cached_input_tokens": 0,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 244,
+        "reasoning_output_tokens": 135
+      },
+      "action_kind": "code",
+      "action_seconds": 0.18761128303594887,
+      "observation_bytes": 19511
+    },
+    {
+      "round": 3,
+      "model_seconds": 27.783708057948388,
+      "prompt_bytes": 64859,
+      "exit_code": 0,
+      "usage": {
+        "input_tokens": 26146,
+        "cached_input_tokens": 20224,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 329,
+        "reasoning_output_tokens": 185
+      },
+      "action_kind": "code",
+      "action_seconds": 0.05259322398342192,
+      "observation_bytes": 808
+    },
+    {
+      "round": 4,
+      "model_seconds": 49.974046079907566,
+      "prompt_bytes": 66051,
+      "exit_code": 0,
+      "usage": {
+        "input_tokens": 26515,
+        "cached_input_tokens": 7936,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 1681,
+        "reasoning_output_tokens": 547
+      },
+      "action_kind": "answer"
+    }
+  ],
+  "usage_scope": "Observed completed CLI turns; reasoning is a subset of output.",
+  "usage_complete": true,
+  "elapsed_seconds": 136.63398639601655,
+  "preparation_seconds": 19.817954760044813,
+  "revision": "6688ed6db7f4f0765851fd2e649c8273059334a2",
+  "task_sha256": "17dd78b27ebc6b9553c93ebd7850e2e99d5a557f4a8b065a846dec88acf1d6bf",
+  "compositional_followup": true,
+  "max_rounds": 32,
+  "sources_sha256_at_start": {
+    "trial.py": "6dde94216429da0ebe5af5e268361e742011526e20965e742e5d3a83d01e2a1d",
+    "backend.mjs": "afc072ea5aefcd473094fba1cb6df3834eb725a27a0b2be30cd27c1c98dca819"
+  }
+}

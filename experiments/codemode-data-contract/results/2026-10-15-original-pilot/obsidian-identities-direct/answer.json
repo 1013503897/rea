@@ -1,0 +1,47 @@
+{
+  "artifact_sha256": "146ef8470d8cbb4a6db209bdc19bf2bad13350444186c0fd93c31087b142b92f",
+  "counts_by_kind": {
+    "javascript-asset": 1,
+    "javascript-module": 23
+  },
+  "node_ids": {
+    "javascript-asset": [
+      "jag_node_205f7beec1e6b5efa4ff4928ea25da1e87be912fe4b597ff4ec40b0c1f7d956d"
+    ],
+    "javascript-module": [
+      "jag_node_15b5b46dfcbc20cac7c7a9c7b2d2efe21d39cecc77bb3a42e86506ac480c6cd0",
+      "jag_node_288149271a58cce3ef8ca8fcadfc24618bb0a4255724e5440605400bbbd61afb",
+      "jag_node_3b78134c949c0ddae48a6c44419bfad0e1820ac0e2807bc433e14fe553e9bf33",
+      "jag_node_42f0ba1369248f1d0ee7dc7e5deccdb6d03b34696d7c9b587b29561b055a0e2c",
+      "jag_node_61561f95fa66efe6525b31567954c8a58bd0f3667b208e85d3c7d760ec396cdd",
+      "jag_node_6728bd2855597b2b521020668ce9f4e1578b1769ad6b07cb516e142811ba3015",
+      "jag_node_7290cf330a4c464680051bf158a11737c88d9b658d12b8ca33dad9d9ed5bbd43",
+      "jag_node_72933fe5ad0b3d02bc689bbec5b98e57781a9e0642402e79d29dd84a40c4add3",
+      "jag_node_74570cc130ee00964df34197958ce329e59db8b64add4f152b4c9dbaa459c620",
+      "jag_node_82249640deb32652d0071229456acdeae30c3713f8cee3fb82d70352dbea476f",
+      "jag_node_842abef9a77ef072b5bc55e00dda19a5b6039ae08288fb1c66240fa6c0321588",
+      "jag_node_a15518c53e559509aa493fc7a059a511b8aec92d52aa9035a505fe2c42060ada",
+      "jag_node_a2953a5694265708ca5deaa4162924db5aa6ec0fe23179473703e2415da6f20d",
+      "jag_node_a304199f3cdfbb132783f2ef19661c97cf6538f6f9e0d2241ebd38a905fa03f5",
+      "jag_node_a7c8f694bd07b5387690de4a25f3dff858865973ff593bb314159b8932c86c15",
+      "jag_node_bc3fca896e4b81c6783517a7fe5c51c8e2c9e5d88eef9bd4f571f9230b5e544b",
+      "jag_node_c74ef2b3509a9072fea733eb720e062f258b2ba13a163c5e50134f76ca8a1030",
+      "jag_node_d678d9ad35db0904fa9af07f745d833b1fd0795211a29e6386551441701f1ea0",
+      "jag_node_e0c8fcd14b723dfb42a5fcabf4ddc6c596d37cc1704c34f1d09456857afaa1a4",
+      "jag_node_e74390bbf11499840fd0d861d90d1e0a9ca4edf57b8eb81dd13287e040979f5b",
+      "jag_node_eaf187fce5c5c6b53bc0f391e658c3a63d73572bc4203b1f221652689777744e",
+      "jag_node_fafc7c8e6c5aa1793108013819c957c7cc427d09fb0ad72f5311fdedb77ca1b2",
+      "jag_node_fe6988c196f390298badd9cd9530548d189f2a76953fbe4898fd5a652e300db4"
+    ]
+  },
+  "inventory_exhausted": true,
+  "evidence_ids": [
+    "ev_e98ca48af774b5296e29a7b819a7ed05b6001664f7f6268ee52cc6a3ed64b705",
+    "ev_4c2ad6337c3a26da7ed84299e6d78604eca738caa5288517e6492ce88a030c99"
+  ],
+  "limitations": [
+    "Module-page coverage is exhausted (55 of 55 retained module identities).",
+    "This inventories retained static identities only; it does not establish runtime entrypoint selection or execution.",
+    "The parent application graph is partial, but module identities were retained."
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "successful_evidence_ids": [
+    "ev_1e3c9561ffa500f0cc75e25891b70480f46cfe819111a39c79b40a80561f80a9",
+    "ev_62f7d7f7c6d1c2cf0f786a4f4d7f1bdd7b808b24ec22e37bc14f86e1a999c8d0",
+    "ev_6f45b0dc7cf03f8a362fccc1693d31302c7d05bc2796427823bb515d44e6e177",
+    "ev_abc62503dd2fa6d17f3d29101c4f25de71dbc27c2745661aca4eb77035e0eba2"
+  ],
+  "producer_response_files": [
+    {
+      "file": "call-001.json",
+      "sha256": "3e2e120d8b887d4071f03e5af7f3ccc69edbe9a0ea81e0d88d962074948454d7",
+      "bytes": 29159
+    },
+    {
+      "file": "call-002.json",
+      "sha256": "ba49916b9d421915c26713be01fa0dec6edc5359faa8afd2cccfa0474e78a1db",
+      "bytes": 2820
+    },
+    {
+      "file": "call-003.json",
+      "sha256": "f73abde281149a0de1b1dea98f7b4e3cc5a59a612354a7380c654ba6cd0f281a",
+      "bytes": 38031
+    },
+    {
+      "file": "call-004.json",
+      "sha256": "7a68e5eab71f1a97ef55ed82b16362d4dcebe8b6508bf580a43a562037b97c06",
+      "bytes": 30167
+    }
+  ],
+  "scope": "Observed successful-envelope references and response digests; raw regenerable producer payloads omitted."
+}

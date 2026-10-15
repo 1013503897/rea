@@ -1,0 +1,464 @@
+{
+  "scope": "Eight-trial exploratory pilot, four questions, two artifacts",
+  "oracle_scope": "HAR grouping independently decoded from original HAR. Obsidian counts/identities are consistency checks against separately retained production Evidence, not an independent proof of semantic extractor correctness.",
+  "trials": [
+    {
+      "trial": "obsidian-lookup-direct",
+      "arm": "direct",
+      "task": "obsidian-lookup",
+      "answer_type": "dict",
+      "status": "answered",
+      "treatment_valid": true,
+      "checks": {
+        "artifact_sha256": true,
+        "requested_paths": true,
+        "unselected_files": true,
+        "parsed_javascript_files": true,
+        "browser_windows": true,
+        "ipc_operations": true,
+        "main_handlers": true,
+        "frozen_task": true,
+        "evidence_ids": true,
+        "limitations_present": true
+      },
+      "facts_pass": true,
+      "usage": {
+        "input_tokens": 112359,
+        "cached_input_tokens": 0,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 1609,
+        "reasoning_output_tokens": 987
+      },
+      "uncached_input_tokens": 112359,
+      "usage_complete": true,
+      "rounds": 5,
+      "max_request_input_tokens": 30326,
+      "model_observation_bytes": 64044,
+      "discovery_rounds": 1,
+      "discovery_response_bytes": 27999,
+      "elapsed_seconds": 107.37500034691766,
+      "whole_scope_seconds": 107.69,
+      "preparation_seconds": 19.36791256791912,
+      "question_seconds": 88.00708777899854,
+      "resources_verified_at_payload_exit": true,
+      "cpu_seconds_at_payload_exit": 26.419693,
+      "peak_bytes_at_payload_exit": 1155231744,
+      "resource_events_at_payload_exit": {
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        },
+        "pids.events": {
+          "max": 0
+        }
+      },
+      "resource_abort": null,
+      "backend_calls": 4,
+      "code_actions": 0,
+      "success": true
+    },
+    {
+      "trial": "obsidian-lookup-code",
+      "arm": "code",
+      "task": "obsidian-lookup",
+      "answer_type": "dict",
+      "status": "answered",
+      "treatment_valid": true,
+      "checks": {
+        "artifact_sha256": true,
+        "requested_paths": true,
+        "unselected_files": true,
+        "parsed_javascript_files": true,
+        "browser_windows": true,
+        "ipc_operations": true,
+        "main_handlers": true,
+        "frozen_task": true,
+        "evidence_ids": true,
+        "limitations_present": true
+      },
+      "facts_pass": true,
+      "usage": {
+        "input_tokens": 82621,
+        "cached_input_tokens": 0,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 1059,
+        "reasoning_output_tokens": 603
+      },
+      "uncached_input_tokens": 82621,
+      "usage_complete": true,
+      "rounds": 4,
+      "max_request_input_tokens": 27101,
+      "model_observation_bytes": 49429,
+      "discovery_rounds": 1,
+      "discovery_response_bytes": 27999,
+      "elapsed_seconds": 94.46551845304202,
+      "whole_scope_seconds": 94.796,
+      "preparation_seconds": 19.444348984980024,
+      "question_seconds": 75.021169468062,
+      "resources_verified_at_payload_exit": true,
+      "cpu_seconds_at_payload_exit": 25.588564,
+      "peak_bytes_at_payload_exit": 1051041792,
+      "resource_events_at_payload_exit": {
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        },
+        "pids.events": {
+          "max": 0
+        }
+      },
+      "resource_abort": null,
+      "backend_calls": 3,
+      "code_actions": 2,
+      "success": true
+    },
+    {
+      "trial": "obsidian-identities-code",
+      "arm": "code",
+      "task": "obsidian-identities",
+      "answer_type": "dict",
+      "status": "answered",
+      "treatment_valid": true,
+      "checks": {
+        "artifact_sha256": true,
+        "counts_by_kind": true,
+        "node_ids": false,
+        "inventory_exhausted": true,
+        "frozen_task": true,
+        "evidence_ids": true,
+        "limitations_present": true
+      },
+      "facts_pass": false,
+      "usage": {
+        "input_tokens": 80325,
+        "cached_input_tokens": 7936,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2171,
+        "reasoning_output_tokens": 699
+      },
+      "uncached_input_tokens": 72389,
+      "usage_complete": true,
+      "rounds": 4,
+      "max_request_input_tokens": 26007,
+      "model_observation_bytes": 47203,
+      "discovery_rounds": 1,
+      "discovery_response_bytes": 27999,
+      "elapsed_seconds": 85.01893847598694,
+      "whole_scope_seconds": 85.36,
+      "preparation_seconds": 19.326784500968643,
+      "question_seconds": 65.6921539750183,
+      "resources_verified_at_payload_exit": true,
+      "cpu_seconds_at_payload_exit": 27.282986,
+      "peak_bytes_at_payload_exit": 1047605248,
+      "resource_events_at_payload_exit": {
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        },
+        "pids.events": {
+          "max": 0
+        }
+      },
+      "resource_abort": null,
+      "backend_calls": 3,
+      "code_actions": 2,
+      "success": false
+    },
+    {
+      "trial": "obsidian-identities-direct",
+      "arm": "direct",
+      "task": "obsidian-identities",
+      "answer_type": "dict",
+      "status": "answered",
+      "treatment_valid": true,
+      "checks": {
+        "artifact_sha256": true,
+        "counts_by_kind": true,
+        "node_ids": true,
+        "inventory_exhausted": true,
+        "frozen_task": true,
+        "evidence_ids": true,
+        "limitations_present": true
+      },
+      "facts_pass": true,
+      "usage": {
+        "input_tokens": 80227,
+        "cached_input_tokens": 0,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2093,
+        "reasoning_output_tokens": 627
+      },
+      "uncached_input_tokens": 80227,
+      "usage_complete": true,
+      "rounds": 4,
+      "max_request_input_tokens": 25916,
+      "model_observation_bytes": 47097,
+      "discovery_rounds": 1,
+      "discovery_response_bytes": 27999,
+      "elapsed_seconds": 163.53370783792343,
+      "whole_scope_seconds": 163.973,
+      "preparation_seconds": 61.656440516002476,
+      "question_seconds": 101.87726732192095,
+      "resources_verified_at_payload_exit": true,
+      "cpu_seconds_at_payload_exit": 61.686086,
+      "peak_bytes_at_payload_exit": 1070039040,
+      "resource_events_at_payload_exit": {
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        },
+        "pids.events": {
+          "max": 0
+        }
+      },
+      "resource_abort": null,
+      "backend_calls": 3,
+      "code_actions": 0,
+      "success": true
+    },
+    {
+      "trial": "excalidraw-network-direct",
+      "arm": "direct",
+      "task": "excalidraw-network",
+      "answer_type": "dict",
+      "status": "answered",
+      "treatment_valid": true,
+      "checks": {
+        "artifact_sha256": true,
+        "observed_records": true,
+        "coverage_exhausted": true,
+        "groups": true,
+        "frozen_task": true,
+        "evidence_ids": true,
+        "limitations_present": true
+      },
+      "facts_pass": true,
+      "usage": {
+        "input_tokens": 74055,
+        "cached_input_tokens": 15872,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 1041,
+        "reasoning_output_tokens": 422
+      },
+      "uncached_input_tokens": 58183,
+      "usage_complete": true,
+      "rounds": 4,
+      "max_request_input_tokens": 30477,
+      "model_observation_bytes": 74298,
+      "discovery_rounds": 2,
+      "discovery_response_bytes": 32179,
+      "elapsed_seconds": 69.86348159005865,
+      "whole_scope_seconds": 70.221,
+      "preparation_seconds": 13.026660543051548,
+      "question_seconds": 56.836821047007106,
+      "resources_verified_at_payload_exit": true,
+      "cpu_seconds_at_payload_exit": 18.711444,
+      "peak_bytes_at_payload_exit": 990904320,
+      "resource_events_at_payload_exit": {
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        },
+        "pids.events": {
+          "max": 0
+        }
+      },
+      "resource_abort": null,
+      "backend_calls": 2,
+      "code_actions": 0,
+      "success": true
+    },
+    {
+      "trial": "excalidraw-network-code",
+      "arm": "code",
+      "task": "excalidraw-network",
+      "answer_type": "dict",
+      "status": "answered",
+      "treatment_valid": true,
+      "checks": {
+        "artifact_sha256": true,
+        "observed_records": true,
+        "coverage_exhausted": true,
+        "groups": true,
+        "frozen_task": true,
+        "evidence_ids": true,
+        "limitations_present": true
+      },
+      "facts_pass": true,
+      "usage": {
+        "input_tokens": 59768,
+        "cached_input_tokens": 0,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 1040,
+        "reasoning_output_tokens": 505
+      },
+      "uncached_input_tokens": 59768,
+      "usage_complete": true,
+      "rounds": 3,
+      "max_request_input_tokens": 29647,
+      "model_observation_bytes": 70171,
+      "discovery_rounds": 1,
+      "discovery_response_bytes": 27999,
+      "elapsed_seconds": 73.09337004297413,
+      "whole_scope_seconds": 73.455,
+      "preparation_seconds": 12.543102559982799,
+      "question_seconds": 60.55026748299133,
+      "resources_verified_at_payload_exit": true,
+      "cpu_seconds_at_payload_exit": 18.117867,
+      "peak_bytes_at_payload_exit": 1191456768,
+      "resource_events_at_payload_exit": {
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        },
+        "pids.events": {
+          "max": 0
+        }
+      },
+      "resource_abort": null,
+      "backend_calls": 2,
+      "code_actions": 1,
+      "success": true
+    },
+    {
+      "trial": "obsidian-unknown-code",
+      "arm": "code",
+      "task": "obsidian-unknown",
+      "answer_type": "dict",
+      "status": "answered",
+      "treatment_valid": true,
+      "checks": {
+        "artifact_sha256": true,
+        "authorization_established": true,
+        "application_behavior_fully_covered": true,
+        "sender_validation_observations": true,
+        "unselected_files": true,
+        "frozen_task": true,
+        "evidence_ids": true,
+        "limitations_present": true
+      },
+      "facts_pass": true,
+      "usage": {
+        "input_tokens": 55817,
+        "cached_input_tokens": 0,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 1059,
+        "reasoning_output_tokens": 580
+      },
+      "uncached_input_tokens": 55817,
+      "usage_complete": true,
+      "rounds": 3,
+      "max_request_input_tokens": 21932,
+      "model_observation_bytes": 31212,
+      "discovery_rounds": 1,
+      "discovery_response_bytes": 27999,
+      "elapsed_seconds": 112.04562795802485,
+      "whole_scope_seconds": 112.424,
+      "preparation_seconds": 21.983774747001007,
+      "question_seconds": 90.06185321102384,
+      "resources_verified_at_payload_exit": true,
+      "cpu_seconds_at_payload_exit": 27.596611,
+      "peak_bytes_at_payload_exit": 1210003456,
+      "resource_events_at_payload_exit": {
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        },
+        "pids.events": {
+          "max": 0
+        }
+      },
+      "resource_abort": null,
+      "backend_calls": 2,
+      "code_actions": 1,
+      "success": true
+    },
+    {
+      "trial": "obsidian-unknown-direct",
+      "arm": "direct",
+      "task": "obsidian-unknown",
+      "answer_type": "dict",
+      "status": "answered",
+      "treatment_valid": true,
+      "checks": {
+        "artifact_sha256": true,
+        "authorization_established": true,
+        "application_behavior_fully_covered": true,
+        "sender_validation_observations": true,
+        "unselected_files": true,
+        "frozen_task": true,
+        "evidence_ids": true,
+        "limitations_present": true
+      },
+      "facts_pass": true,
+      "usage": {
+        "input_tokens": 82373,
+        "cached_input_tokens": 15872,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 1362,
+        "reasoning_output_tokens": 803
+      },
+      "uncached_input_tokens": 66501,
+      "usage_complete": true,
+      "rounds": 4,
+      "max_request_input_tokens": 26999,
+      "model_observation_bytes": 49323,
+      "discovery_rounds": 1,
+      "discovery_response_bytes": 27999,
+      "elapsed_seconds": 129.5048534909729,
+      "whole_scope_seconds": 129.832,
+      "preparation_seconds": 19.56745550094638,
+      "question_seconds": 109.93739799002651,
+      "resources_verified_at_payload_exit": true,
+      "cpu_seconds_at_payload_exit": 26.765896,
+      "peak_bytes_at_payload_exit": 1049292800,
+      "resource_events_at_payload_exit": {
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        },
+        "pids.events": {
+          "max": 0
+        }
+      },
+      "resource_abort": null,
+      "backend_calls": 3,
+      "code_actions": 0,
+      "success": true
+    }
+  ],
+  "accepted_shapes": "node_ids may be a list or a mapping of kinds to lists; sender_validation_observations may be a count object; limitations may be prose or a string list. Exact facts still required.",
+  "narrative_review": "Required separately: supporting IDs alone do not establish claim-level support."
+}

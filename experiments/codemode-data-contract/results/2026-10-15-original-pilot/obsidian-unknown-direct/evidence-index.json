@@ -1,0 +1,25 @@
+{
+  "successful_evidence_ids": [
+    "ev_6e485e2dcd2439c0a55380488b9fc3a781269665a28bbc34670da79797f1ecbe",
+    "ev_acb7b2a702834e46329a84bb8f65db2ef19d97327fb9a93e62e189e357e2bd25",
+    "ev_dac1268d8376469317eeca2b1ceaacc4b987f5b34b7b964567eec9b683151605"
+  ],
+  "producer_response_files": [
+    {
+      "file": "call-001.json",
+      "sha256": "6e82c7d18a768f4c3339fe465f4b46cfccf6a1c7ecd3db80252b6012edb2f6f0",
+      "bytes": 29159
+    },
+    {
+      "file": "call-002.json",
+      "sha256": "ba49916b9d421915c26713be01fa0dec6edc5359faa8afd2cccfa0474e78a1db",
+      "bytes": 2820
+    },
+    {
+      "file": "call-003.json",
+      "sha256": "07f4c1a9d68b079f8b79d3229cee7ac6da49a75ceee1686cbb2717c780aedf72",
+      "bytes": 38031
+    }
+  ],
+  "scope": "Observed successful-envelope references and response digests; raw regenerable producer payloads omitted."
+}

@@ -1,0 +1,21 @@
+{
+  "authorization_established": false,
+  "application_behavior_fully_covered": false,
+  "sender_validation_observations": {
+    "count": 1,
+    "meaning": "One sender-validation observation was retained among 47 statically observed main IPC handlers; it is an observed check, not proof of enforced authorization."
+  },
+  "unselected_files": 36,
+  "artifact_sha256": "146ef8470d8cbb4a6db209bdc19bf2bad13350444186c0fd93c31087b142b92f",
+  "evidence_ids": [
+    "ev_293425260c6d234a8754873c77f3fc59d8141bd411687f9aac0b926f88d1c571",
+    "ev_fc5d8facd797da5738d6d2c5492aa1baa0d8057d1bba14d387afe8808f953990"
+  ],
+  "reason": "No. The selected-source analysis statically observed 47 main IPC handlers and one sender-validation observation, but analyzed only package.json and main.js with 36 inventoried files outside scope. Application and semantic coverage are partial, and static relationships do not establish runtime registration, reachability, or enforcement.",
+  "limitations": [
+    "Selected-source scope excluded 36 inventoried files.",
+    "Application and semantic graph coverage were partial, with retained unknowns and a main.js resource constraint.",
+    "Sender/frame/URL/origin checks are observations only and do not prove a complete authorization policy.",
+    "Static analysis did not execute code and does not prove runtime behavior."
+  ]
+}

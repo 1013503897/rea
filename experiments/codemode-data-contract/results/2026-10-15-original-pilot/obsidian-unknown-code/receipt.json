@@ -1,0 +1,74 @@
+{
+  "arm": "code",
+  "task": "obsidian-unknown",
+  "status": "answered",
+  "model": "gpt-5.6-terra",
+  "reasoning": "high",
+  "treatment_valid": true,
+  "native_tool_calls": 0,
+  "usage": {
+    "input_tokens": 55817,
+    "cached_input_tokens": 0,
+    "cache_write_input_tokens": 0,
+    "output_tokens": 1059,
+    "reasoning_output_tokens": 580
+  },
+  "rounds": [
+    {
+      "round": 1,
+      "model_seconds": 25.553908049012534,
+      "prompt_bytes": 16221,
+      "exit_code": 0,
+      "usage": {
+        "input_tokens": 13512,
+        "cached_input_tokens": 0,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 191,
+        "reasoning_output_tokens": 165
+      },
+      "action_kind": "docs",
+      "action_seconds": 0.001881890930235386,
+      "observation_bytes": 27999
+    },
+    {
+      "round": 2,
+      "model_seconds": 24.40222004998941,
+      "prompt_bytes": 44302,
+      "exit_code": 0,
+      "usage": {
+        "input_tokens": 20373,
+        "cached_input_tokens": 0,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 190,
+        "reasoning_output_tokens": 82
+      },
+      "action_kind": "code",
+      "action_seconds": 0.061395206954330206,
+      "observation_bytes": 3213
+    },
+    {
+      "round": 3,
+      "model_seconds": 39.85925874498207,
+      "prompt_bytes": 47833,
+      "exit_code": 0,
+      "usage": {
+        "input_tokens": 21932,
+        "cached_input_tokens": 0,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 678,
+        "reasoning_output_tokens": 333
+      },
+      "action_kind": "answer"
+    }
+  ],
+  "usage_scope": "Observed completed CLI turns; reasoning is a subset of output.",
+  "usage_complete": true,
+  "elapsed_seconds": 112.04562795802485,
+  "preparation_seconds": 21.983774747001007,
+  "revision": "6688ed6db7f4f0765851fd2e649c8273059334a2",
+  "task_sha256": "2c73dc6269025d2c55d675b12794af3461c5aaadf2371719bb3405975a8fb9ad",
+  "sources_sha256": {
+    "trial.py": "b57718d1c44f4300d9d4f3f0b8979f4a532d51073c728e006ad9ff922b46773d",
+    "backend.mjs": "687cab7f83ba0d7e7bff42c094bfd9a68a03f66f65cd4d2a4a942b745e81de40"
+  }
+}

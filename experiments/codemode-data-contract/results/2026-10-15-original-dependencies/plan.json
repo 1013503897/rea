@@ -1,0 +1,19 @@
+{
+  "scope": "Exploratory follow-up, one dependent-read task and one pair; no statistical claim",
+  "oracle_scope": "Separate retained producer Evidence consistency, not independent semantic validation",
+  "protocol": "Direct batches permitted; code explicitly instructed to project/combine before print",
+  "trials": [
+    {
+      "task": "obsidian-dependencies",
+      "arm": "code",
+      "task_file": "obsidian-dependencies.json",
+      "task_sha256": "17dd78b27ebc6b9553c93ebd7850e2e99d5a557f4a8b065a846dec88acf1d6bf"
+    },
+    {
+      "task": "obsidian-dependencies",
+      "arm": "direct",
+      "task_file": "obsidian-dependencies.json",
+      "task_sha256": "17dd78b27ebc6b9553c93ebd7850e2e99d5a557f4a8b065a846dec88acf1d6bf"
+    }
+  ]
+}

@@ -1,0 +1,102 @@
+{
+  "arm": "direct",
+  "task": "obsidian-lookup",
+  "status": "answered",
+  "model": "gpt-5.6-terra",
+  "reasoning": "high",
+  "treatment_valid": true,
+  "native_tool_calls": 0,
+  "usage": {
+    "input_tokens": 112359,
+    "cached_input_tokens": 0,
+    "output_tokens": 1609
+  },
+  "rounds": [
+    {
+      "round": 1,
+      "model_seconds": 12.320914381998591,
+      "prompt_bytes": 15742,
+      "exit_code": 0,
+      "usage": {
+        "input_tokens": 13403,
+        "cached_input_tokens": 0,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 101,
+        "reasoning_output_tokens": 75
+      },
+      "action_kind": "docs",
+      "action_seconds": 0.00133176997769624,
+      "observation_bytes": 27999
+    },
+    {
+      "round": 2,
+      "model_seconds": 9.473931564949453,
+      "prompt_bytes": 43823,
+      "exit_code": 0,
+      "usage": {
+        "input_tokens": 20056,
+        "cached_input_tokens": 0,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 256,
+        "reasoning_output_tokens": 155
+      },
+      "action_kind": "call",
+      "action_seconds": 0.009007319924421608,
+      "observation_bytes": 2840
+    },
+    {
+      "round": 3,
+      "model_seconds": 13.01484405703377,
+      "prompt_bytes": 46994,
+      "exit_code": 0,
+      "usage": {
+        "input_tokens": 21606,
+        "cached_input_tokens": 0,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 171,
+        "reasoning_output_tokens": 70
+      },
+      "action_kind": "call",
+      "action_seconds": 0.10135728295426816,
+      "observation_bytes": 18484
+    },
+    {
+      "round": 4,
+      "model_seconds": 26.68342290702276,
+      "prompt_bytes": 65799,
+      "exit_code": 0,
+      "usage": {
+        "input_tokens": 26968,
+        "cached_input_tokens": 0,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 533,
+        "reasoning_output_tokens": 389
+      },
+      "action_kind": "call",
+      "action_seconds": 0.01812774606514722,
+      "observation_bytes": 14721
+    },
+    {
+      "round": 5,
+      "model_seconds": 26.19809547602199,
+      "prompt_bytes": 80920,
+      "exit_code": 0,
+      "usage": {
+        "input_tokens": 30326,
+        "cached_input_tokens": 0,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 548,
+        "reasoning_output_tokens": 298
+      },
+      "action_kind": "answer"
+    }
+  ],
+  "elapsed_seconds": 107.37500034691766,
+  "preparation_seconds": 19.36791256791912,
+  "revision": "6688ed6db7f4f0765851fd2e649c8273059334a2",
+  "task_sha256": "15ee74eb8718372d48c5c51b9dc6b10fa525ccf03a6d6f8fce3f93764f243368",
+  "sources_sha256": {
+    "trial.py": "b57718d1c44f4300d9d4f3f0b8979f4a532d51073c728e006ad9ff922b46773d",
+    "backend.mjs": "687cab7f83ba0d7e7bff42c094bfd9a68a03f66f65cd4d2a4a942b745e81de40"
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "external_specifiers": {
+    "child_process": 1,
+    "crypto": 1,
+    "electron": 2,
+    "fs": 3,
+    "net": 1,
+    "original-fs": 2,
+    "os": 2,
+    "path": 3,
+    "url": 1,
+    "util": 1
+  },
+  "module_identity_count": 23,
+  "external_module_count": 10,
+  "inventory_exhausted": true,
+  "runtime_load_proven": false,
+  "artifact_sha256": "146ef8470d8cbb4a6db209bdc19bf2bad13350444186c0fd93c31087b142b92f",
+  "evidence_ids": [
+    "ev_50b7871563e88ebff64c427549faf311865ec6c8b7a17d61044b1a502757098e",
+    "ev_81fc0685b521de24f0814031ec4d2230cb4b250b957959a6a16f37298d73a2b9",
+    "ev_96260f086b225ac0ee17bfba751484689651752be621369a3451ea931186eb19",
+    "ev_d15ba8ee24b193787f284d52e4a6d635eeea770dd05a2a7021dc1fdb3e29b449",
+    "ev_f69723c99318756f0462be1ce9939e392bebbbd72d2f18bef9a8a19e880db261",
+    "ev_cdb36ff0317dcc5610af41f61a4be98066acf7bf92c84becba4ac84f953ae41d",
+    "ev_49ad1905bd9a41f4ccf66dff87691876f9c6459f85c2f2f0f79a63984bc9d57a",
+    "ev_a4c91b24573fb27b98bee99eaf9f2ce5551bba8f352fc6f3a2ebe2d11d7333cc",
+    "ev_036369aeda99a5b7062fea638653e02e629a29cf78f42d6a4a7f411774a3a9c9",
+    "ev_c8e029449993ce395212d84b6a4cdd61caf5609fec72e2312fc04cf2e2d11104",
+    "ev_35383118f9cca4880562111a5e414008796d4b8c94699146ba211ba1ddb843f4",
+    "ev_58782b3b0a49141b3d148c097ce0cb2237388091fc0040ad47bc91598241c40b"
+  ],
+  "limitations": "Counts are limited to retained javascript-module identities at main.js and the specified unresolved-semantic-module external: selector; unresolved-reference identities were excluded. Findings are inert static observations and do not establish runtime loading; parent semantic graph coverage is partial."
+}
