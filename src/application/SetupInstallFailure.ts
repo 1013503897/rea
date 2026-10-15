@@ -24,12 +24,18 @@ export type SetupHopperInstallResult =
       readonly status: "installed";
       readonly launcherPath: string;
       readonly cleanupFailure?: string;
+      readonly warning?: string;
     }
   | {
       readonly status: "failed";
       readonly code: SetupFailureCode;
       readonly remediation: string;
     };
+
+export type SetupHopperInstallFailure = Extract<
+  SetupHopperInstallResult,
+  { readonly status: "failed" }
+>;
 
 export type HopperInstallFailureReason =
   | "unsupported_host"
@@ -97,7 +103,7 @@ export const setupInstallFailure = (
   reason: HopperInstallFailureReason,
   packageFailure?: LinuxPackageInstallFailure,
   platform: NodeJS.Platform = "darwin",
-): SetupHopperInstallResult => {
+): SetupHopperInstallFailure => {
   switch (reason) {
     case "unsupported_host":
       return {
