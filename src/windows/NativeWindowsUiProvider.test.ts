@@ -236,9 +236,11 @@ it("retains and retries an executable descriptor whose close first fails", async
       "Selected executable descriptor cleanup failed",
     );
     close.mockRestore();
-    const client = new NativeWindowsUiProvider(host(), "linux").createClient(
-      TARGET,
-    );
+    const client = new NativeWindowsUiProvider(
+      {},
+      host(),
+      "linux",
+    ).createClient(TARGET);
     await expect(client.close()).resolves.toMatchObject({ ok: true });
     await expect(
       hashWindowsCaptureExecutable(executable),
@@ -309,7 +311,7 @@ it("retains both final identity owners before returning their primary failure", 
       cleanup: { resources: [TARGET.path, processPath] },
     },
   });
-  const client = new NativeWindowsUiProvider(host(), "linux").createClient(
+  const client = new NativeWindowsUiProvider({}, host(), "linux").createClient(
     TARGET,
   );
   await expect(client.close()).resolves.toMatchObject({ ok: true });

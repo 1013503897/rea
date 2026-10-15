@@ -1,6 +1,7 @@
 import { requireWindowsWindowCaptureAuthority } from "./WindowsNativeLoader.js";
 import {
   nativeWindowsCaptureSchema,
+  WINDOWS_CAPTURE_REQUEST_BYTES,
   windowsCaptureFailureSchema,
   windowsCaptureRequestSchema,
 } from "./WindowsWindowCaptureProtocol.js";
@@ -9,8 +10,19 @@ import {
 // calls it; the parent can terminate its Job Object without blocking the server
 // or leaving a detached native thread/surface in the long-lived REA process.
 try {
-  const encoded = process.argv[2];
-  if (encoded === undefined) throw new Error("Missing capture request");
+  const chunks: Buffer[] = [];
+  let bytes = 0;
+  for await (const chunk of process.stdin) {
+    if (!Buffer.isBuffer(chunk))
+      throw new Error("Invalid capture request bytes");
+    bytes += chunk.byteLength;
+    if (bytes > WINDOWS_CAPTURE_REQUEST_BYTES)
+      throw new Error("Capture request exceeds its protocol byte limit");
+    chunks.push(chunk);
+  }
+  const encoded = new TextDecoder("utf-8", { fatal: true }).decode(
+    Buffer.concat(chunks, bytes),
+  );
   const value: unknown = JSON.parse(encoded);
   const input = windowsCaptureRequestSchema.parse(value);
   const authority = requireWindowsWindowCaptureAuthority();

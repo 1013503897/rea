@@ -7,6 +7,7 @@ import {
 
 export const WINDOWS_CAPTURE_TIMEOUT_MS = 5000;
 const MAX_WINDOWS_TEXT_UNITS = 32767;
+export const WINDOWS_CAPTURE_REQUEST_BYTES = MAX_WINDOWS_TEXT_UNITS * 6 + 4096;
 // Title and image path can each expand to six ASCII bytes per UTF-16 unit
 // under JSON escaping. Reserve the remaining fixed fields independently.
 export const WINDOWS_CAPTURE_REPLY_BYTES =
@@ -17,9 +18,9 @@ export const WINDOWS_CAPTURE_REPLY_BYTES =
 /** Private process protocol; identity is validated again by the native owner. */
 export const windowsCaptureRequestSchema = z.strictObject({
   ...windowsWindowScreenshotInputSchema.shape,
-  target_path: z.string().min(1),
+  target_path: z.string().min(1).max(MAX_WINDOWS_TEXT_UNITS),
   target_sha256: z.string().regex(/^[a-f0-9]{64}$/u),
-  target_file_identity: z.string().min(1),
+  target_file_identity: z.string().min(1).max(32),
 });
 
 const identityFields = {

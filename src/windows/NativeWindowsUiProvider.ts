@@ -139,7 +139,9 @@ export interface WindowsWindowCaptureHost {
   ): Promise<ExecutableIdentity>;
 }
 
-const systemCaptureHost = (): WindowsWindowCaptureHost => ({
+const systemCaptureHost = (
+  environment: Readonly<NodeJS.ProcessEnv>,
+): WindowsWindowCaptureHost => ({
   capture: async (
     pid,
     windowHandle,
@@ -166,6 +168,7 @@ const systemCaptureHost = (): WindowsWindowCaptureHost => ({
         target_sha256: targetIdentity.sha256,
         target_file_identity: targetIdentity.fileIdentity,
       },
+      environment,
       signal,
     );
   },
@@ -177,7 +180,10 @@ export class NativeWindowsUiProvider implements AnalysisProvider {
   readonly #capabilities: readonly CapabilityDescriptor[];
 
   constructor(
-    private readonly captureHost: WindowsWindowCaptureHost = systemCaptureHost(),
+    environment: Readonly<NodeJS.ProcessEnv> = process.env,
+    private readonly captureHost: WindowsWindowCaptureHost = systemCaptureHost(
+      environment,
+    ),
     platform: NodeJS.Platform = process.platform,
   ) {
     this.#capabilities = nativeWindowsUiCapabilities(platform);
@@ -246,7 +252,7 @@ export class NativeWindowsUiProvider implements AnalysisProvider {
 export const captureWindowsWindowScreenshot = async (
   target: BinaryTarget,
   parameters: Readonly<Record<string, unknown>>,
-  host: WindowsWindowCaptureHost = systemCaptureHost(),
+  host: WindowsWindowCaptureHost = systemCaptureHost(process.env),
   options: ExecutionOptions = {},
 ): Promise<Result<WindowsWindowScreenshotResult, AnalysisError>> => {
   if (options.signal?.aborted)

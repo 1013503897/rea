@@ -100,7 +100,7 @@ describe("selected-window native admission", () => {
   });
 
   it("refuses an addon that does not expose selected-window inspection", () => {
-    const value = fixture({ jobMemoryLimit: true });
+    const value = fixture({ jobMemoryLimit: true, protocolStdin: true });
     expect(loadWindowsWindowCaptureAuthority(value.host)).toMatchObject({
       available: false,
       failureStage: "inspection",
@@ -109,12 +109,24 @@ describe("selected-window native admission", () => {
   it("requires capture support and the helper's enforced memory control", () => {
     expect(
       loadWindowsWindowCaptureAuthority(
-        fixture({ windowCapture: true, jobMemoryLimit: true }).host,
+        fixture({
+          windowCapture: true,
+          jobMemoryLimit: true,
+          protocolStdin: true,
+        }).host,
       ),
     ).toMatchObject({ available: true });
     expect(
       loadWindowsWindowCaptureAuthority(fixture({ windowCapture: true }).host),
     ).toMatchObject({ available: false, failureStage: "inspection" });
+    expect(
+      loadWindowsWindowCaptureAuthority(
+        fixture({ windowCapture: true, jobMemoryLimit: true }).host,
+      ),
+    ).toMatchObject({
+      available: false,
+      reason: expect.stringContaining("protocol stdin"),
+    });
   });
 });
 

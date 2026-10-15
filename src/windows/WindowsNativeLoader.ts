@@ -247,6 +247,13 @@ export const loadWindowsWindowCaptureAuthority = (
       reason:
         "Selected-window capture requires owned helper Job Object memory limits; install the matching native artifact.",
     };
+  if (binding.inspection.protocolStdin !== true)
+    return {
+      available: false,
+      failureStage: "inspection",
+      reason:
+        "Selected-window capture requires owned helper protocol stdin; install the matching native artifact.",
+    };
   try {
     let observed: unknown;
     try {

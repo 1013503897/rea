@@ -118,6 +118,9 @@ automatically. Alternatively, build it using the Linux/MinGW lane above.
   a 256 MiB Job Object commit limit and a 64 MiB JavaScript heap. It retains any
   failed cleanup owner and retries it before admitting another capture. It does
   not retain a detached native thread or target-owned surface in the server.
+  Requests use bounded UTF-8 JSON on owned protocol stdin, avoiding Windows
+  command-line expansion of long paths. The helper receives the provider's
+  selected environment with ambient Node preload options removed.
   A thread-local DPI context gives physical client dimensions without changing
   the parent DPI policy. The implementation never enumerates windows, captures
   a desktop/region, searches titles, sends input, changes permissions, launches

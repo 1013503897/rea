@@ -18,7 +18,7 @@ import {
   WINDOWS_CAPTURE_REPLY_BYTES,
   WINDOWS_CAPTURE_TIMEOUT_MS,
   windowsCaptureReplySchema,
-  type windowsCaptureRequestSchema,
+  windowsCaptureRequestSchema,
 } from "./WindowsWindowCaptureProtocol.js";
 import type { z } from "zod";
 
@@ -50,6 +50,7 @@ export const retryWindowsCaptureCleanup = async (): Promise<
 /** Isolate the blocking OS API in one bounded, supervised helper at a time. */
 export const executeWindowsCapture = async (
   request: z.output<typeof windowsCaptureRequestSchema>,
+  selectedEnvironment: Readonly<NodeJS.ProcessEnv>,
   signal?: AbortSignal,
 ): Promise<unknown> => {
   if (active)
@@ -67,7 +68,7 @@ export const executeWindowsCapture = async (
     // Preserve inherited values without allowing ambient Node options to run
     // preload scripts or replace this helper's explicit heap limit.
     const environment = Object.fromEntries(
-      Object.entries(process.env).filter(
+      Object.entries(selectedEnvironment).filter(
         ([name]) => name.toUpperCase() !== "NODE_OPTIONS",
       ),
     );
@@ -79,7 +80,6 @@ export const executeWindowsCapture = async (
           fileURLToPath(
             new URL("../windows-capture-runtime/worker.js", import.meta.url),
           ),
-          JSON.stringify(request),
         ],
         runId: `rea-window-capture-${randomUUID()}`,
         expectedCommand: null,
@@ -90,7 +90,13 @@ export const executeWindowsCapture = async (
         timeoutMs: WINDOWS_CAPTURE_TIMEOUT_MS,
         diagnosticBytes: WINDOWS_CAPTURE_REPLY_BYTES,
       },
-      { signal },
+      {
+        signal,
+        input: Buffer.from(
+          JSON.stringify(windowsCaptureRequestSchema.parse(request)),
+          "utf8",
+        ),
+      },
     );
     const value: unknown = JSON.parse(snapshot.stdout.text);
     const reply = windowsCaptureReplySchema.parse(value);

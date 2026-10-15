@@ -604,6 +604,12 @@ WindowImage captureWindow(DWORD pid, ULONG_PTR handle, int maximumDimension,
   surface->makeOpaque();
   validateWindowOwner(window, pid);
   auto observedProcess = validateProcessIdentity(pid, startToken, imagePath);
+  RECT observedBounds{};
+  require(GetClientRect(window, &observedBounds) != FALSE,
+          "Read selected window client bounds after rendering failed");
+  require(EqualRect(&bounds, &observedBounds) != FALSE,
+          "Selected window client area changed during capture; retry after resizing stops", L"",
+          ERROR_INVALID_DATA, FailureKind::WindowState);
   const int longest = std::max(width, height);
   const double scale = longest <= maximumDimension ? 1.0 : static_cast<double>(maximumDimension) / longest;
   const int renderedWidth = std::max(1, static_cast<int>(std::floor(width * scale)));

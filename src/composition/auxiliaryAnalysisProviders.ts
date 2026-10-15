@@ -50,7 +50,7 @@ export const auxiliaryAnalysisProviderDeclarations = (
       load: async () => {
         const { NativeWindowsUiProvider } =
           await import("../windows/NativeWindowsUiProvider.js");
-        return new NativeWindowsUiProvider(undefined, platform);
+        return new NativeWindowsUiProvider(environment, undefined, platform);
       },
     },
     {
