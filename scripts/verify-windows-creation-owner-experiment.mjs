@@ -38,6 +38,7 @@ const native = createRequire(join(root, "package.json"))(
 const workspace = await mkdtemp(join(tmpdir(), "rea-failed-creation-probe-"));
 process.env.REA_NATIVE_CREATION_FAILURE = "1";
 let retry;
+const failures = [];
 try {
   let failure;
   try {
@@ -95,7 +96,16 @@ try {
       originalHostDeleteDenialReproduced: false,
     }),
   );
-} finally {
-  if (retry) native.call("runtime_close", [retry.handle]);
-  await rm(workspace, { recursive: true, force: true });
+} catch (failure) {
+  failures.push(failure);
+  console.error(failure);
 }
+try {
+  if (retry) native.call("runtime_close", [retry.handle]);
+  native.call("inspect", []);
+  await rm(workspace, { recursive: true, force: true });
+} catch (cleanupFailure) {
+  failures.push(cleanupFailure);
+}
+if (failures.length !== 0)
+  throw new AggregateError(failures, "Creation ownership probe failed");

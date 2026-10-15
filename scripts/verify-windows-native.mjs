@@ -316,6 +316,7 @@ process.stdout.write(JSON.stringify({executable:basename(process.execPath),abiVe
   ]);
   const sentinel = join(sourceDirectory, "sentinel");
   await writeFile(sentinel, "preserve");
+  const runtimeVerificationErrors = [];
   try {
     const acl = JSON.parse(
       execFileSync(
@@ -587,7 +588,7 @@ process.stdout.write(JSON.stringify({executable:basename(process.execPath),abiVe
           "-NoProfile",
           "-NonInteractive",
           "-Command",
-          "$ErrorActionPreference='Stop'; $items=@($env:REA_TEST_READONLY_CHILDREN | ConvertFrom-Json); @($items | ForEach-Object { [IO.File]::SetAttributes($_,[IO.FileAttributes]([int][IO.File]::GetAttributes($_) -bor 1)); $a=[int][IO.File]::GetAttributes($_); @{readonly=(($a -band 1) -ne 0); directory=(($a -band 16) -ne 0)} }) | ConvertTo-Json -Compress",
+          "$ErrorActionPreference='Stop'; $items=ConvertFrom-Json -InputObject $env:REA_TEST_READONLY_CHILDREN; @($items | ForEach-Object { [IO.File]::SetAttributes($_,[IO.FileAttributes]([int][IO.File]::GetAttributes($_) -bor 1)); $a=[int][IO.File]::GetAttributes($_); @{readonly=(($a -band 1) -ne 0); directory=(($a -band 16) -ne 0)} }) | ConvertTo-Json -Compress",
         ],
         {
           encoding: "utf8",
@@ -606,8 +607,20 @@ process.stdout.write(JSON.stringify({executable:basename(process.execPath),abiVe
       { readonly: true, directory: true },
       { readonly: true, directory: false },
     ]);
+  } catch (failure) {
+    runtimeVerificationErrors.push(failure);
+    throw failure;
   } finally {
-    native.call("runtime_close", [runtime.handle]);
+    try {
+      native.call("runtime_close", [runtime.handle]);
+    } catch (cleanupFailure) {
+      if (runtimeVerificationErrors.length !== 0)
+        throw new AggregateError(
+          [...runtimeVerificationErrors, cleanupFailure],
+          "Native runtime verification and cleanup failed",
+        );
+      throw cleanupFailure;
+    }
   }
   assert.equal(await exists(runtime.path), false);
   assert.equal(await readFile(sentinel, "utf8"), "preserve");
