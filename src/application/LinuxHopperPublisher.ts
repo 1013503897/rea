@@ -1,9 +1,10 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { copyFile, lstat, mkdir, rename, writeFile } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 
 import { z } from "zod";
 import { ArtifactResourceScope } from "../artifacts/ArtifactResourceScope.js";
+import { ArtifactReaderFailure } from "../artifacts/ArtifactReader.js";
 import { homeDirectoryFromEnvironment } from "../config/homeDirectory.js";
 import { err, ok, type Result } from "../domain/result.js";
 import { hashStableFile } from "../filesystem/StableFileHash.js";
@@ -29,6 +30,8 @@ import { withRegularFile } from "./RegularFileRead.js";
 
 /** Metadata/key inspection budget, independent of the compressed package budget. */
 const RELEASE_METADATA_BYTES = 1024 * 1024;
+/** Small feed/key requests must not consume the full package-download deadline. */
+const RELEASE_METADATA_TIMEOUT_MS = 10_000;
 const cacheRecordSchema = z.object({
   format: z.literal("rea-signed-hopper-release-v1"),
   family: z.enum(["deb", "rpm", "arch"]),
@@ -76,7 +79,7 @@ export const linuxHopperReleaseCacheDirectory = (
   environment: Readonly<NodeJS.ProcessEnv>,
 ): Result<string, HopperReleaseError> => {
   try {
-    const supplied = environment.XDG_CACHE_HOME;
+    const supplied = environment.XDG_CACHE_HOME || undefined;
     if (supplied !== undefined && !isAbsolute(supplied))
       return err(
         new HopperReleaseError(
@@ -124,10 +127,12 @@ export class LinuxHopperPublisher {
     signal?: AbortSignal,
   ): Promise<Result<LinuxHopperRelease, HopperReleaseError>> {
     try {
+      signal?.throwIfAborted();
       if (this.#feed === undefined) {
         const response = await downloadHopperPackage(HOPPER_RELEASES_URL, {
           ...(signal === undefined ? {} : { signal }),
           maxBytes: RELEASE_METADATA_BYTES,
+          timeoutMs: RELEASE_METADATA_TIMEOUT_MS,
         });
         if (!response.ok)
           throw new HopperReleaseError(
@@ -169,6 +174,7 @@ export class LinuxHopperPublisher {
         const response = await downloadHopperPackage(HOPPER_PUBLIC_KEY_URL, {
           ...(signal === undefined ? {} : { signal }),
           maxBytes: RELEASE_METADATA_BYTES,
+          timeoutMs: RELEASE_METADATA_TIMEOUT_MS,
         });
         if (!response.ok)
           throw new HopperReleaseError(
@@ -251,6 +257,7 @@ export class LinuxHopperPublisher {
     signal?: AbortSignal,
   ): Promise<Result<void, HopperReleaseError>> {
     try {
+      signal?.throwIfAborted();
       await mkdir(this.cacheRoot, { recursive: true, mode: 0o700 });
       const parent = await lstat(this.cacheRoot);
       if (
@@ -295,7 +302,43 @@ export class LinuxHopperPublisher {
             verified.release.main_exe_hash,
             signal,
           );
-          if (!existing.ok) throw existing.error;
+          if (!existing.ok) {
+            if (["cancelled", "cleanup_failed"].includes(existing.error.reason))
+              throw existing.error;
+            signal?.throwIfAborted();
+            const previous = await lstat(target);
+            if (
+              !previous.isDirectory() ||
+              previous.isSymbolicLink() ||
+              previous.uid !== process.getuid?.()
+            )
+              throw existing.error;
+            // Only approved retention may repair an entry. Preserve all old
+            // evidence, including malformed data, without following symlinks.
+            const backup = `${target}.backup-${randomUUID()}`;
+            await rename(target, backup);
+            const moved = await lstat(backup);
+            if (moved.dev !== previous.dev || moved.ino !== previous.ino)
+              throw new HopperReleaseError(
+                "verification_unavailable",
+                `The Hopper cache entry changed during repair; its moved contents are preserved at ${backup}. Retry approved setup.`,
+              );
+            try {
+              await rename(stage, target);
+            } catch (replacementCause: unknown) {
+              // Another approved writer may have published the same release.
+              const replacement = await this.#cachedPackage(
+                verified.release.main_exe_hash,
+                signal,
+              );
+              if (!replacement.ok)
+                throw new HopperReleaseError(
+                  "verification_unavailable",
+                  `The Hopper cache repair did not finish; previous evidence is preserved at ${backup}. Retry approved setup.`,
+                  { cause: replacementCause },
+                );
+            }
+          }
         }
       }, this.cacheRoot);
       return ok(undefined);
@@ -600,18 +643,34 @@ export class LinuxHopperPublisher {
 /** Retry only resources retained by this producer after failed cleanup. */
 export const retryLinuxHopperPublisherCleanup = async (): Promise<void> => {
   const causes: unknown[] = [];
+  const observations = [];
   for (const scope of pendingCleanup) {
     try {
       await scope.close();
       pendingCleanup.delete(scope);
     } catch (cause: unknown) {
       causes.push(cause);
+      observations.push(
+        ArtifactReaderFailure.cleanupObservation(
+          cause,
+          "hopper-publisher-verification",
+        ),
+      );
     }
   }
   if (causes.length > 0)
-    throw new AggregateError(
-      causes,
+    throw new ArtifactReaderFailure(
+      "unavailable",
       "Hopper publisher cleanup remains incomplete",
+      {
+        cause: new AggregateError(causes, "Hopper publisher cleanup failures"),
+        cleanup: {
+          reason: observations.map(({ reason }) => reason).join("; "),
+          resources: [
+            ...new Set(observations.flatMap(({ resources }) => resources)),
+          ],
+        },
+      },
     );
 };
 
@@ -625,19 +684,21 @@ const releaseFailure = (
   signal: AbortSignal | undefined,
   fallback: HopperReleaseError["reason"],
 ): HopperReleaseError =>
-  signal?.aborted === true
-    ? new HopperReleaseError(
-        "cancelled",
-        "Hopper publisher verification was cancelled.",
-        { cause },
-      )
-    : cause instanceof HopperReleaseError
-      ? cause
-      : new HopperReleaseError(
-          fallback,
-          "Hopper publisher verification could not complete.",
+  cause instanceof HopperReleaseError && cause.reason === "cleanup_failed"
+    ? cause
+    : signal?.aborted === true
+      ? new HopperReleaseError(
+          "cancelled",
+          "Hopper publisher verification was cancelled.",
           { cause },
-        );
+        )
+      : cause instanceof HopperReleaseError
+        ? cause
+        : new HopperReleaseError(
+            fallback,
+            "Hopper publisher verification could not complete.",
+            { cause },
+          );
 const launcherIdentity = (
   verified: VerifiedLinuxHopperPackage,
   source: VerifiedLinuxHopperLauncher["source"],

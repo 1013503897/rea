@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { createTestTempDirectory } from "../../../fixtures/temporaryDirectory.js";
 
@@ -21,6 +21,9 @@ import { err, ok } from "../../../../src/domain/result.js";
 
 import { HopperReleaseError } from "../../../../src/application/HopperReleaseFeed.js";
 import { projectAnalysisError } from "../../../../src/domain/analysisErrorProjection.js";
+import { ArtifactResourceScope } from "../../../../src/artifacts/ArtifactResourceScope.js";
+import { PrivateRuntimeRoot } from "../../../../src/process/PrivateRuntimeRoot.js";
+import { HopperClient } from "../../../../src/hopper/HopperClient.js";
 
 const readyDirectDisplay = async () =>
   ({
@@ -59,6 +62,86 @@ const options = (launcherPath: string): HopperApplicationLauncherOptions => ({
   bridgeScriptPath: "/rea/hopper_bridge.py",
   launchMode: "verified_linux_demo",
   demoHelperPath: "/rea/hopper-demo-x11.py",
+});
+
+it("retains cancelled verification cleanup through client shutdown and retries it", async () => {
+  const directory = await createTestTempDirectory("rea-publisher-cancel-");
+  const targetPath = join(directory, "target");
+  await writeFile(targetPath, "source-owned target");
+  const root = await PrivateRuntimeRoot.create({
+    prefix: "rea-publisher-pending-",
+  });
+  const resources = new ArtifactResourceScope();
+  let allowCleanup = false;
+  expect(
+    await resources.release({
+      kind: "private-runtime-root",
+      resource: root.path,
+      root: {
+        path: root.path,
+        close: async () => {
+          if (!allowCleanup)
+            throw new Error("Fixture publisher cleanup denied");
+          await root.close();
+        },
+      },
+    }),
+  ).toMatchObject({ kind: "failed" });
+  const controller = new AbortController();
+  const verify = vi.fn(async () => {
+    controller.abort();
+    return err(
+      new HopperReleaseError(
+        "cleanup_failed",
+        "Publisher cleanup remains owned",
+      ),
+    );
+  });
+  const launcher = new HopperApplicationLauncher(
+    {
+      ...options(process.execPath),
+      targetPath,
+    },
+    {
+      verifyLinuxLauncher: verify,
+      retryPublisherCleanup: () => resources.close(),
+      selectPrivateDisplay: readyDirectDisplay,
+    },
+  );
+  const client = new HopperClient({ launcher, startupTimeoutMs: 5_000 });
+  try {
+    const started = await client.start(controller.signal);
+    expect(started).toMatchObject({
+      ok: false,
+      error: { cleanupIncomplete: true, cleanupResources: [root.path] },
+    });
+    if (started.ok)
+      throw new Error("Expected cancelled startup with pending cleanup");
+    expect(projectAnalysisError(started.error)).toMatchObject({
+      code: "cleanup_incomplete",
+      details: {
+        diagnostics: { primary_error: { code: "cancelled" } },
+        resources: [root.path],
+      },
+    });
+    expect(await client.start()).toMatchObject({
+      ok: false,
+      error: { cleanupIncomplete: true },
+    });
+    expect(verify).toHaveBeenCalledOnce();
+    expect(await client.close()).toMatchObject({
+      ok: false,
+      error: { cleanupIncomplete: true },
+    });
+    await access(root.path);
+    allowCleanup = true;
+    expect(await client.close()).toEqual({ ok: true, value: null });
+    await expect(access(root.path)).rejects.toMatchObject({ code: "ENOENT" });
+  } finally {
+    allowCleanup = true;
+    await client.close();
+    await resources.close();
+  }
 });
 
 describe("Hopper bridge launcher selection", () => {

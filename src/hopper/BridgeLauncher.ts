@@ -9,6 +9,8 @@ import {
   HopperStartError,
 } from "../domain/hopperErrors.js";
 import { err, ok, type Result } from "../domain/result.js";
+import { ProviderCleanupError } from "../domain/providerCleanupError.js";
+import { ArtifactReaderFailure } from "../artifacts/ArtifactReader.js";
 import { cleanupOwnedProcessGroup } from "../process/ProcessOwnership.js";
 import { execFileOutput } from "../process/ExecFileOutput.js";
 import {
@@ -35,6 +37,7 @@ import type { HopperTargetLease } from "./HopperTargetLease.js";
 import { HOPPER_SHUTDOWN_TIMEOUT_MS } from "./HopperSessionValues.js";
 import { verifyMacHopperNativeHelper } from "./HopperMacPublisher.js";
 import { inspectLinuxHopperLauncher } from "../application/LinuxHopper.js";
+import { retryLinuxHopperPublisherCleanup } from "../application/LinuxHopperPublisher.js";
 
 const execFileAsync = promisify(execFile);
 const HOPPER_BACKGROUND_STARTUP_MS = 5_000;
@@ -74,6 +77,8 @@ export type BridgeLaunch = {
 
 /** Application-owned capability that starts the in-Hopper bridge. */
 export interface BridgeLauncher {
+  /** Retry owned pre-launch resources even when no application was started. */
+  cleanup?(): Promise<Result<null, ProviderCleanupError>>;
   launch(
     session: BridgeSession,
     options?: { readonly signal?: AbortSignal },
@@ -112,6 +117,7 @@ export type HopperApplicationLauncherOptions =
 export interface HopperApplicationLauncherDependencies {
   readonly verifyNativeHelper?: typeof verifyMacHopperNativeHelper;
   readonly verifyLinuxLauncher?: typeof inspectLinuxHopperLauncher;
+  readonly retryPublisherCleanup?: typeof retryLinuxHopperPublisherCleanup;
   readonly platform?: NodeJS.Platform;
   readonly acquireTargetLease?: typeof acquireHopperTargetLease;
   readonly acquireApplicationLease?: typeof acquireLinuxHopperApplicationLease;
@@ -141,6 +147,32 @@ export class HopperApplicationLauncher implements BridgeLauncher {
     readonly options: HopperApplicationLauncherOptions,
     readonly dependencies: HopperApplicationLauncherDependencies = {},
   ) {}
+
+  async cleanup(): Promise<Result<null, ProviderCleanupError>> {
+    if (!usesLinuxDemo(this.options)) return ok(null);
+    try {
+      await (
+        this.dependencies.retryPublisherCleanup ??
+        retryLinuxHopperPublisherCleanup
+      )();
+      return ok(null);
+    } catch (cause: unknown) {
+      const observation = ArtifactReaderFailure.cleanupObservation(
+        cause,
+        "hopper-publisher-verification",
+      );
+      return err(
+        new ProviderCleanupError(
+          "hopper",
+          observation.resources,
+          {
+            reason: observation.reason,
+          },
+          { cause },
+        ),
+      );
+    }
+  }
 
   async launch(
     session: BridgeSession,

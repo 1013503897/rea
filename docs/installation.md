@@ -552,6 +552,10 @@ The feed row itself is not PGP-signed; doctor labels its display version as
 The approval plan includes the caller-selected cache location. Approved setup
 retains the signed archive, public key and release metadata under
 `${XDG_CACHE_HOME:-$HOME/.cache}/rea/hopper-releases/<launcher-sha256>`.
+An empty `XDG_CACHE_HOME` uses `$HOME/.cache`. Approved setup can repair a
+damaged caller-owned entry after authenticating a fresh package; the previous
+entry is preserved beside it as `<launcher-sha256>.backup-<id>`. Ordinary doctor
+and launches reject damaged evidence and never repair it implicitly.
 Doctor and launches authenticate this evidence for offline use; an editable
 digest receipt alone cannot authorize a launcher. Verification reuses at most
 eight immutable package proofs per process, keyed by the complete package,

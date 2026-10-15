@@ -1,5 +1,6 @@
 import { access, chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { delimiter, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { expect } from "vitest";
 
@@ -45,6 +46,7 @@ cliTest.skipIf(!["darwin", "linux"].includes(process.platform))(
           ? {
               PATH: [join(home, "bin"), process.env.PATH ?? ""].join(delimiter),
               REA_HOPPER_LDD_TEST_MARKER: loaderMarker,
+              NODE_OPTIONS: `--import=${fileURLToPath(new URL("../../fixtures/hopperRejectionFeed.mjs", import.meta.url))}`,
             }
           : {}),
         HOME: home,

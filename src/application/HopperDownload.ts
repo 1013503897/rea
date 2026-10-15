@@ -4,9 +4,16 @@ export const HOPPER_DOWNLOAD_BYTES = 100_000_000;
 /** Bound observed response bytes before retaining them, including chunked bodies. */
 export const downloadHopperPackage = async (
   url: string,
-  options: { readonly signal?: AbortSignal; readonly maxBytes?: number } = {},
+  options: {
+    readonly signal?: AbortSignal;
+    readonly maxBytes?: number;
+    readonly timeoutMs?: number;
+  } = {},
 ): Promise<{ readonly ok: boolean; readonly bytes: Uint8Array }> => {
-  const deadline = AbortSignal.timeout(120_000);
+  const timeoutMs = options.timeoutMs ?? 120_000;
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 120_000)
+    throw new RangeError("Invalid Hopper response time budget");
+  const deadline = AbortSignal.timeout(timeoutMs);
   const maxBytes = options.maxBytes ?? HOPPER_DOWNLOAD_BYTES;
   if (
     !Number.isSafeInteger(maxBytes) ||

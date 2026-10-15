@@ -5,6 +5,7 @@ import {
   copyFile,
   mkdir,
   readFile,
+  readdir,
   rm,
   symlink,
   writeFile,
@@ -15,7 +16,11 @@ import { promisify } from "node:util";
 import { createMessage, generateKey, readPrivateKey, sign } from "openpgp";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { LinuxHopperPublisher } from "../../../src/application/LinuxHopperPublisher.js";
+import {
+  LinuxHopperPublisher,
+  linuxHopperReleaseCacheDirectory,
+  retryLinuxHopperPublisherCleanup,
+} from "../../../src/application/LinuxHopperPublisher.js";
 import {
   HOPPER_LINUX_PRIMARY_FINGERPRINT,
   type LinuxHopperRelease,
@@ -92,14 +97,33 @@ const fixture = async (family: "deb" | "arch" = "deb") => {
   };
 };
 
-const admitFixturePublisher = (fingerprint: string) => {
-  vi.spyOn(signatures, "verifyDetachedPgpSignature").mockImplementation(
-    (bytes, signature, key, primary, signal) => {
+const admitFixturePublisher = (
+  fingerprint: string,
+  module: typeof signatures = signatures,
+) =>
+  vi
+    .spyOn(module, "verifyDetachedPgpSignature")
+    .mockImplementation((bytes, signature, key, primary, signal) => {
       expect(primary).toBe(HOPPER_LINUX_PRIMARY_FINGERPRINT);
       return verifySignature(bytes, signature, key, fingerprint, signal);
-    },
-  );
-};
+    });
+
+it.each([undefined, "", "/selected/cache", "relative/cache"])(
+  "resolves the selected XDG cache setting %j once for every consumer",
+  (setting) => {
+    const selected = linuxHopperReleaseCacheDirectory({
+      HOME: "/caller/home",
+      ...(setting === undefined ? {} : { XDG_CACHE_HOME: setting }),
+    });
+    if (setting === "relative/cache")
+      expect(selected).toMatchObject({ ok: false });
+    else
+      expect(selected).toEqual({
+        ok: true,
+        value: join(setting || "/caller/home/.cache", "rea/hopper-releases"),
+      });
+  },
+);
 
 describe("Linux signed package retention boundary", () => {
   linux(
@@ -150,7 +174,17 @@ describe("Linux signed package retention boundary", () => {
           await f.publisher.retainVerifiedArchive(verified.value, f.archive),
         ).toEqual({ ok: true, value: undefined });
         await f.publisher.close();
-        const fresh = new LinuxHopperPublisher(
+        // A new instance alone still shares process-local cryptographic proofs.
+        // Reload the owner and assert actual PGP and native payload inspection.
+        vi.resetModules();
+        const coldSignatures =
+          await import("../../../src/process/DetachedPgpSignature.js");
+        const signature = admitFixturePublisher(f.fingerprint, coldSignatures);
+        const commands = await import("../../../src/process/ExecFileOutput.js");
+        const extraction = vi.spyOn(commands, "execFileOutput");
+        const { LinuxHopperPublisher: ColdPublisher } =
+          await import("../../../src/application/LinuxHopperPublisher.js");
+        const fresh = new ColdPublisher(
           f.publisher.environment,
           async () => family,
         );
@@ -164,6 +198,12 @@ describe("Linux signed package retention boundary", () => {
             },
           });
           expect(network).not.toHaveBeenCalled();
+          expect(signature).toHaveBeenCalledOnce();
+          expect(extraction).toHaveBeenCalledWith(
+            family === "deb" ? "dpkg-deb" : "tar",
+            expect.any(Array),
+            expect.any(Object),
+          );
         } finally {
           await fresh.close();
         }
@@ -233,6 +273,38 @@ describe("Linux signed cache tampering", () => {
           ok: false,
         });
         expect(network).not.toHaveBeenCalled();
+        // An explicitly approved fresh package can repair this entry while
+        // preserving the original evidence and keeping ordinary reads strict.
+        expect(
+          await f.publisher.retainVerifiedArchive(verified.value, f.archive),
+        ).toEqual({ ok: true, value: undefined });
+        const backups = (await readdir(f.publisher.cacheRoot)).filter((name) =>
+          name.startsWith(`${f.release.main_exe_hash}.backup-`),
+        );
+        expect(backups).toHaveLength(1);
+        if (kind === "missing metadata")
+          await expect(
+            access(join(f.publisher.cacheRoot, backups[0]!, "release.json")),
+          ).rejects.toMatchObject({ code: "ENOENT" });
+        else
+          expect(
+            await readFile(
+              join(f.publisher.cacheRoot, backups[0]!, "release.json"),
+              "utf8",
+            ),
+          ).toBeTruthy();
+        expect(await f.publisher.inspectLauncher(f.launcher)).toMatchObject({
+          ok: true,
+        });
+        expect(
+          await f.publisher.retainVerifiedArchive(verified.value, f.archive),
+        ).toEqual({ ok: true, value: undefined });
+        expect(
+          (await readdir(f.publisher.cacheRoot)).filter((name) =>
+            name.includes(".backup-"),
+          ),
+        ).toEqual(backups);
+        expect(network).not.toHaveBeenCalled();
       } finally {
         await f.publisher.close();
       }
@@ -277,6 +349,33 @@ describe("Linux signed cache tampering", () => {
 });
 
 describe("Hopper verification capacity and ownership", () => {
+  it("bounds a stalled metadata fetch and preserves caller cancellation", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        (_url, options: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            const signal = options.signal;
+            signal?.addEventListener("abort", () => reject(signal.reason), {
+              once: true,
+            });
+            signal?.throwIfAborted();
+          }),
+      ),
+    );
+    await expect(
+      downloadHopperPackage("https://www.hopperapp.com/fixture", {
+        timeoutMs: 10,
+      }),
+    ).rejects.toMatchObject({ name: "TimeoutError" });
+    const controller = new AbortController();
+    const reason = new Error("Caller cancelled metadata inspection");
+    const pending = downloadHopperPackage("https://www.hopperapp.com/fixture", {
+      signal: controller.signal,
+    });
+    controller.abort(reason);
+    await expect(pending).rejects.toBe(reason);
+  });
   it("cancels an oversized chunked metadata response before retaining it", async () => {
     const cancelled = vi.fn();
     vi.stubGlobal(
@@ -324,4 +423,42 @@ describe("Hopper verification capacity and ownership", () => {
       await f.publisher.close();
     }
   });
+
+  linux(
+    "preserves cleanup ownership when verification is cancelled",
+    async () => {
+      const f = await fixture();
+      admitFixturePublisher(f.fingerprint);
+      const controller = new AbortController();
+      const cleanup = vi
+        .spyOn(PrivateRuntimeRoot.prototype, "close")
+        .mockImplementation(async () => {
+          controller.abort();
+          throw new Error("Fixture cleanup unavailable after cancellation");
+        });
+      try {
+        expect(
+          await f.publisher.verifyArchive(
+            "deb",
+            f.release,
+            f.archive,
+            controller.signal,
+            f.publicKey,
+          ),
+        ).toMatchObject({
+          ok: false,
+          error: { reason: "cleanup_failed" },
+        });
+        await expect(retryLinuxHopperPublisherCleanup()).rejects.toMatchObject({
+          cleanup: {
+            resources: [expect.stringContaining("rea-hopper-publisher-")],
+          },
+        });
+      } finally {
+        cleanup.mockRestore();
+        await f.publisher.close();
+        await retryLinuxHopperPublisherCleanup();
+      }
+    },
+  );
 });
