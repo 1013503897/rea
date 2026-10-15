@@ -6,6 +6,7 @@ import { createServer } from "../../dist/server/createServer.js";
 import { createEvidence } from "../../dist/domain/evidence.js";
 import { projectAnalysisError } from "../../dist/domain/analysisErrorProjection.js";
 import { toolContract } from "../../dist/contracts/toolContracts.js";
+import { TARGET_CONTENT_RESULT_META } from "../../dist/server/toolResultEncoding.js";
 import { expandProviderCapabilities } from "../../dist/contracts/toolOutputSchemaPrimitives.js";
 import { FactQueries, contextFor } from "./facts.mjs";
 
@@ -63,6 +64,7 @@ const contracts = [
 ];
 
 const encode = (value) => ({
+  _meta: TARGET_CONTENT_RESULT_META,
   content: [{ type: "text", text: JSON.stringify(value) }],
   structuredContent: value,
   ...(value.status === "error" ? { isError: true } : {}),

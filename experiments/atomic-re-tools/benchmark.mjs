@@ -58,6 +58,12 @@ const call = async (name, arguments_ = {}, expectError = false) => {
     { timeout: 180000 },
   );
   wire.push({ request: { name, arguments: arguments_ }, response, phase });
+  if (name.startsWith("experiment_"))
+    assert.equal(
+      response._meta?.provenance?.untrusted_content,
+      true,
+      "Experimental results lost the canonical target-content marker",
+    );
   calls.push({ name, phase, elapsed_ms: performance.now() - started });
   if (expectError) {
     assert.equal(response.isError, true);

@@ -77,7 +77,7 @@ test("partial batches retain good observations and exact failure reasons", async
   assert.equal(result.results[0].coverage.status, "unknown");
 });
 
-test("duplicate selectors share work but preserve separate string identities", async () => {
+test("duplicate point lookups share work without turning selectors into observed objects", async () => {
   let calls = 0;
   const facts = new FactQueries(
     port(async () => {
@@ -92,9 +92,14 @@ test("duplicate selectors share work but preserve separate string identities", a
   });
   assert.equal(calls, 1);
   assert.deepEqual(
-    result.results.map((row) => row.items[0].to),
+    result.results.map((row) => row.target),
     [string, otherEncoding, string],
   );
+  assert.deepEqual(
+    result.results.map((row) => row.items[0].to),
+    Array(3).fill({ kind: "location", address: string.address }),
+  );
+  assert.equal(result.results[0].scope.kind, "exact-address");
 });
 
 test("paging and field selection retain identities, source and unknown coverage", async () => {

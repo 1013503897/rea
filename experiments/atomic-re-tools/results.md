@@ -154,10 +154,8 @@ The exact-address composition therefore returns **unknown**, not a guessed
 nearby line. The mapped-code run cost 8.387 s / 8.091 CPU s / 202.0 MiB, including
 discovery/references and decompilation. It did not finish the analyst question
 "which condition triggers the error?" and must not count as a successful
-context-saving answer. A development attempt also used an unsupported
-single-function timeout flag; it failed and was corrected after checking actual
-CLI help. Single-function work uses REA's owned command deadline and native
-`--max-fn-memory`; it does not accept the batch `--max-fn-seconds` flag.
+context-saving answer. Single-function work uses REA's owned command deadline
+and the native `--max-fn-memory` option shown by the tested CLI's actual help.
 
 The retained C text does contain the error literal at line 164, but a small
 fixed window there omits the earlier check around lines 122–124. Literal search
@@ -190,6 +188,11 @@ does not claim to have completed that trial.
   paging, duplicate-selector, negative/unknown, retained-Evidence, foreign-context
   and expired-lease checks. Its live catalog had 212 tools and zero output
   schemas. Verification runs are excluded from the performance table.
+- The v2 facade was also exercised through a real Kuna MCP client: edges carry
+  explicit point scope and location endpoints, caller selectors stay separate,
+  and successful/error results retain the canonical untrusted-target marker.
+  The same six additional verification groups passed. This v2 verification is
+  not relabelled as a new performance comparison.
 - All real-provider measurements reported verified cleanup and zero OOM kills.
   No default parallel-suite stability, live-model reasoning improvement, general
   high-address code mapping, overlay support or newer Kuna compatibility is claimed.

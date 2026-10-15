@@ -104,6 +104,7 @@ export class FactQueries {
       results.push({
         target,
         status: "ok",
+        scope: { kind: "exact-address", address: target.address },
         ...source(evidence),
         selection: page.selection,
         coverage: {
@@ -113,7 +114,7 @@ export class FactQueries {
         },
         items: page.items.map((address) => ({
           from: { kind: "location", address },
-          to: target,
+          to: { kind: "location", address: target.address },
           kind: "unknown",
           kind_reason: "The existing xrefs contract projects addresses only.",
         })),

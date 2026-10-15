@@ -120,6 +120,13 @@ shape remain the same; ordinary queries do not materialize the richer facts.
 Experimental MCP tools have live-validated input schemas, but no canonical
 output-schema/product-catalog integration. They are not a production SDK/API.
 
+The v2 facade labels reference scope explicitly and connects **locations** in its
+point-reference edges. A result's `target` preserves the caller's selector; it
+is not a separate observation proving that an object exists at that address.
+All experimental MCP results carry REA's canonical untrusted-target-content
+marker. The v1 measurement table is retained with its revision label; it is not
+relabelled as a measurement of this later response shape.
+
 ## Reproduce
 
 Use the repository's pinned Node/npm and run `npm ci`, then
