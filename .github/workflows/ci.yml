@@ -1,99 +1,51 @@
-name: Experimental Windows failed runtime creation ownership red-green
-
+name: Experimental Windows readonly fixture mutation oracle
 on:
   workflow_dispatch:
-
 permissions:
   contents: read
-
+  actions: read
 jobs:
-  build:
-    name: Build ${{ matrix.variant }} failure artifact
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        variant: [baseline, fixed]
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          ref: ${{ matrix.variant == 'baseline' && 'fa318995f5654b2c2cb76f496da9220d49fc12ca' || github.sha }}
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version-file: .nvmrc
-      - name: Prepare cross compiler
-        run: |
-          for source in /etc/apt/apt-mirrors.txt /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources; do
-            if [ -f "$source" ]; then
-              sudo sed -i 's|azure.archive.ubuntu.com|archive.ubuntu.com|g; s|http://archive.ubuntu.com|https://archive.ubuntu.com|g' "$source"
-            fi
-          done
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y g++-mingw-w64-x86-64
-      - name: Checkout candidate failure fixture for baseline comparison
-        if: matrix.variant == 'baseline'
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          ref: ${{ github.sha }}
-          path: .cache/candidate-failure-fixture
-      - name: Use the same failure fixture with exact baseline production code
-        if: matrix.variant == 'baseline'
-        run: cp .cache/candidate-failure-fixture/tests/fixtures/windows-native-inspection-failure.cc tests/fixtures/windows-native-inspection-failure.cc
-      - run: npm run build:windows-native
-      - run: npm run verify:windows-native:artifact
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: windows-creation-owner-native-${{ matrix.variant }}
-          path: native/windows/build/
-          if-no-files-found: error
-      - run: node scripts/build-windows-native.mjs --inspection-fixture
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: windows-creation-owner-failure-${{ matrix.variant }}
-          path: .cache/windows-native-inspection-fixture/
-          if-no-files-found: error
-
   verify:
-    name: Verify ${{ matrix.variant }} ownership on Windows x64
-    needs: build
     runs-on: windows-latest
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        variant: [baseline, fixed]
+        variant: [without-normal-fix, fixed]
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          ref: ${{ matrix.variant == 'baseline' && 'fa318995f5654b2c2cb76f496da9220d49fc12ca' || github.sha }}
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version-file: .nvmrc
       - run: npm ci
       - run: npm run build:cached
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          name: windows-creation-owner-failure-${{ matrix.variant }}
-          path: .cache/windows-native-inspection-fixture/
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: windows-creation-owner-native-${{ matrix.variant }}
+          github-token: ${{ github.token }}
+          run-id: ${{ matrix.variant == 'fixed' && '38662148662' || '38660840144' }}
+          name: windows-creation-owner-native-fixed
           path: native/windows/build/
-      - name: Checkout fixed-source probe helper
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          ref: ${{ github.sha }}
-          path: .cache/windows-creation-owner-harness
-      - name: Verify readonly cleanup for stationary, renamed and populated roots
-        run: >-
-          node .cache/windows-creation-owner-harness/scripts/verify-windows-readonly-root-experiment.mjs
-          . ${{ matrix.variant == 'baseline' && 'deny-clear' || 'allow' }}
-      - name: Compare retained ownership through the real native boundary
-        run: >-
-          node .cache/windows-creation-owner-harness/scripts/verify-windows-creation-owner-experiment.mjs
-          . .cache/windows-native-inspection-fixture
-          ${{ matrix.variant == 'baseline' && 'expect-leak' || 'retain-owner' }}
-      - name: Verify retry, teardown and replacement preservation
-        if: matrix.variant == 'fixed'
-        run: node scripts/verify-windows-native-inspection.mjs
+      - name: Verify permanent fixture detects missing NORMAL fallback
+        shell: bash
+        env:
+          EXPECTED_VARIANT: ${{ matrix.variant }}
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import {spawnSync} from 'node:child_process';
+          const result=spawnSync(process.execPath,['scripts/verify-windows-native.mjs','.'],{encoding:'utf8',timeout:180000});
+          if(result.error)throw result.error;
+          process.stdout.write(result.stdout);
+          process.stderr.write(result.stderr);
+          if(process.env.EXPECTED_VARIANT==='fixed'){
+            assert.equal(result.status,0);
+            const observed=JSON.parse(result.stdout.trim());
+            assert.equal(observed.ok,true);
+            assert.equal(observed.controls.readonlyFileWithoutArchiveAttributeRemoved,true);
+          }else{
+            assert.notEqual(result.status,0);
+            assert.match(result.stderr,/Delete owned object by handle failed/);
+            assert.match(result.stderr,/Win32 5/);
+          }
+          console.log(JSON.stringify({ok:true,variant:process.env.EXPECTED_VARIANT,permanentVerifierStatus:result.status,baselineMissingNormalDetected:process.env.EXPECTED_VARIANT!=='fixed'}));
+          JS
