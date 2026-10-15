@@ -35,14 +35,14 @@ jobs:
           node --input-type=module <<'JS'
           import { appendFileSync, chmodSync, writeFileSync } from 'node:fs';
           import { join } from 'node:path';
-          import { pathToFileURL } from 'node:url';
           const log = join(process.env.RUNNER_TEMP, 'rea-hopper-installer.jsonl');
           writeFileSync(log, '', {mode: 0o666});
           chmodSync(log, 0o666);
-          const tracer = pathToFileURL(join(process.cwd(), '.github/scripts/trace-hopper-installer.mjs')).href;
-          appendFileSync(process.env.GITHUB_ENV, `REA_HOPPER_PROBE_LOG=${log}\nNODE_OPTIONS=--import=${tracer}\n`);
+          appendFileSync(process.env.GITHUB_ENV, `REA_HOPPER_PROBE_LOG=${log}\n`);
           JS
       - name: Verify clean Linux setup through CLI and MCP
+        env:
+          NODE_OPTIONS: --import=file://${{ github.workspace }}/.github/scripts/trace-hopper-installer.mjs
         run: sudo --preserve-env=REA_VERIFY_SERVER_COMMAND,PATH,REA_HOPPER_PROBE_LOG env NODE_OPTIONS="$NODE_OPTIONS" npm run verify:setup:linux
       - name: Installer boundary observations
         if: always()
