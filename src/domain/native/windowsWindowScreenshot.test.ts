@@ -58,6 +58,27 @@ it("rejects PNG dimensions that disagree with its IHDR", () => {
   ).toBe(false);
 });
 
+it.each(["chunk-length", "high-bit-chunk-type"] as const)(
+  "rejects a self-consistent digest with a malformed %s",
+  (kind) => {
+    const bytes = Buffer.from(PNG);
+    if (kind === "chunk-length") bytes.writeUInt32BE(12, 8);
+    else for (let index = 12; index < 16; index++) bytes[index]! |= 0x80;
+    expect(
+      windowsWindowPngSchema.safeParse({
+        media_type: "image/png",
+        data_base64: bytes.toString("base64"),
+        sha256: createHash("sha256").update(bytes).digest("hex"),
+        bytes: bytes.byteLength,
+        width: 1,
+        height: 1,
+        source_width: 1,
+        source_height: 1,
+      }).success,
+    ).toBe(false);
+  },
+);
+
 it("bounds encoded PNG bytes independently of the declared size", () => {
   const result = windowsWindowPngSchema.safeParse({
     media_type: "image/png",

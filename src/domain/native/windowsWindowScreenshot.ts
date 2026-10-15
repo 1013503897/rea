@@ -3,8 +3,8 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 
 import { decodeCanonicalBase64 } from "../webScreenshot.js";
+import { readPngHeaderDimensions } from "../pngHeader.js";
 
-const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 /** Fits the duplicated structured/text MCP delivery inside the default 10 MiB buffer. */
 export const MAX_WINDOWS_WINDOW_PNG_BYTES = 3 * 1024 * 1024;
 
@@ -66,11 +66,8 @@ export const windowsWindowPngSchema = z
         path: ["sha256"],
         message: "PNG digest mismatch",
       });
-    if (
-      bytes.byteLength < 24 ||
-      !bytes.subarray(0, 8).equals(PNG_SIGNATURE) ||
-      bytes.subarray(12, 16).toString("ascii") !== "IHDR"
-    ) {
+    const dimensions = readPngHeaderDimensions(bytes);
+    if (dimensions === undefined) {
       context.addIssue({
         code: "custom",
         message: "Screenshot bytes are not a PNG image",
@@ -78,8 +75,8 @@ export const windowsWindowPngSchema = z
       return;
     }
     if (
-      bytes.readUInt32BE(16) !== screenshot.width ||
-      bytes.readUInt32BE(20) !== screenshot.height
+      dimensions.width !== screenshot.width ||
+      dimensions.height !== screenshot.height
     )
       context.addIssue({
         code: "custom",
