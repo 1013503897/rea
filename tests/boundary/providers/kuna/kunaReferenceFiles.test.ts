@@ -4,6 +4,7 @@ import { normalizeKunaAddress } from "../../../../src/kuna/KunaAddress.js";
 import {
   parseKunaCallGraph,
   parseKunaIncomingReferences,
+  parseKunaIncomingReferenceFacts,
 } from "../../../../src/kuna/KunaReferenceFiles.js";
 
 const input = "/snapshot/program";
@@ -187,6 +188,38 @@ it("keeps exact endpoints, deduplicates sites and counts excluded forwarding ali
     ok: true,
     value: { addresses: ["0x1004"], rows: 3, excludedAliasRows: 1 },
   });
+});
+
+it("preserves typed relationships and explicit unknown ownership at the producing boundary", () => {
+  const value = xrefs();
+  value.xrefs[1]!.kind = "data";
+  const parsed = parseKunaIncomingReferenceFacts(wire(value), input, "0x2000");
+  expect(parsed.ok).toBe(true);
+  if (!parsed.ok) return;
+  expect(parsed.value.facts).toEqual([
+    {
+      from: "0x1004",
+      to: "0x2000",
+      kind: "call",
+      fromFunction: { address: "0x1000", name: "caller" },
+      toFunction: null,
+      instruction: "CALL",
+    },
+    {
+      from: "0x1004",
+      to: "0x2000",
+      kind: "data",
+      fromFunction: { address: "0x1000", name: "caller" },
+      toFunction: null,
+      instruction: "CALL",
+    },
+  ]);
+  const addresses = parseKunaIncomingReferences(wire(value), input, "0x2000");
+  expect(addresses.ok && Object.hasOwn(addresses.value, "facts")).toBe(false);
+  value.xrefs[2]!.from_address_hex = "0xdead";
+  expect(parseKunaIncomingReferenceFacts(wire(value), input, "0x2000").ok).toBe(
+    false,
+  );
 });
 
 it.each([

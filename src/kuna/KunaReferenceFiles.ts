@@ -159,6 +159,28 @@ const xrefsDocument = z.object({
   xrefs: z.array(z.unknown()),
 });
 
+/** One owning interpretation of native endpoints, identities and alias scope. */
+const parseReferenceRow = (raw: unknown, aliases: ReadonlySet<string>) => {
+  const row = xrefRow.parse(raw);
+  if (
+    row.address !== row.address_hex ||
+    row.address !== row.from_address ||
+    row.from_address !== row.from_address_hex ||
+    row.to_address !== row.to_address_hex
+  )
+    throw new Error(
+      "xref endpoints disagree with numeric or directional fields",
+    );
+  for (const fn of [row.from_function, row.to_function])
+    if (fn !== null && fn.address !== fn.address_hex)
+      throw new Error("xref function address disagrees with its hex field");
+  if (!aliases.has(row.to_address))
+    throw new Error(
+      "xref row targets neither the requested address nor an advertised alias",
+    );
+  return row;
+};
+
 export interface KunaIncomingReferences {
   readonly addresses: readonly string[];
   readonly sha256: string;
@@ -167,12 +189,32 @@ export interface KunaIncomingReferences {
   readonly excludedAliasRows: number;
 }
 
-/** Native --to unifies forwarding aliases; REA xrefs asks for the exact address. */
-export const parseKunaIncomingReferences = (
+/** Experimental fact projection, owned by the native protocol parser. */
+export type KunaReferenceFact = {
+  readonly from: string;
+  readonly to: string;
+  readonly kind: z.infer<typeof kind>;
+  readonly fromFunction: {
+    readonly address: string;
+    readonly name: string;
+  } | null;
+  readonly toFunction: {
+    readonly address: string;
+    readonly name: string;
+  } | null;
+  readonly instruction: string;
+};
+
+/** Native --to unifies aliases; these facts cover only the requested address. */
+const parseIncomingReferenceDocument = (
   text: string,
   input: string,
   target: string,
-): Result<KunaIncomingReferences, string> => {
+  retainFacts: boolean,
+): Result<
+  KunaIncomingReferences & { readonly facts: readonly KunaReferenceFact[] },
+  string
+> => {
   try {
     const document = xrefsDocument.parse(
       parseKunaJson(text, KUNA_XREF_OUTPUT_BYTES, addressKeys),
@@ -192,27 +234,34 @@ export const parseKunaIncomingReferences = (
       aliases.add(alias.address);
     }
     const addresses = new Set<string>();
+    const facts: KunaReferenceFact[] = [];
     let excludedAliasRows = 0;
     for (const raw of document.xrefs) {
-      const row = xrefRow.parse(raw);
-      if (
-        row.address !== row.address_hex ||
-        row.address !== row.from_address ||
-        row.from_address !== row.from_address_hex ||
-        row.to_address !== row.to_address_hex
-      )
-        throw new Error(
-          "xref endpoints disagree with numeric or directional fields",
-        );
-      for (const fn of [row.from_function, row.to_function])
-        if (fn !== null && fn.address !== fn.address_hex)
-          throw new Error("xref function address disagrees with its hex field");
-      if (!aliases.has(row.to_address))
-        throw new Error(
-          "xref row targets neither the requested address nor an advertised alias",
-        );
-      if (row.to_address === target) addresses.add(row.from_address);
-      else excludedAliasRows += 1;
+      const row = parseReferenceRow(raw, aliases);
+      if (row.to_address === target) {
+        addresses.add(row.from_address);
+        if (retainFacts)
+          facts.push({
+            from: row.from_address,
+            to: row.to_address,
+            kind: row.kind,
+            fromFunction:
+              row.from_function === null
+                ? null
+                : {
+                    address: row.from_function.address,
+                    name: row.from_function.name,
+                  },
+            toFunction:
+              row.to_function === null
+                ? null
+                : {
+                    address: row.to_function.address,
+                    name: row.to_function.name,
+                  },
+            instruction: row.instruction,
+          });
+      } else excludedAliasRows += 1;
     }
     return ok({
       addresses: [...addresses].sort(compareKunaAddresses),
@@ -220,8 +269,30 @@ export const parseKunaIncomingReferences = (
       excludedAliasRows,
       bytes: Buffer.byteLength(text),
       sha256: createHash("sha256").update(text).digest("hex"),
+      facts,
     });
   } catch (cause: unknown) {
     return err(cause instanceof Error ? cause.message : String(cause));
   }
+};
+
+export const parseKunaIncomingReferenceFacts = (
+  text: string,
+  input: string,
+  target: string,
+): Result<
+  KunaIncomingReferences & { readonly facts: readonly KunaReferenceFact[] },
+  string
+> => parseIncomingReferenceDocument(text, input, target, true);
+
+/** Existing address-only contract; richer facts do not enter its retained cache. */
+export const parseKunaIncomingReferences = (
+  text: string,
+  input: string,
+  target: string,
+): Result<KunaIncomingReferences, string> => {
+  const parsed = parseIncomingReferenceDocument(text, input, target, false);
+  if (!parsed.ok) return parsed;
+  const { addresses, sha256, bytes, rows, excludedAliasRows } = parsed.value;
+  return ok({ addresses, sha256, bytes, rows, excludedAliasRows });
 };
