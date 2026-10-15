@@ -66,7 +66,6 @@ jobs:
           import { readFileSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
           import { execFileSync, spawnSync } from "node:child_process";
           import { resolve } from "node:path";
-          import { stripVTControlCharacters } from "node:util";
           assert.equal(process.platform, "win32");
           const source = process.env.PROOF_SOURCE;
           const base = process.env.PROOF_BASE;
@@ -75,9 +74,6 @@ jobs:
           const path = "tests/acceptance/applications/applicationWorkflowCli.test.ts";
           const candidate = readFileSync(path, "utf8");
           const baseline = execFileSync("git", ["show", `${base}:${path}`], { encoding: "utf8" });
-          const marker = "  } catch (cause: unknown) {";
-          assert.equal(baseline.split(marker).length, 2);
-          const observation = '\n    console.error("BASELINE_SPAWN_CODE", typeof cause === "object" && cause !== null && "code" in cause ? cause.code : "missing");';
           const targets = "traces the same authenticated semantic graph through the CLI|preserves uncertainty after a helper can mutate an awaited return object";
           mkdirSync(".cache/windows-proof", { recursive: true });
           const run = (name, pattern) => {
@@ -93,12 +89,14 @@ jobs:
           };
           let failed;
           try {
-            writeFileSync(path, baseline.replace(marker, marker + observation));
+            writeFileSync(path, baseline);
             failed = run("baseline", targets);
             assert.equal(failed.exit, 1);
             assert.equal(failed.report.numFailedTests, 2);
             assert.equal(failed.report.numPassedTests, 0);
-            assert.equal((stripVTControlCharacters(failed.log).match(/BASELINE_SPAWN_CODE ENAMETOOLONG/g) ?? []).length, 2);
+            const failures = failed.report.testResults.flatMap((suite) => suite.assertionResults).filter((test) => test.status === "failed");
+            assert.equal(failures.length, 2);
+            for (const test of failures) assert.match(test.failureMessages.join("\n"), /Error: spawn ENAMETOOLONG/);
           } finally {
             writeFileSync(path, candidate);
           }
@@ -108,7 +106,7 @@ jobs:
           assert.equal(fixed.report.numFailedTests, 0);
           assert.equal(fixed.report.testResults.length, 1);
           execFileSync("git", ["diff", "--exit-code", "HEAD", "--"]);
-          const receipt = { source, base, platform: process.platform, architecture: process.arch, node: process.version, baseline_failed: failed.report.numFailedTests, baseline_spawn_error: "ENAMETOOLONG", baseline_elapsed_ms: failed.elapsed_ms, candidate_passed: fixed.report.numPassedTests, candidate_elapsed_ms: fixed.elapsed_ms, selected_skips: fixed.report.numPendingTests, instrumentation: "Only the baseline catch prints the original spawn code; restored before candidate execution." };
+          const receipt = { source, base, platform: process.platform, architecture: process.arch, node: process.version, baseline_failed: failed.report.numFailedTests, baseline_spawn_error: "ENAMETOOLONG", baseline_elapsed_ms: failed.elapsed_ms, candidate_passed: fixed.report.numPassedTests, candidate_elapsed_ms: fixed.elapsed_ms, selected_skips: fixed.report.numPendingTests, instrumentation: "Unmodified baseline source; original spawn errors verified in structured failure messages. Candidate source restored and checked before completion." };
           writeFileSync(".cache/windows-proof/receipt.json", JSON.stringify(receipt, null, 2));
           console.log(JSON.stringify(receipt));
           JS
