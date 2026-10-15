@@ -30,7 +30,7 @@ const attributes = (path, readonly) => {
   const script = `$ErrorActionPreference='Stop';
 $path=$env:REA_OWNED_ATTRIBUTE_PROBE;
 $current=[int][IO.File]::GetAttributes($path);
-$next=if($env:REA_ATTRIBUTE_PROBE_MODE -eq 'set'){ $current -bor 1 }else{ $current -band (-bnot 1) };
+$next=if($env:REA_ATTRIBUTE_PROBE_MODE -eq 'only'){1}elseif($env:REA_ATTRIBUTE_PROBE_MODE -eq 'set'){ $current -bor 1 }else{ $current -band (-bnot 1) };
 [IO.File]::SetAttributes($path,[IO.FileAttributes]$next);
 $observed=[int][IO.File]::GetAttributes($path);
 @{readonly=(($observed -band 1) -ne 0); attributes=$observed} | ConvertTo-Json -Compress`;
@@ -45,12 +45,12 @@ $observed=[int][IO.File]::GetAttributes($path);
         env: {
           ...process.env,
           REA_OWNED_ATTRIBUTE_PROBE: path,
-          REA_ATTRIBUTE_PROBE_MODE: readonly ? "set" : "clear",
+          REA_ATTRIBUTE_PROBE_MODE: readonly === "only" ? "only" : readonly ? "set" : "clear",
         },
       },
     ),
   );
-  assert.equal(result.readonly, readonly);
+  assert.equal(result.readonly, Boolean(readonly));
   return result;
 };
 const create = () => {
@@ -139,6 +139,16 @@ try {
   }
   close(children);
   await assert.rejects(access(children.currentPath), { code: "ENOENT" });
+  const onlyReadonly = create();
+  native.call("runtime_write", [onlyReadonly.runtime.handle, "only-readonly.txt", Buffer.from("owned file")]);
+  const onlyReadonlyPath = join(onlyReadonly.currentPath, "only-readonly.txt");
+  assert.equal(attributes(onlyReadonlyPath, "only").attributes, 1);
+  if (expected === "deny-clear") {
+    assert.throws(() => close(onlyReadonly), error => error.win32Code === 5 && error.constraint === "Delete owned object by handle failed");
+    attributes(onlyReadonlyPath, false);
+  }
+  close(onlyReadonly);
+  await assert.rejects(access(onlyReadonly.currentPath), { code: "ENOENT" });
   console.log(
     JSON.stringify({
       ok: true,
@@ -149,6 +159,7 @@ try {
       renamedOwnedRootRemoved: true,
       unrelatedReplacementPreserved: true,
       readonlyChildFileAndDirectoryRemoved: true,
+      readonlyFileWithoutOtherAttributesRemoved: true,
       baselineConstraint: failure?.constraint ?? null,
       baselineWin32: failure?.win32Code ?? null,
       originalIssueDeleteDenialReproduced: false,
