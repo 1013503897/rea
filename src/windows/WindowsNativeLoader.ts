@@ -254,6 +254,20 @@ export const loadWindowsWindowCaptureAuthority = (
       reason:
         "Selected-window capture requires owned helper protocol stdin; install the matching native artifact.",
     };
+  return inspectWindowsWindowCapture(binding);
+};
+
+/** A supervised worker only uses the in-memory capture facet, not runtime files. */
+export const loadWindowsWindowCaptureWorkerAuthority = (
+  host: WindowsNativeLoadHost,
+): WindowsWindowCaptureLoadResult => {
+  const binding = loadWindowsNativeBinding(host);
+  return binding.available ? inspectWindowsWindowCapture(binding) : binding;
+};
+
+const inspectWindowsWindowCapture = (
+  binding: WindowsWindowCaptureAuthority,
+): WindowsWindowCaptureLoadResult => {
   try {
     let observed: unknown;
     try {
@@ -370,6 +384,16 @@ export const requireWindowsNativeAuthority = (): WindowsNativeAuthority => {
 export const requireWindowsWindowCaptureAuthority =
   (): WindowsWindowCaptureAuthority => {
     const loaded = systemWindowsWindowCaptureAuthority();
+    if (!loaded.available) throw new Error(loaded.reason);
+    return loaded.authority;
+  };
+
+/** Verify the worker's artifact and capture facet without a second filesystem probe. */
+export const requireWindowsWindowCaptureWorkerAuthority =
+  (): WindowsWindowCaptureAuthority => {
+    const loaded = loadWindowsWindowCaptureWorkerAuthority(
+      systemWindowsNativeLoadHost(),
+    );
     if (!loaded.available) throw new Error(loaded.reason);
     return loaded.authority;
   };

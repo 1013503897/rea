@@ -9,6 +9,7 @@ import {
   readFile,
   readdir,
   rm,
+  stat,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -36,6 +37,9 @@ const load = (path) => import(pathToFileURL(join(packageRoot, "dist", path)));
 const { WindowsOwnedProcess } = await load("windows/WindowsOwnedProcess.js");
 const { toolContract } = await load("contracts/toolContracts.js");
 const { comparePngScreenshots } = await load("browser/PngVisualDiff.js");
+const { windowsCaptureReplySchema } = await load(
+  "windows/WindowsWindowCaptureProtocol.js",
+);
 const { requireWindowsNativeAuthority } = await load(
   "windows/WindowsNativeLoader.js",
 );
@@ -178,6 +182,88 @@ const stop = async (fixture) => {
   );
   owned.delete(fixture.process);
 };
+const captureWithoutWritableTemp = async (fixture) => {
+  const unavailableTemp = join(root, "temp-is-a-file");
+  await writeFile(unavailableTemp, "Not a directory\n");
+  const file = await stat(fixturePath, { bigint: true });
+  const helper = new WindowsOwnedProcess(
+    process.execPath,
+    [
+      "--max-old-space-size=64",
+      join(packageRoot, "dist/windows-capture-runtime/worker.js"),
+    ],
+    packageRoot,
+    { ...environment, TEMP: unavailableTemp, TMP: unavailableTemp },
+    false,
+    {
+      protocolStdin: true,
+      memoryLimitBytes: 256 * 1024 * 1024,
+    },
+  );
+  owned.add(helper);
+  const chunks = [];
+  let bytes = 0,
+    overflow = false;
+  helper.stdout.on("data", (chunk) => {
+    bytes += chunk.byteLength;
+    if (bytes > 128 * 1024) overflow = true;
+    else chunks.push(chunk);
+  });
+  helper.stderr.resume();
+  helper.stdin.on("error", () => {});
+  let timer;
+  const finished = new Promise((resolve, reject) => {
+    timer = setTimeout(
+      () =>
+        reject(
+          new Error("Restricted-temp capture helper exceeded its deadline"),
+        ),
+      10000,
+    );
+    helper.once("error", reject);
+    helper.once("close", resolve);
+  });
+  try {
+    helper.stdin.end(
+      Buffer.from(
+        JSON.stringify({
+          pid: fixture.identity.pid,
+          window_handle: fixture.identity.window_handle,
+          max_dimension: 320,
+          target_path: fixturePath,
+          target_sha256: original,
+          target_file_identity: `${file.dev}:${file.ino}`,
+        }),
+      ),
+    );
+    assert.equal(await finished, 0);
+    assert.equal(overflow, false);
+    const reply = windowsCaptureReplySchema.parse(
+      JSON.parse(Buffer.concat(chunks).toString("utf8")),
+    );
+    assert.equal(
+      reply.ok,
+      true,
+      "Capture-only helper must not require writable TEMP",
+    );
+    const { png_base64, ...capture } = reply.capture;
+    const png = Buffer.from(png_base64, "base64");
+    pixels(
+      {
+        ...capture,
+        media_type: "image/png",
+        data_base64: png_base64,
+        bytes: png.byteLength,
+        sha256: digest(png),
+      },
+      [40, 120, 200],
+    );
+    await stop({ process: helper });
+    return true;
+  } finally {
+    clearTimeout(timer);
+  }
+};
 const call = async (name, arguments_) => {
   report.lastOperation = name;
   const started = performance.now();
@@ -248,6 +334,8 @@ try {
   );
   assert.equal(imageView.item.source_width, first.identity.width);
   assert.equal(imageView.item.source_height, first.identity.height);
+  report.cases.helperWithoutWritableTemp =
+    await captureWithoutWritableTemp(first);
   await first.command("change");
   assert.equal((await first.next()).event, "changed");
   const changed = outputOf(
@@ -472,6 +560,21 @@ try {
     name: cause instanceof Error ? cause.name : "UnknownError",
     message: cause instanceof Error ? cause.message : String(cause),
   };
+  if (cause !== null && typeof cause === "object") {
+    for (const name of ["code", "signal", "killed"])
+      if (["string", "number", "boolean"].includes(typeof cause[name]))
+        report.failure[name] = cause[name];
+    if (typeof cause.stderr === "string")
+      report.failure.stderr = cause.stderr.slice(0, 4096);
+    if (typeof cause.stdout === "string") {
+      report.failure.stdoutBytes = Buffer.byteLength(cause.stdout);
+      try {
+        report.failure.stdoutError = JSON.parse(cause.stdout).error ?? null;
+      } catch {
+        /* Exit diagnostics need not be JSON. */
+      }
+    }
+  }
   throw cause;
 } finally {
   const cleanupFailures = [];

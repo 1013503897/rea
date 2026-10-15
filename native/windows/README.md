@@ -121,6 +121,8 @@ automatically. Alternatively, build it using the Linux/MinGW lane above.
   Requests use bounded UTF-8 JSON on owned protocol stdin, avoiding Windows
   command-line expansion of long paths. The helper receives the provider's
   selected environment with ambient Node preload options removed.
+  The parent admits the Job and private-runtime controls. The worker validates
+  only its artifact and capture facet; its selected TEMP need not be writable.
   A thread-local DPI context gives physical client dimensions without changing
   the parent DPI policy. The implementation never enumerates windows, captures
   a desktop/region, searches titles, sends input, changes permissions, launches

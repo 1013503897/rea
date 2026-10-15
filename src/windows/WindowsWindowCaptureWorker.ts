@@ -1,4 +1,4 @@
-import { requireWindowsWindowCaptureAuthority } from "./WindowsNativeLoader.js";
+import { requireWindowsWindowCaptureWorkerAuthority } from "./WindowsNativeLoader.js";
 import {
   nativeWindowsCaptureSchema,
   WINDOWS_CAPTURE_REQUEST_BYTES,
@@ -25,7 +25,7 @@ try {
   );
   const value: unknown = JSON.parse(encoded);
   const input = windowsCaptureRequestSchema.parse(value);
-  const authority = requireWindowsWindowCaptureAuthority();
+  const authority = requireWindowsWindowCaptureWorkerAuthority();
   const { png, ...capture } = nativeWindowsCaptureSchema.parse(
     authority.call("capture_window_png", [
       input.pid,

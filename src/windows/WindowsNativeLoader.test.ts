@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   loadWindowsNativeAuthority,
   loadWindowsWindowCaptureAuthority,
+  loadWindowsWindowCaptureWorkerAuthority,
   type WindowsNativeLoadHost,
 } from "./WindowsNativeLoader.js";
 
@@ -79,6 +80,34 @@ const fixture = (
 };
 
 describe("selected-window native admission", () => {
+  it("admits the worker's capture facet without repeating filesystem or process admission", () => {
+    const value = fixture({ windowCapture: true });
+    const host = {
+      ...value.host,
+      loadArtifact: () => ({
+        call: (operation: string) => {
+          expect(operation).toBe("inspect_window_capture");
+          return {
+            abiVersion: 1,
+            nodeApiVersion: 8,
+            architecture: "x64",
+            windowCapture: true,
+          };
+        },
+      }),
+    };
+    expect(loadWindowsWindowCaptureWorkerAuthority(host)).toMatchObject({
+      available: true,
+    });
+    expect(
+      loadWindowsWindowCaptureWorkerAuthority(fixture().host),
+    ).toMatchObject({
+      available: false,
+    });
+    expect(loadWindowsWindowCaptureAuthority(value.host)).toMatchObject({
+      available: false,
+    });
+  });
   it("refuses capture when owned helper controls fail admission", () => {
     const value = fixture({ windowCapture: true });
     const result = loadWindowsWindowCaptureAuthority({
