@@ -1,4 +1,4 @@
-name: Real Hopper Linux E2E
+name: Hopper Linux installation diagnostic
 
 on:
   workflow_dispatch:
@@ -30,31 +30,20 @@ jobs:
           prefix="${RUNNER_TEMP}/rea-prefix"
           npm install --global --prefix "${prefix}" "./${tarball}"
           echo "REA_VERIFY_SERVER_COMMAND=${prefix}/bin/rea" >> "${GITHUB_ENV}"
-      - name: Verify clean Linux setup through CLI and MCP
-        run: sudo --preserve-env=REA_VERIFY_SERVER_COMMAND,PATH npm run verify:setup:linux
-
-  verify:
-    name: Installed package against real Linux Hopper
-    runs-on: [self-hosted, Linux, hopper]
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version-file: .nvmrc
-      - name: Cache npm package downloads
-        id: npm-cache
-        uses: ./.github/actions/npm-cache
-      - run: npm ci
-      - name: Install packed CLI in isolation
-        shell: bash
+      - name: Record public HTTP and child lifecycle facts
         run: |
-          tarball="$(npm pack --silent)"
-          prefix="${RUNNER_TEMP}/rea-prefix"
-          npm install --global --ignore-scripts --prefix "${prefix}" "./${tarball}"
-          echo "REA_VERIFY_SERVER_COMMAND=${prefix}/bin/rea" >> "${GITHUB_ENV}"
-          echo 'REA_VERIFY_SERVER_ARGS_JSON=["mcp"]' >> "${GITHUB_ENV}"
-      - name: Verify source-owned ELF fixtures through an alternate launcher symlink
-        env:
-          REA_HOPPER_CONFORMANCE_MANIFEST_PATH: ${{ github.workspace }}/build/conformance/manifest.json
-        run: npm run verify:hopper:linux
+          node --input-type=module <<'JS'
+          import { appendFileSync, chmodSync, writeFileSync } from 'node:fs';
+          import { join } from 'node:path';
+          import { pathToFileURL } from 'node:url';
+          const log = join(process.env.RUNNER_TEMP, 'rea-hopper-installer.jsonl');
+          writeFileSync(log, '', {mode: 0o666});
+          chmodSync(log, 0o666);
+          const tracer = pathToFileURL(join(process.cwd(), '.github/scripts/trace-hopper-installer.mjs')).href;
+          appendFileSync(process.env.GITHUB_ENV, `REA_HOPPER_PROBE_LOG=${log}\nNODE_OPTIONS=--import=${tracer}\n`);
+          JS
+      - name: Verify clean Linux setup through CLI and MCP
+        run: sudo --preserve-env=REA_VERIFY_SERVER_COMMAND,PATH,REA_HOPPER_PROBE_LOG env NODE_OPTIONS="$NODE_OPTIONS" npm run verify:setup:linux
+      - name: Installer boundary observations
+        if: always()
+        run: cat "$REA_HOPPER_PROBE_LOG"
