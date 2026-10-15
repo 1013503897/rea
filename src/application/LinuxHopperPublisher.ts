@@ -333,9 +333,16 @@ export class LinuxHopperPublisher {
               );
               if (!replacement.ok)
                 throw new HopperReleaseError(
-                  "verification_unavailable",
+                  replacement.error.reason === "cleanup_failed"
+                    ? "cleanup_failed"
+                    : "verification_unavailable",
                   `The Hopper cache repair did not finish; previous evidence is preserved at ${backup}. Retry approved setup.`,
-                  { cause: replacementCause },
+                  {
+                    cause: new AggregateError(
+                      [replacementCause, replacement.error],
+                      "Hopper cache publication and verification outcomes",
+                    ),
+                  },
                 );
             }
           }
@@ -658,20 +665,22 @@ export const retryLinuxHopperPublisherCleanup = async (): Promise<void> => {
       );
     }
   }
-  if (causes.length > 0)
+  if (causes.length > 0) {
+    const cleanup = {
+      reason: observations.map(({ reason }) => reason).join("; "),
+      resources: [
+        ...new Set(observations.flatMap(({ resources }) => resources)),
+      ],
+    };
     throw new ArtifactReaderFailure(
       "unavailable",
-      "Hopper publisher cleanup remains incomplete",
+      `Hopper publisher cleanup remains incomplete: ${cleanup.resources.join(", ")}`,
       {
         cause: new AggregateError(causes, "Hopper publisher cleanup failures"),
-        cleanup: {
-          reason: observations.map(({ reason }) => reason).join("; "),
-          resources: [
-            ...new Set(observations.flatMap(({ resources }) => resources)),
-          ],
-        },
+        cleanup,
       },
     );
+  }
 };
 
 const decodeUtf8 = (bytes: Uint8Array): string =>
