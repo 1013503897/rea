@@ -3,6 +3,10 @@
 Experimental branch only: no PR, merge, production registration, or Code Mode.
 Started from REA main `5b16f2431062eea6ffd245a9e05512790007cb13`.
 
+Read [measured results](results.md) and [mechanism / prior-art notes](research.md).
+The first round includes an object-reference counterexample and a failed
+code-mapping composition; it does not claim every hypothesis succeeded.
+
 The question is whether composable facts improve **completed reverse-engineering
 tasks**, especially on complex software. Three outcomes matter together:
 
@@ -83,6 +87,38 @@ set and never establishes complete artifact discovery.
 This is not a production contract proposal. Overlays, non-default address spaces,
 typed edges, native batching and live agent decision quality need further work.
 No measured claim about improved complex-program reasoning is established yet.
+
+## Native experiments
+
+After the build described below, with `REA_KUNA_COMMAND` configured:
+
+```sh
+mkdir -p .cache/atomic-re-tools
+gcc -O2 -fno-pie -no-pie -o .cache/atomic-re-tools/interior-reference \
+  experiments/atomic-re-tools/interior-reference.c
+
+# Run once for each variant: per-address, then inventory.
+python3 experiments/analysis-efficiency/resource-run.py --observe-payload-exit -- \
+  node experiments/atomic-re-tools/native-relations.mjs \
+  .cache/atomic-re-tools/interior-reference HEAD:REA per-address \
+  .cache/atomic-re-tools/native-interior-per-address
+
+python3 experiments/atomic-re-tools/verify-interior.py \
+  .cache/atomic-re-tools/interior-reference \
+  .cache/atomic-re-tools/native-interior-per-address.report.json \
+  .cache/atomic-re-tools/native-interior-inventory.report.json
+```
+
+Use the installed zlib/SQLite paths and `incorrect`/`malformed` to repeat the
+native plan comparison. Append `--code-slice` to the per-address experiment for
+an exact instruction-to-line probe. `mapped-code.mjs` rejects unsupported address
+precision and never substitutes a nearby line for a missing mapping.
+
+The experiment adds an opt-in typed reference projection at the existing Kuna
+protocol owner. The existing public address-only result and its retained cache
+shape remain the same; ordinary queries do not materialize the richer facts.
+Experimental MCP tools have live-validated input schemas, but no canonical
+output-schema/product-catalog integration. They are not a production SDK/API.
 
 ## Reproduce
 

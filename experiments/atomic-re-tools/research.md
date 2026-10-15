@@ -36,11 +36,11 @@ upstream main, a guarantee of decompilation correctness, or a novelty claim.
 
 ## Granularity has at least three independent dimensions
 
-| Dimension | Example | Consequence |
-| --- | --- | --- |
-| Fact unit | One typed reference with both endpoints and provenance | Can be retained and joined without reading unrelated C text |
-| Transport unit | A batch of references for several selectors | Amortizes headers and agent turns; need not change native work |
-| Compute unit | One image load and reference walk | Can serve many fact queries; may cost much more than one returned row |
+| Dimension      | Example                                                | Consequence                                                           |
+| -------------- | ------------------------------------------------------ | --------------------------------------------------------------------- |
+| Fact unit      | One typed reference with both endpoints and provenance | Can be retained and joined without reading unrelated C text           |
+| Transport unit | A batch of references for several selectors            | Amortizes headers and agent turns; need not change native work        |
+| Compute unit   | One image load and reference walk                      | Can serve many fact queries; may cost much more than one returned row |
 
 Calling all three "atomic tools" hides the main optimization opportunity. A tiny
 getter can repeat a whole-program analysis. Conversely, one expensive shared

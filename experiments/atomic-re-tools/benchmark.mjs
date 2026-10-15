@@ -141,6 +141,16 @@ let catalog,
 try {
   await client.connect(transport);
   catalog = await client.listTools();
+  const expectedOutputSchemas =
+    process.env.REA_MCP_OUTPUT_SCHEMA_PROFILE === "off"
+      ? 0
+      : catalog.tools.filter((tool) => !tool.name.startsWith("experiment_"))
+          .length;
+  assert.equal(
+    catalog.tools.filter((tool) => Object.hasOwn(tool, "outputSchema")).length,
+    expectedOutputSchemas,
+    "Advertised output-schema profile differs from the requested profile",
+  );
   const ajv = new Ajv2020({ strict: false, validateFormats: false });
   for (const tool of catalog.tools.filter((tool) =>
     tool.name.startsWith("experiment_"),

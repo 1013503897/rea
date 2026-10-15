@@ -16,11 +16,12 @@ def main():
         return len(encoding.encode(json.dumps(value, ensure_ascii=False, separators=(",", ":")), disallowed_special=()))
 
     results = []
+    failed_runs = []
     equivalence = {}
     for root in map(Path, options.roots):
         for report_path in sorted(root.glob("*.report.json")):
             report = json.loads(report_path.read_text())
-            if report["failures"] or report["verification_only"]:
+            if report["verification_only"]:
                 continue
             prefix = str(report_path).removesuffix(".report.json")
             catalog = json.loads(Path(prefix + ".catalog.json").read_text())
@@ -29,8 +30,16 @@ def main():
                          if line.startswith('{"resource_scope":')][-1]
             assert resources["payload_resource_observation_verified"], prefix
             counters = resources["payload_resource_observation"]
-            assert counters["payload_exit_code"] == 0 and counters["payload_cleanup_verified"], prefix
+            assert counters["payload_cleanup_verified"], prefix
             assert counters["resource_events"]["memory.events"]["oom_kill"] == 0, prefix
+            if report["failures"]:
+                failed_runs.append({"provider": report["provider"], "variant": report["variant"], "target": report["binary"],
+                                    "elapsed_seconds": resources["elapsed_seconds"], "cpu_seconds": round(counters["cpu_stat"]["usage_usec"] / 1e6, 3),
+                                    "peak_process_family_cgroup_mib": round(counters["memory_peak_bytes"] / 1024 ** 2, 1),
+                                    "failure_count": len(report["failures"]), "retained_prefix": prefix,
+                                    "cleanup_verified": True, "oom_kills": 0})
+                continue
+            assert counters["payload_exit_code"] == 0, prefix
             key = (report["provider"], report["target_sha256"], report["pattern"])
             outcome = [{name: row[name] for name in ["strings", "references", "functions"]} for row in report["outcomes"]]
             if key in equivalence:
@@ -66,6 +75,7 @@ def main():
         "workload": "One cold and one warm selected navigation task per fresh session, plus startup, discovery/status, close and cleanup. Additional --verify runs excluded.",
         "equivalence": "All included variants agree on selected strings, reference sites and per-location function resolutions within each provider/target/query. This is not cross-provider truth or a live-agent reasoning evaluation.",
         "results": results,
+        "failed_runs": failed_runs,
     }
     print(json.dumps(summary, indent=2))
 
