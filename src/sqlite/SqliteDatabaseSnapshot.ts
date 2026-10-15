@@ -3,7 +3,10 @@ import { constants, type BigIntStats } from "node:fs";
 import { join } from "node:path";
 import { ArtifactReaderFailure } from "../artifacts/ArtifactReader.js";
 import type { ArtifactResourceScope } from "../artifacts/ArtifactResourceScope.js";
-import { AnalysisInputError } from "../domain/analysisErrorCore.js";
+import {
+  AnalysisInputError,
+  AnalysisResourceConstraintError,
+} from "../domain/analysisErrorCore.js";
 import { OwnedFileHandle } from "../filesystem/OwnedFileHandle.js";
 import {
   readStableArtifact,
@@ -50,13 +53,35 @@ const duringAcquisition = async <T>(
     if (
       cause instanceof Error &&
       "code" in cause &&
-      ["ENOENT", "ENOTDIR", "ELOOP"].includes(String(cause.code))
+      ["ENOENT", "ENOTDIR", "ELOOP", "ENAMETOOLONG"].includes(
+        String(cause.code),
+      )
     )
       throw new ArtifactReaderFailure(
         "integrity",
         `SQLite snapshot file set changed during acquisition: ${path}`,
         { cause },
       );
+    if (cause instanceof ArtifactReaderFailure && cause.reason === "limit") {
+      const changed = new ArtifactReaderFailure(
+        "integrity",
+        `SQLite snapshot file set exceeded its observed size during acquisition: ${path}`,
+        {
+          cause,
+          ...(cause.partialObservation === undefined
+            ? {}
+            : { partialObservation: cause.partialObservation }),
+        },
+        cause.details,
+      );
+      if (cause.cleanup !== undefined)
+        throw ArtifactReaderFailure.withCleanup(
+          changed,
+          cause.cleanup,
+          cause.partialObservation,
+        );
+      throw changed;
+    }
     throw cause;
   }
 };
@@ -195,6 +220,21 @@ export const captureSqliteDatabaseSnapshot = async (
   if (database === undefined || wal === undefined || before[2] === undefined)
     throw new Error("Incomplete database file-set observation");
   if (database === null) throw missingDatabase(path);
+  const selectedSize = database.size + (wal?.size ?? 0n);
+  if (selectedSize > BigInt(SQLITE_DATABASE_LIMITS.inputBytes))
+    throw new AnalysisResourceConstraintError(
+      "inspect_sqlite_database",
+      "file-size",
+      `Selected SQLite database and WAL total ${selectedSize.toString()} bytes, exceeding the combined ${String(SQLITE_DATABASE_LIMITS.inputBytes)}-byte offline snapshot budget: ${path}`,
+      {
+        sqlite_snapshot_input_bytes: SQLITE_DATABASE_LIMITS.inputBytes,
+        observed_sqlite_snapshot_input_bytes: selectedSize.toString(),
+      },
+      {
+        remediationAction:
+          "Use the application's supported export workflow to create a consistent, smaller offline SQLite snapshot containing only the relevant data, then inspect that snapshot. REA will not truncate or modify the selected source.",
+      },
+    );
   if (before[2] !== null)
     await verifyInactiveJournal(
       `${path}-journal`,
@@ -203,12 +243,6 @@ export const captureSqliteDatabaseSnapshot = async (
       resourceScope,
       "initial",
       signal,
-    );
-  const selectedSize = database.size + (wal?.size ?? 0n);
-  if (selectedSize > BigInt(SQLITE_DATABASE_LIMITS.inputBytes))
-    throw new ArtifactReaderFailure(
-      "limit",
-      `Selected SQLite database and WAL exceed the combined ${String(SQLITE_DATABASE_LIMITS.inputBytes)}-byte snapshot budget: ${path}`,
     );
   const snapshotPath = join(root, "database.snapshot");
   const captured = await readObservedArtifact(
