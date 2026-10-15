@@ -60,6 +60,12 @@ const source = fileURLToPath(
 const literalSource = fileURLToPath(
   new URL("../tests/conformance/swift/string-literals.swift", import.meta.url),
 );
+const unresolvedJumpSource = fileURLToPath(
+  new URL(
+    "../tests/conformance/swift/unresolved-string-jump.s",
+    import.meta.url,
+  ),
+);
 const binary = join(root, "swift-inventory");
 const literalBinary = join(root, "swift-literals");
 const literalAssembly = fileURLToPath(
@@ -98,6 +104,7 @@ try {
       "arm64-apple-macosx13.0",
       literalSource,
       literalObject,
+      unresolvedJumpSource,
       "-o",
       literalBinary,
     ],
@@ -254,15 +261,33 @@ async function verifyStringLiterals() {
       }
       decoded[name] = observed.length;
     }
+    const unresolvedJump = procedures.find(({ value }) =>
+      value.includes("rea_unresolved_string_jump"),
+    );
+    assert(
+      unresolvedJump,
+      "unresolved jump fixture is missing from the procedure inventory",
+    );
+    const unresolvedDossier = await call("analyze_function", {
+      procedure: unresolvedJump.address,
+    });
+    assert.deepEqual(unresolvedDossier.swift_string_literals, []);
+    assert.deepEqual(
+      unresolvedDossier.swift_string_literal_omissions.map(
+        ({ reason }) => reason,
+      ),
+      ["unresolved_jump"],
+    );
+    decoded.unresolvedStringJump =
+      unresolvedDossier.swift_string_literal_omissions.length;
     return decoded;
   } finally {
     await call("close_binary", {});
   }
 }
 
-// Exercise the actual Java producer inside a disposable Ghidra database. The
-// explicit private budget boundary makes exhaustion deterministic, without a
-// production CLI/MCP option or dependence on the verification host's free heap.
+// Exercise the Java producer inside an ephemeral Ghidra database. The explicit
+// budget seam makes exhaustion deterministic without exposing a runtime option.
 async function verifyDecoderSafeguards() {
   const scripts = join(root, "decoder-scripts");
   await mkdir(scripts);
@@ -302,8 +327,9 @@ async function runDecoderProbe(scripts, report) {
   process.on("SIGINT", interrupt);
   process.on("SIGTERM", interrupt);
   let supervisor;
+  let launch;
   try {
-    const launch = await spawnOwnedProviderProcess({
+    launch = await spawnOwnedProviderProcess({
       command: installation.analyzeHeadlessPath,
       arguments: [
         root,
@@ -358,6 +384,13 @@ async function runDecoderProbe(scripts, report) {
       if (supervisor !== undefined) {
         const stopped = await supervisor.stop();
         decoderCleaned = stopped.status === "verified-cleanup";
+        assert.ok(
+          decoderCleaned,
+          `Owned Ghidra cleanup incomplete; retained ${root}: ${JSON.stringify(stopped)}`,
+        );
+      } else if (launch !== undefined) {
+        const stopped = await cleanupOwnedProcessGroup(launch.ownership);
+        decoderCleaned = stopped.cleaned;
         assert.ok(
           decoderCleaned,
           `Owned Ghidra cleanup incomplete; retained ${root}: ${JSON.stringify(stopped)}`,
