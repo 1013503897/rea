@@ -1,0 +1,14 @@
+{
+  "files_sha256": {
+    "plan.json": "35192fbfab73729d2235a7a3f1219777e03f4c5224f413476d1044609db5f364",
+    "oracles.json": "834eda6aa1639ddb3c2b1bffd03cd55882042aca740804afc68fba9f4d5ed27f",
+    "review.json": "bd26f2d7895c40200d6dc655423b9472c87c2758bce3902f208f878039ed015d",
+    "obsidian-dependencies.json": "be9b36c968f2c0c23700edff158817b3afa7fbc2d00e9db4b4f989d5bc402d52",
+    "obsidian-dependencies-code/trajectory.jsonl": "ed3a678a11a5cdceac001495db06dabc90630bbd913f0d87441b7b5be7c68ceb",
+    "obsidian-dependencies-code/resources.json": "ebee89f2cbcac9c40c7e7b142b8cfd69b962af926c847560e1ce5abdf0a132fa",
+    "obsidian-dependencies-code/evidence-index.json": "d846c402ba7556ba8209f9c008f5c889bb147d2d6c6f3be0ee8abb34b2f2331f",
+    "obsidian-dependencies-code/receipt.json": "f2de7855d06be9c3539fdb46afa38493666b10c211dfc00ab338311d52712d6a"
+  },
+  "retention": "Tasks, oracles, sampling actions/CLI events, usage, failures, response digests and resources. No original applications/captures or full producer payloads.",
+  "replay_limit": "Regenerate new captures and oracles for a fresh cohort. Historical live web captures are not byte-reproducible and are intentionally not archived."
+}

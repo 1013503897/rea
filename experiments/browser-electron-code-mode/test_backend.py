@@ -11,6 +11,12 @@ import unittest
 
 class BackendTests(unittest.TestCase):
     def test_async_cells_compose_real_calls_and_recover_from_rejection(self):
+        self.check_async_cells('typed-async')
+
+    def test_result_cells_use_one_success_and_failure_convention(self):
+        self.check_async_cells('typed-result')
+
+    def check_async_cells(self, mode):
         quickjs = os.environ.get('REA_EXPERIMENT_QUICKJS')
         if not quickjs:
             self.skipTest('Set REA_EXPERIMENT_QUICKJS to isolated quickjs-emscripten@0.31.0')
@@ -19,7 +25,7 @@ class BackendTests(unittest.TestCase):
             settings = Path(directory) / 'settings.json'
             settings.write_text(json.dumps({'runtime': str(root), 'output': directory,
                                            'tools': ['binary_session'], 'quickjs': quickjs,
-                                           'code_api': 'typed-async'}))
+                                           'code_api': mode}))
             process = subprocess.Popen([shutil.which('node'), str(Path(__file__).with_name('backend.mjs')),
                                         str(settings)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                         stderr=subprocess.PIPE, text=True)
@@ -32,15 +38,22 @@ class BackendTests(unittest.TestCase):
                 return response['value']
 
             try:
+                value = 'value.' if mode == 'typed-result' else ''
                 result = cell('const a=await rea.call("binary_session",{}); '
                               'await Promise.resolve(); const b=await rea.call("binary_session",{}); '
-                              'print({first:!!a.result,second:!!b.result,sdk:typeof rea.javascript.fromEvidence});')
+                              f'print({{first:!!a.{value}result,second:!!b.{value}result,sdk:typeof rea.javascript.fromEvidence}});')
                 self.assertEqual(result['status'], 'completed', result)
                 self.assertEqual(result['backend_calls'], 2)
                 self.assertEqual(result['printed'], [{'first': True, 'second': True, 'sdk': 'function'}])
-                result = cell('await rea.call("not_allowed",{});')
-                self.assertEqual(result['status'], 'code_error')
-                self.assertIn('allowlist', result['error']['message'])
+                if mode == 'typed-result':
+                    result = cell('print(await rea.call("not_allowed",{}));')
+                    self.assertEqual(result['status'], 'completed')
+                    self.assertFalse(result['printed'][0]['ok'])
+                    self.assertIn('allowlist', result['printed'][0]['error']['details'])
+                else:
+                    result = cell('await rea.call("not_allowed",{});')
+                    self.assertEqual(result['status'], 'code_error')
+                    self.assertIn('allowlist', result['error']['message'])
                 result = cell('await Promise.resolve(); while(true) {}')
                 self.assertEqual(result['status'], 'code_error')
                 self.assertIn('interrupted', result['error']['message'])

@@ -4,14 +4,14 @@ import { z } from "zod";
 
 /** Narrow discovery generated from named canonical schemas, with full discovery
  * still accessible. This is an experiment, not an additional server contract. */
-export async function moduleReferenceDiscovery(runtime) {
+export async function moduleReferenceDiscovery(runtime, resultCalls = false) {
   const load = (path) =>
     import(pathToFileURL(resolve(runtime, "dist", path)).href);
   const [views, modules] = await Promise.all([
     load("domain/analysisView/analysisView.js"),
     load("domain/analysisView/javascriptModuleReferences.js"),
   ]);
-  return {
+  const discovery = {
     name: "inspect_analysis_view",
     description:
       "Read typed retained JavaScript module references. Exact filters select all matching identities, including ambiguous paths. Rows carry canonical identity and retained source-range counts with observation support. Page exhaustion concerns retained matches; source coverage is separate. Complete discovery: inspect_analysis_view.complete.",
@@ -28,4 +28,10 @@ export async function moduleReferenceDiscovery(runtime) {
       "The ordinary canonical Evidence envelope: evidence_id, normalized_result (pageSchema), evidence_links, authority, confidence and limitations. Queries create retained view Evidence, linked to the parent. Errors preserve the ordinary tool error envelope.",
     code: "const app = rea.javascript.fromEvidence(parentEvidenceId); await app.modules.references({where:{path,kind},offset:0,limit:64}) returns Result<{evidence_id,page},{kind,details}>. for await (const result of app.modules.pages(options)) iterates the same query. Narrow result and option types come from the canonical schemas; client.mjs also borrows canonical TypeScript types. Use await rea.call(name,args) for any original tool. Cells are async functions; print(value) returns selected facts. Complete Evidence remains retained; arbitrary printed conclusions are derivations, not new source Evidence.",
   };
+  if (resultCalls)
+    discovery.code = discovery.code.replace(
+      "Use await rea.call(name,args) for any original tool.",
+      "Use await rea.call(name,args) for original tools: it returns Result<canonical Evidence or lifecycle reply,{kind,details}>. All code methods use Result; read raw Evidence from result.value and a module page from result.value.page. Direct actions retain their ordinary MCP reply shape.",
+    );
+  return discovery;
 }

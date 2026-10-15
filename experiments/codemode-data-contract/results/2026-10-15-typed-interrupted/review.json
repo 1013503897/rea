@@ -1,0 +1,66 @@
+{
+  "scope": "Operator-aborted infrastructure attempt: pre-push overlapped preparation and first discovery round. Preserved separately, not a completed randomized task. Sampling was stopped cooperatively before reading any answer or scoring outcome; no answer existed.",
+  "oracle_scope": "HAR grouping independently decoded from original HAR; Obsidian producer consistency plus explicit static/runtime distinction, not independent semantic extractor validation.",
+  "trials": [
+    {
+      "trial": "obsidian-dependencies-code",
+      "arm": "code",
+      "task": "obsidian-dependencies",
+      "answer_type": "NoneType",
+      "status": "incomplete",
+      "treatment_valid": true,
+      "checks": {
+        "artifact_sha256": false,
+        "external_specifiers": false,
+        "module_identity_count": false,
+        "external_module_count": false,
+        "inventory_exhausted": false,
+        "runtime_load_proven": false,
+        "frozen_task": true,
+        "evidence_ids": false,
+        "limitations_present": false
+      },
+      "facts_pass": false,
+      "usage": {
+        "input_tokens": 13646,
+        "cached_input_tokens": 7936,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 53,
+        "reasoning_output_tokens": 27
+      },
+      "uncached_input_tokens": 5710,
+      "usage_complete": false,
+      "rounds": 1,
+      "max_request_input_tokens": 13646,
+      "model_observation_bytes": 12584,
+      "discovery_rounds": 1,
+      "discovery_response_bytes": 12584,
+      "elapsed_seconds": 57.311283582937904,
+      "whole_scope_seconds": 57.719,
+      "preparation_seconds": 38.34215235395823,
+      "question_seconds": 18.969131228979677,
+      "resources_verified_at_payload_exit": true,
+      "cpu_seconds_at_payload_exit": 22.899571,
+      "peak_bytes_at_payload_exit": 1129177088,
+      "resource_events_at_payload_exit": {
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        },
+        "pids.events": {
+          "max": 0
+        }
+      },
+      "resource_abort": null,
+      "backend_calls": 1,
+      "code_actions": 0,
+      "success": false
+    }
+  ],
+  "accepted_shapes": "node_ids may be a list or a mapping of kinds to lists; sender_validation_observations may be a count object; limitations may be prose or a string list. Exact facts still required.",
+  "narrative_review": "Required separately: supporting IDs alone do not establish claim-level support."
+}

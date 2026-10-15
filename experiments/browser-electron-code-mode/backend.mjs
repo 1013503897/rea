@@ -9,6 +9,8 @@ import { createJavaScriptClient } from "../codemode-data-contract/client.mjs";
 import { moduleReferenceDiscovery } from "../codemode-data-contract/discovery.mjs";
 
 const settings = JSON.parse(await readFile(process.argv[2], "utf8"));
+const resultCalls = settings.code_api === "typed-result";
+const asynchronous = settings.code_api === "typed-async" || resultCalls;
 await mkdir(settings.output, { recursive: true, mode: 0o700 });
 const client = new Client({ name: "rea-organization-pilot", version: "1" });
 const transport = new StdioClientTransport({
@@ -37,8 +39,11 @@ try {
   contracts = allTools.filter(({ name }) => settings.tools.includes(name));
   if (contracts.length !== settings.tools.length)
     throw new Error("Unknown allowed tool");
-  if (settings.code_api === "typed-async")
-    narrowDiscovery = await moduleReferenceDiscovery(settings.runtime);
+  if (asynchronous && (!resultCalls || settings.view_namespace !== "capture"))
+    narrowDiscovery = await moduleReferenceDiscovery(
+      settings.runtime,
+      resultCalls,
+    );
 } catch (error) {
   try {
     await closeClient();
@@ -186,7 +191,6 @@ const execute = async (source) => {
   let outputBytes = 0;
   const printed = [];
   const before = ordinal;
-  const asynchronous = settings.code_api === "typed-async";
   const pending = new Set();
   const deferreds = [];
   vm.runtime.setInterruptHandler(
@@ -233,6 +237,19 @@ const execute = async (source) => {
         describe(name) { return JSON.parse(__describe(name)); }
       };
       ${asynchronous ? `rea.javascript = (${createJavaScriptClient.toString()})(rea.call);` : ""}
+      ${
+        resultCalls
+          ? `{
+        const rawCall = rea.call;
+        rea.call = async (name,args) => {
+          try {
+            const value = await rawCall(name,args);
+            return value.error ? {ok:false,error:{kind:'tool-error',details:value.error}} : {ok:true,value};
+          } catch (error) { return {ok:false,error:{kind:'transport-error',details:String(error)}}; }
+        };
+      }`
+          : ""
+      }
     `),
     ).dispose();
     let result = await vm.evalCodeAsync(

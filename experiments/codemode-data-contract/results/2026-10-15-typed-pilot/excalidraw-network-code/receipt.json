@@ -1,0 +1,143 @@
+{
+  "arm": "code",
+  "task": "excalidraw-network",
+  "status": "answered",
+  "model": "gpt-5.6-terra",
+  "reasoning": "high",
+  "treatment_valid": true,
+  "native_tool_calls": 0,
+  "usage": {
+    "input_tokens": 119147,
+    "cached_input_tokens": 15872,
+    "cache_write_input_tokens": 0,
+    "output_tokens": 2087,
+    "reasoning_output_tokens": 1189
+  },
+  "rounds": [
+    {
+      "round": 1,
+      "model_seconds": 13.022535913973115,
+      "prompt_bytes": 6390,
+      "exit_code": 0,
+      "usage": {
+        "input_tokens": 11665,
+        "cached_input_tokens": 0,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 54,
+        "reasoning_output_tokens": 28
+      },
+      "action_kind": "docs",
+      "action_seconds": 0.0010337400017306209,
+      "observation_bytes": 12584
+    },
+    {
+      "round": 2,
+      "model_seconds": 12.72313070204109,
+      "prompt_bytes": 19056,
+      "exit_code": 0,
+      "usage": {
+        "input_tokens": 14682,
+        "cached_input_tokens": 0,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 114,
+        "reasoning_output_tokens": 87
+      },
+      "action_kind": "docs",
+      "action_seconds": 0.0007395200664177537,
+      "observation_bytes": 4180
+    },
+    {
+      "round": 3,
+      "model_seconds": 16.773199127987027,
+      "prompt_bytes": 23324,
+      "exit_code": 0,
+      "usage": {
+        "input_tokens": 15814,
+        "cached_input_tokens": 0,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 215,
+        "reasoning_output_tokens": 110
+      },
+      "action_kind": "code",
+      "action_seconds": 0.11641948495525867,
+      "observation_bytes": 583
+    },
+    {
+      "round": 4,
+      "model_seconds": 13.00372897402849,
+      "prompt_bytes": 24222,
+      "exit_code": 0,
+      "usage": {
+        "input_tokens": 16044,
+        "cached_input_tokens": 7936,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 557,
+        "reasoning_output_tokens": 452
+      },
+      "action_kind": "code",
+      "action_seconds": 0.010461090016178787,
+      "observation_bytes": 1363
+    },
+    {
+      "round": 5,
+      "model_seconds": 12.411768333986402,
+      "prompt_bytes": 25896,
+      "exit_code": 0,
+      "usage": {
+        "input_tokens": 16440,
+        "cached_input_tokens": 0,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 178,
+        "reasoning_output_tokens": 72
+      },
+      "action_kind": "code",
+      "action_seconds": 0.02098190994001925,
+      "observation_bytes": 583
+    },
+    {
+      "round": 6,
+      "model_seconds": 17.744824154069647,
+      "prompt_bytes": 26794,
+      "exit_code": 0,
+      "usage": {
+        "input_tokens": 16672,
+        "cached_input_tokens": 7936,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 230,
+        "reasoning_output_tokens": 124
+      },
+      "action_kind": "code",
+      "action_seconds": 0.20796491694636643,
+      "observation_bytes": 42172
+    },
+    {
+      "round": 7,
+      "model_seconds": 29.012757868971676,
+      "prompt_bytes": 69277,
+      "exit_code": 0,
+      "usage": {
+        "input_tokens": 27830,
+        "cached_input_tokens": 0,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 739,
+        "reasoning_output_tokens": 316
+      },
+      "action_kind": "answer"
+    }
+  ],
+  "usage_scope": "Observed completed CLI turns; reasoning is a subset of output.",
+  "usage_complete": true,
+  "elapsed_seconds": 126.9365316319745,
+  "preparation_seconds": 11.740965740056708,
+  "revision": "2c2c8df8d192eb2fa5e6e1ac5fe87b739d6033b0",
+  "task_sha256": "89d087a5b39097b390a5cfaf1f0f32925854cfd590fffb60dd9a56099ea7fb1b",
+  "compositional_followup": true,
+  "interface": "typed",
+  "max_rounds": 16,
+  "sources_sha256_at_start": {
+    "experiments/browser-electron-code-mode/trial.py": "b447cd293ee4b2bb441638208f10f3f96b88d890b6fc6e4845ddfff1a183ec39",
+    "experiments/browser-electron-code-mode/backend.mjs": "d3edb4cad722b35c6865dc400721ffe4c358aed5724cdc2f2e3c34a8248043fd",
+    "experiments/codemode-data-contract/client.mjs": "38e79a98a18c4a1787e6cd3fbfa2bb422d883bec8adcad8b535056eb1270af6c",
+    "experiments/codemode-data-contract/discovery.mjs": "12bae8c55978c1948ecdd56af139977445552e72a15fb9cf0afc35aa29ffaad5"
+  }
+}

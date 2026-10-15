@@ -1,0 +1,19 @@
+{
+  "id": "obsidian-dependencies",
+  "tools": [
+    "analyze_javascript_application",
+    "inspect_analysis_view"
+  ],
+  "bootstrap": {
+    "tool": "analyze_javascript_application",
+    "arguments": {
+      "input_path": "/tmp/rea-codemode-experiment-20261015/artifacts/obsidian-1.14.4.asar",
+      "source_paths": [
+        "package.json",
+        "main.js"
+      ],
+      "detail": "summary"
+    }
+  },
+  "question": "For a packaging/sandboxing review of the actual shipped Obsidian main.js, inventory every retained javascript-module identity at that exact path and its retained reference facts. Return external_specifiers as an object mapping each literal external module specifier to its number of retained source_ranges, selecting only identity.namespace unresolved-semantic-module with identity.key starting external:. Strip only that prefix. Do not count unresolved-reference identities a second time. Return module_identity_count (all javascript-module identities for main.js), external_module_count, inventory_exhausted, runtime_load_proven (boolean), artifact_sha256 (the original ASAR digest), evidence_ids (sufficient actual supporting REA Evidence IDs), and concise limitations. Do not execute target code, fetch URLs, infer installed versions or claim runtime loading from static references. The initial selected-source summary and retained parent are supplied. Use the smallest sufficient observations and finish once all requested facts are supported."
+}

@@ -1,0 +1,236 @@
+{
+  "scope": "Four-trial exploratory follow-up, two real app questions, one counterbalanced pair per task; no statistical claim.",
+  "oracle_scope": "HAR grouping independently decoded from original HAR; Obsidian producer consistency plus explicit static/runtime distinction, not independent semantic extractor validation.",
+  "trials": [
+    {
+      "trial": "obsidian-dependencies-code",
+      "arm": "code",
+      "task": "obsidian-dependencies",
+      "answer_type": "dict",
+      "status": "answered",
+      "treatment_valid": true,
+      "checks": {
+        "artifact_sha256": true,
+        "external_specifiers": true,
+        "module_identity_count": true,
+        "external_module_count": false,
+        "inventory_exhausted": true,
+        "runtime_load_proven": true,
+        "frozen_task": true,
+        "evidence_ids": true,
+        "limitations_present": true
+      },
+      "facts_pass": false,
+      "usage": {
+        "input_tokens": 53972,
+        "cached_input_tokens": 7936,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 1585,
+        "reasoning_output_tokens": 862
+      },
+      "uncached_input_tokens": 46036,
+      "usage_complete": true,
+      "rounds": 3,
+      "max_request_input_tokens": 23673,
+      "model_observation_bytes": 37786,
+      "discovery_rounds": 1,
+      "discovery_response_bytes": 12584,
+      "elapsed_seconds": 102.32077949505765,
+      "whole_scope_seconds": 102.637,
+      "preparation_seconds": 18.940267013036646,
+      "question_seconds": 83.380512482021,
+      "resources_verified_at_payload_exit": true,
+      "cpu_seconds_at_payload_exit": 24.568732,
+      "peak_bytes_at_payload_exit": 1349758976,
+      "resource_events_at_payload_exit": {
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        },
+        "pids.events": {
+          "max": 0
+        }
+      },
+      "resource_abort": null,
+      "backend_calls": 2,
+      "code_actions": 1,
+      "success": false
+    },
+    {
+      "trial": "obsidian-dependencies-direct",
+      "arm": "direct",
+      "task": "obsidian-dependencies",
+      "answer_type": "dict",
+      "status": "answered",
+      "treatment_valid": true,
+      "checks": {
+        "artifact_sha256": true,
+        "external_specifiers": true,
+        "module_identity_count": true,
+        "external_module_count": true,
+        "inventory_exhausted": true,
+        "runtime_load_proven": true,
+        "frozen_task": true,
+        "evidence_ids": true,
+        "limitations_present": true
+      },
+      "facts_pass": true,
+      "usage": {
+        "input_tokens": 52974,
+        "cached_input_tokens": 7936,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 675,
+        "reasoning_output_tokens": 253
+      },
+      "uncached_input_tokens": 45038,
+      "usage_complete": true,
+      "rounds": 3,
+      "max_request_input_tokens": 22929,
+      "model_observation_bytes": 36034,
+      "discovery_rounds": 1,
+      "discovery_response_bytes": 12584,
+      "elapsed_seconds": 118.2241332459962,
+      "whole_scope_seconds": 118.777,
+      "preparation_seconds": 69.46533942001406,
+      "question_seconds": 48.75879382598214,
+      "resources_verified_at_payload_exit": true,
+      "cpu_seconds_at_payload_exit": 59.846232,
+      "peak_bytes_at_payload_exit": 1130397696,
+      "resource_events_at_payload_exit": {
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        },
+        "pids.events": {
+          "max": 0
+        }
+      },
+      "resource_abort": null,
+      "backend_calls": 2,
+      "code_actions": 0,
+      "success": true
+    },
+    {
+      "trial": "excalidraw-network-direct",
+      "arm": "direct",
+      "task": "excalidraw-network",
+      "answer_type": "dict",
+      "status": "answered",
+      "treatment_valid": true,
+      "checks": {
+        "artifact_sha256": true,
+        "observed_records": true,
+        "coverage_exhausted": true,
+        "groups": true,
+        "frozen_task": true,
+        "evidence_ids": true,
+        "limitations_present": true
+      },
+      "facts_pass": true,
+      "usage": {
+        "input_tokens": 111383,
+        "cached_input_tokens": 7936,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 1832,
+        "reasoning_output_tokens": 1115
+      },
+      "uncached_input_tokens": 103447,
+      "usage_complete": true,
+      "rounds": 6,
+      "max_request_input_tokens": 33994,
+      "model_observation_bytes": 88741,
+      "discovery_rounds": 3,
+      "discovery_response_bytes": 45950,
+      "elapsed_seconds": 116.37481278798077,
+      "whole_scope_seconds": 116.684,
+      "preparation_seconds": 12.096547322929837,
+      "question_seconds": 104.27826546505094,
+      "resources_verified_at_payload_exit": true,
+      "cpu_seconds_at_payload_exit": 21.436455,
+      "peak_bytes_at_payload_exit": 1215897600,
+      "resource_events_at_payload_exit": {
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        },
+        "pids.events": {
+          "max": 0
+        }
+      },
+      "resource_abort": null,
+      "backend_calls": 3,
+      "code_actions": 0,
+      "success": true
+    },
+    {
+      "trial": "excalidraw-network-code",
+      "arm": "code",
+      "task": "excalidraw-network",
+      "answer_type": "dict",
+      "status": "answered",
+      "treatment_valid": true,
+      "checks": {
+        "artifact_sha256": true,
+        "observed_records": true,
+        "coverage_exhausted": true,
+        "groups": true,
+        "frozen_task": true,
+        "evidence_ids": true,
+        "limitations_present": true
+      },
+      "facts_pass": true,
+      "usage": {
+        "input_tokens": 119147,
+        "cached_input_tokens": 15872,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2087,
+        "reasoning_output_tokens": 1189
+      },
+      "uncached_input_tokens": 103275,
+      "usage_complete": true,
+      "rounds": 7,
+      "max_request_input_tokens": 27830,
+      "model_observation_bytes": 61465,
+      "discovery_rounds": 2,
+      "discovery_response_bytes": 16764,
+      "elapsed_seconds": 126.9365316319745,
+      "whole_scope_seconds": 127.326,
+      "preparation_seconds": 11.740965740056708,
+      "question_seconds": 115.1955658919178,
+      "resources_verified_at_payload_exit": true,
+      "cpu_seconds_at_payload_exit": 22.093462,
+      "peak_bytes_at_payload_exit": 1137565696,
+      "resource_events_at_payload_exit": {
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        },
+        "pids.events": {
+          "max": 0
+        }
+      },
+      "resource_abort": null,
+      "backend_calls": 5,
+      "code_actions": 4,
+      "success": true
+    }
+  ],
+  "accepted_shapes": "node_ids may be a list or a mapping of kinds to lists; sender_validation_observations may be a count object; limitations may be prose or a string list. Exact facts still required.",
+  "narrative_review": "Required separately: supporting IDs alone do not establish claim-level support."
+}

@@ -1,0 +1,32 @@
+{
+  "files_sha256": {
+    "plan.json": "4262c146a603695cc36ca8c4e717a32a18979fae836944c102088de0ef0aa1b3",
+    "oracles.json": "834eda6aa1639ddb3c2b1bffd03cd55882042aca740804afc68fba9f4d5ed27f",
+    "review.json": "f1dd275b4880ba7ede16650aa2a93c6560a4ba412aefbb23a2db8b0577fbbe86",
+    "excalidraw-network.json": "89d087a5b39097b390a5cfaf1f0f32925854cfd590fffb60dd9a56099ea7fb1b",
+    "obsidian-dependencies.json": "be9b36c968f2c0c23700edff158817b3afa7fbc2d00e9db4b4f989d5bc402d52",
+    "obsidian-dependencies-direct/trajectory.jsonl": "925276b6a1ce0571ce8e68644be9d8a5a75d27efdcb0a2e752ffd994b29c03da",
+    "obsidian-dependencies-direct/resources.json": "94b93e1eecbb72c5014f7a9db8ccaf9d68ab4ca7467ea762f696fce72dd249e6",
+    "obsidian-dependencies-direct/evidence-index.json": "265c1b4532107f297d246c84f1fcd424135a2b92014e762eb8f0884a615e70ed",
+    "obsidian-dependencies-direct/answer.json": "dd3e758a59e121220f9155fb6a930d147ed76b1499408bb41a0310c0192745f5",
+    "obsidian-dependencies-direct/receipt.json": "ef8b4788b34a4a9a2f7c0764b88cade2594b70866df661a5f0e5253fad7b30f9",
+    "excalidraw-network-code/trajectory.jsonl": "41379183a28a8a26beb83d28b07ec20c45f9044eef820bb408bc55e7bd8a5c63",
+    "excalidraw-network-code/resources.json": "62cfeed28485c061ceb5b2a60d9561b22666a73ae8ee025a1585e9f974a1e013",
+    "excalidraw-network-code/evidence-index.json": "badb8ba9795400741431198c7c50ffe900a96d88d7bef08494b37ed526c6542d",
+    "excalidraw-network-code/answer.json": "f96801a93856bb2411ccdeb7afc21f5174c91c29bddf60cab1cf1667247100a1",
+    "excalidraw-network-code/receipt.json": "0c98e171e8a43e9a75831a4f8cebbc302b7fe519757413cff1b567f84dd4804f",
+    "excalidraw-network-direct/trajectory.jsonl": "cd17f2ec27dc8f58f155bf948da23c6047bef64fa877dd25c3a347e80d7a9d58",
+    "excalidraw-network-direct/resources.json": "391daa15f2580d33ed64d88aa2145c3f72eb41d5b186cf4a60dc92180e97ab58",
+    "excalidraw-network-direct/evidence-index.json": "3d70ee98887d8954bac4fb0135fb850dfd75b56d8084333463c8823b09c439e3",
+    "excalidraw-network-direct/answer.json": "caf1a9df191e953b684c75622336707740224dafa54d93e7fee3eee176857c95",
+    "excalidraw-network-direct/receipt.json": "22e04d50adcb53eabcdd3caed8dd1dca791b5ce4c16edc9fcf73fb77714bac12",
+    "obsidian-dependencies-code/trajectory.jsonl": "1ac1de437c51c6fd32315ae14caebc48b385477aa9c075283accf83f087b874d",
+    "obsidian-dependencies-code/resources.json": "18656157257fba57c509b6621da4a94dc93ed0c0222f8b7c2990666a4742ed5f",
+    "obsidian-dependencies-code/evidence-index.json": "a57e8e4075b48fb2734d4475e3b32efe750dc744b6d351606b99d6bb9a9427b6",
+    "obsidian-dependencies-code/answer.json": "1f682b9be7b62704a6cfb7ecd2ac0913fe0b3ae08e533bbdb5e008d21a76585f",
+    "obsidian-dependencies-code/receipt.json": "5f625a525fa3b66fc3deff53116e5e0d48a84a3a48d147b1bd6a8a0e7aeb3568"
+  },
+  "retention": "Tasks, oracles, sampling actions/CLI events, usage, failures, response digests and resources. No original applications/captures or full producer payloads.",
+  "replay_limit": "Regenerate new captures and oracles for a fresh cohort. Historical live web captures are not byte-reproducible and are intentionally not archived.",
+  "exporter_sha256": "d891d66e869fc4db5e84e7785f84491ae84b566c8c0ef100875376e5cba26874"
+}

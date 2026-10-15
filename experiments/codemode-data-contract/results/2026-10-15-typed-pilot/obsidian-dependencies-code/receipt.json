@@ -1,0 +1,79 @@
+{
+  "arm": "code",
+  "task": "obsidian-dependencies",
+  "status": "answered",
+  "model": "gpt-5.6-terra",
+  "reasoning": "high",
+  "treatment_valid": true,
+  "native_tool_calls": 0,
+  "usage": {
+    "input_tokens": 53972,
+    "cached_input_tokens": 7936,
+    "cache_write_input_tokens": 0,
+    "output_tokens": 1585,
+    "reasoning_output_tokens": 862
+  },
+  "rounds": [
+    {
+      "round": 1,
+      "model_seconds": 12.603809128049761,
+      "prompt_bytes": 17010,
+      "exit_code": 0,
+      "usage": {
+        "input_tokens": 13641,
+        "cached_input_tokens": 7936,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 43,
+        "reasoning_output_tokens": 17
+      },
+      "action_kind": "docs",
+      "action_seconds": 0.001127830008044839,
+      "observation_bytes": 12584
+    },
+    {
+      "round": 2,
+      "model_seconds": 41.7003065609606,
+      "prompt_bytes": 29676,
+      "exit_code": 0,
+      "usage": {
+        "input_tokens": 16658,
+        "cached_input_tokens": 0,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 940,
+        "reasoning_output_tokens": 516
+      },
+      "action_kind": "code",
+      "action_seconds": 0.3651774349855259,
+      "observation_bytes": 25202
+    },
+    {
+      "round": 3,
+      "model_seconds": 28.47710579598788,
+      "prompt_bytes": 56375,
+      "exit_code": 0,
+      "usage": {
+        "input_tokens": 23673,
+        "cached_input_tokens": 0,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 602,
+        "reasoning_output_tokens": 329
+      },
+      "action_kind": "answer"
+    }
+  ],
+  "usage_scope": "Observed completed CLI turns; reasoning is a subset of output.",
+  "usage_complete": true,
+  "elapsed_seconds": 102.32077949505765,
+  "preparation_seconds": 18.940267013036646,
+  "revision": "2c2c8df8d192eb2fa5e6e1ac5fe87b739d6033b0",
+  "task_sha256": "be9b36c968f2c0c23700edff158817b3afa7fbc2d00e9db4b4f989d5bc402d52",
+  "compositional_followup": true,
+  "interface": "typed",
+  "max_rounds": 16,
+  "sources_sha256_at_start": {
+    "experiments/browser-electron-code-mode/trial.py": "b447cd293ee4b2bb441638208f10f3f96b88d890b6fc6e4845ddfff1a183ec39",
+    "experiments/browser-electron-code-mode/backend.mjs": "d3edb4cad722b35c6865dc400721ffe4c358aed5724cdc2f2e3c34a8248043fd",
+    "experiments/codemode-data-contract/client.mjs": "38e79a98a18c4a1787e6cd3fbfa2bb422d883bec8adcad8b535056eb1270af6c",
+    "experiments/codemode-data-contract/discovery.mjs": "12bae8c55978c1948ecdd56af139977445552e72a15fb9cf0afc35aa29ffaad5"
+  }
+}

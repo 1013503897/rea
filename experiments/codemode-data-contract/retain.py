@@ -10,6 +10,7 @@ import json
 from pathlib import Path
 import shutil
 import sys
+import tempfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'browser-electron-code-mode'))
 from review import evidence_ids
@@ -28,6 +29,18 @@ def main():
     parser.add_argument('--cohort', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
+    destination = args.output.resolve()
+    if destination.exists():
+        raise FileExistsError(destination)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix='export-', dir=destination.parent) as temporary:
+        args.output = Path(temporary) / 'records'
+        metadata = write_records(args)
+        args.output.rename(destination)
+    print(json.dumps({'output': str(destination), **metadata}))
+
+
+def write_records(args):
     plan = read(args.cohort / 'plan.json')
     args.output.mkdir(parents=True, exist_ok=False)
     files = {'plan.json', 'oracles.json', 'review.json'} | {row['task_file'] for row in plan['trials']}
@@ -56,6 +69,22 @@ def main():
                 item[name + '_bytes'] = path.stat().st_size
                 if name == 'action.json':
                     item['action'] = read(path)
+                if name == 'observation.json':
+                    observation = read(path)
+                    value = observation.get('value', observation) if isinstance(observation, dict) else observation
+                    if isinstance(value, dict):
+                        item['observation_status'] = value.get('status', 'reply')
+                        error = value.get('error')
+                        if error:
+                            item['observed_error'] = error
+                            if isinstance(error, dict) and isinstance(error.get('message'), str) and len(error['message']) > 2048:
+                                # Full dumped Evidence can be regenerated. Keep
+                                # an explicit diagnostic prefix and byte digest.
+                                message = error['message']
+                                item['observed_error'] = {**error, 'message': message[:2048],
+                                    'message_truncated_for_archive': True,
+                                    'full_message_sha256': hashlib.sha256(message.encode()).hexdigest(),
+                                    'full_message_bytes': len(message.encode())}
                 if name == 'events.jsonl':
                     # CLI usage/events reflect the actual sampling, and cannot
                     # be reconstructed from regenerated tool output.
@@ -89,9 +118,9 @@ def main():
         'files_sha256': inventory,
         'retention': 'Tasks, oracles, sampling actions/CLI events, usage, failures, response digests and resources. No original applications/captures or full producer payloads.',
         'replay_limit': 'Regenerate new captures and oracles for a fresh cohort. Historical live web captures are not byte-reproducible and are intentionally not archived.',
+        'exporter_sha256': digest(Path(__file__)),
     }, indent=2) + '\n')
-    print(json.dumps({'output': str(args.output), 'files': len(inventory),
-                      'bytes': sum(path.stat().st_size for path in args.output.rglob('*') if path.is_file())}))
+    return {'files': len(inventory), 'bytes': sum(path.stat().st_size for path in args.output.rglob('*') if path.is_file())}
 
 
 if __name__ == '__main__':

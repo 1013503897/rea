@@ -5,7 +5,7 @@
  * @typedef {import('zod').input<typeof import('../../src/domain/analysisView/javascriptModuleReferences.js').javascriptModuleReferencesRequestSchema>} ModuleView
  * @typedef {Omit<ModuleView, 'kind' | 'collection' | 'projection'>} ModuleOptions
  * @typedef {{evidence_id: string, page: ModulePage}} QueryEvidence
- * @typedef {{kind: 'tool-error' | 'unexpected-result', details: unknown}} QueryError
+ * @typedef {{kind: 'tool-error' | 'transport-error' | 'unexpected-result', details: unknown}} QueryError
  * @typedef {import('../../src/domain/result.js').Result<QueryEvidence, QueryError>} QueryResult
  * @typedef {{error?: unknown, evidence_id?: string, normalized_result?: ModulePage}} QueryResponse
  */
@@ -22,15 +22,23 @@ export function createJavaScriptClient(call) {
       /** @param {ModuleOptions} [options]
        *  @returns {Promise<QueryResult>} */
       async function references(options = {}) {
-        const response = await call("inspect_analysis_view", {
-          source: { kind: "retained-evidence", evidence_id: evidenceId },
-          view: {
-            ...options,
-            kind: "javascript",
-            collection: "modules",
-            projection: "references",
-          },
-        });
+        let response;
+        try {
+          response = await call("inspect_analysis_view", {
+            source: { kind: "retained-evidence", evidence_id: evidenceId },
+            view: {
+              ...options,
+              kind: "javascript",
+              collection: "modules",
+              projection: "references",
+            },
+          });
+        } catch (error) {
+          return {
+            ok: false,
+            error: { kind: "transport-error", details: String(error) },
+          };
+        }
         if (response.error)
           return {
             ok: false,

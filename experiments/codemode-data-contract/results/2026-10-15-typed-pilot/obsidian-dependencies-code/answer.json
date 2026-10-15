@@ -1,0 +1,24 @@
+{
+  "external_specifiers": {
+    "child_process": 1,
+    "crypto": 1,
+    "electron": 2,
+    "fs": 3,
+    "net": 1,
+    "original-fs": 2,
+    "os": 2,
+    "path": 3,
+    "url": 1,
+    "util": 1
+  },
+  "module_identity_count": 23,
+  "external_module_count": 11,
+  "inventory_exhausted": true,
+  "runtime_load_proven": false,
+  "artifact_sha256": "146ef8470d8cbb4a6db209bdc19bf2bad13350444186c0fd93c31087b142b92f",
+  "evidence_ids": [
+    "ev_75ff15f1ebb8da1fd2e6f9ae099cc6fe330ba9a71473e631304bffddd7f0b184",
+    "ev_5cce3aafdc3f5d81d9fa8b02a33c22c2679d7d4f7274748aaf97d30184efe299"
+  ],
+  "limitations": "Complete retained-identity page for main.js only; external identities are static-relationship inferences with low confidence. Unresolved-reference identities were excluded, static references do not establish runtime loading, and semantic coverage is partial."
+}

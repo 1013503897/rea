@@ -1,0 +1,127 @@
+{
+  "arm": "direct",
+  "task": "excalidraw-network",
+  "status": "answered",
+  "model": "gpt-5.6-terra",
+  "reasoning": "high",
+  "treatment_valid": true,
+  "native_tool_calls": 0,
+  "usage": {
+    "input_tokens": 111383,
+    "cached_input_tokens": 7936,
+    "cache_write_input_tokens": 0,
+    "output_tokens": 1832,
+    "reasoning_output_tokens": 1115
+  },
+  "rounds": [
+    {
+      "round": 1,
+      "model_seconds": 15.488429785938933,
+      "prompt_bytes": 5809,
+      "exit_code": 0,
+      "usage": {
+        "input_tokens": 11558,
+        "cached_input_tokens": 0,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 157,
+        "reasoning_output_tokens": 67
+      },
+      "action_kind": "call",
+      "action_seconds": 0.012143019936047494,
+      "observation_bytes": 672
+    },
+    {
+      "round": 2,
+      "model_seconds": 13.432470286032185,
+      "prompt_bytes": 6762,
+      "exit_code": 0,
+      "usage": {
+        "input_tokens": 12006,
+        "cached_input_tokens": 7936,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 80,
+        "reasoning_output_tokens": 54
+      },
+      "action_kind": "docs",
+      "action_seconds": 0.0011825700057670474,
+      "observation_bytes": 12584
+    },
+    {
+      "round": 3,
+      "model_seconds": 9.39353362401016,
+      "prompt_bytes": 19428,
+      "exit_code": 0,
+      "usage": {
+        "input_tokens": 15023,
+        "cached_input_tokens": 0,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 45,
+        "reasoning_output_tokens": 18
+      },
+      "action_kind": "docs",
+      "action_seconds": 0.0009534499840810895,
+      "observation_bytes": 4180
+    },
+    {
+      "round": 4,
+      "model_seconds": 27.25497334206011,
+      "prompt_bytes": 23696,
+      "exit_code": 0,
+      "usage": {
+        "input_tokens": 15947,
+        "cached_input_tokens": 0,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 414,
+        "reasoning_output_tokens": 387
+      },
+      "action_kind": "docs",
+      "action_seconds": 0.0010406200308352709,
+      "observation_bytes": 29186
+    },
+    {
+      "round": 5,
+      "model_seconds": 9.612759844982065,
+      "prompt_bytes": 52973,
+      "exit_code": 0,
+      "usage": {
+        "input_tokens": 22855,
+        "cached_input_tokens": 0,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 219,
+        "reasoning_output_tokens": 118
+      },
+      "action_kind": "call",
+      "action_seconds": 0.12356456799898297,
+      "observation_bytes": 42119
+    },
+    {
+      "round": 6,
+      "model_seconds": 28.767716740025207,
+      "prompt_bytes": 95412,
+      "exit_code": 0,
+      "usage": {
+        "input_tokens": 33994,
+        "cached_input_tokens": 0,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 917,
+        "reasoning_output_tokens": 471
+      },
+      "action_kind": "answer"
+    }
+  ],
+  "usage_scope": "Observed completed CLI turns; reasoning is a subset of output.",
+  "usage_complete": true,
+  "elapsed_seconds": 116.37481278798077,
+  "preparation_seconds": 12.096547322929837,
+  "revision": "2c2c8df8d192eb2fa5e6e1ac5fe87b739d6033b0",
+  "task_sha256": "89d087a5b39097b390a5cfaf1f0f32925854cfd590fffb60dd9a56099ea7fb1b",
+  "compositional_followup": true,
+  "interface": "typed",
+  "max_rounds": 16,
+  "sources_sha256_at_start": {
+    "experiments/browser-electron-code-mode/trial.py": "b447cd293ee4b2bb441638208f10f3f96b88d890b6fc6e4845ddfff1a183ec39",
+    "experiments/browser-electron-code-mode/backend.mjs": "d3edb4cad722b35c6865dc400721ffe4c358aed5724cdc2f2e3c34a8248043fd",
+    "experiments/codemode-data-contract/client.mjs": "38e79a98a18c4a1787e6cd3fbfa2bb422d883bec8adcad8b535056eb1270af6c",
+    "experiments/codemode-data-contract/discovery.mjs": "12bae8c55978c1948ecdd56af139977445552e72a15fb9cf0afc35aa29ffaad5"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "external_specifiers": {
+    "original-fs": 2,
+    "util": 1,
+    "child_process": 1,
+    "crypto": 1,
+    "net": 1,
+    "path": 3,
+    "fs": 3,
+    "os": 2,
+    "electron": 2,
+    "url": 1
+  },
+  "module_identity_count": 23,
+  "external_module_count": 10,
+  "inventory_exhausted": true,
+  "runtime_load_proven": false,
+  "artifact_sha256": "146ef8470d8cbb4a6db209bdc19bf2bad13350444186c0fd93c31087b142b92f",
+  "evidence_ids": [
+    "ev_25bf97b2ab1bcd281114113421a8e4fa5792f2a8669538161c474295c0eb7e01",
+    "ev_6e02ed45c332d86ff350c54c37815597415c9f1b86d94286bed9de149d1a702c"
+  ],
+  "limitations": "Complete retained-identity page for main.js, but observations are static/inferred source references only; no code executed and runtime loading is unproven. Application/semantic coverage is partial, with 36 unselected files and semantic truncation."
+}

@@ -29,7 +29,7 @@ def main():
     parser.add_argument('--max-rounds', type=int, default=10)
     parser.add_argument('--compositional-followup', action='store_true',
                         help='Permit direct batches and explicitly require code-side projection')
-    parser.add_argument('--interface', choices=['current', 'typed'], default='current',
+    parser.add_argument('--interface', choices=['current', 'typed', 'typed-result'], default='current',
                         help='Typed enables canonical module references, narrow discovery and async SDK in both arms')
     args = parser.parse_args()
     if not args.output.is_absolute() or not args.quickjs.is_absolute():
@@ -77,8 +77,10 @@ def main():
     schema_path.write_text(encode(schema))
     backend_settings = {'runtime': str(root), 'output': str(args.output / 'backend'),
                         'tools': task['tools'], 'quickjs': str(args.quickjs)}
-    if args.interface == 'typed':
-        backend_settings['code_api'] = 'typed-async'
+    if args.interface in ['typed', 'typed-result']:
+        backend_settings['code_api'] = 'typed-async' if args.interface == 'typed' else 'typed-result'
+        backend_settings['view_namespace'] = task.get('view_namespace',
+            'capture' if task['bootstrap']['tool'] == 'inspect_web_network_capture' else 'javascript')
     settings_path = args.output / 'backend-settings.json'
     settings_path.write_text(encode(backend_settings))
     backend = None
@@ -153,12 +155,16 @@ def main():
                     'Do not print complete raw REA envelopes or irrelevant observations. '
                     'Compose multiple calls in one cell when their arguments can be obtained from earlier results. '
                 )
-            if args.interface == 'typed':
+            if args.interface in ['typed', 'typed-result']:
                 protocol = protocol.replace(
                     'Use synchronous rea.call(name,args) and rea.describe(name); no await is necessary or supported.',
                     'Cells are async functions. Use await rea.call(name,args), rea.describe(name), '
                     'and the typed rea.javascript client documented by inspect_analysis_view. '
                     'Use ordinary async/await and for await loops.')
+                if args.interface == 'typed-result':
+                    protocol += ('All code methods return Result: test r.ok, then read canonical MCP Evidence '
+                                 'from r.value for rea.call, or the typed page from r.value.page for the module SDK. '
+                                 'Transport and tool failures return {ok:false,error:{kind,details}}. ')
         base = protocol + '\nTool menu: ' + encode(menu) + '\nQuestion: ' + task['question']
         history = [{'bootstrap': bootstrap}]
         for index in range(1, args.max_rounds + 1):

@@ -4,6 +4,22 @@ Status: experimental query/client implemented on this branch; not integrated ups
 Tracking: [experiment #4063](https://github.com/morluto/rea/issues/4063).
 The original design sketch below predates the implementation; its future names
 are illustrative. The implemented surface is described first.
+
+The first typed-interface pilot is preserved under `results/2026-10-15-typed-pilot`:
+direct passed 2/2, code 1/2. Code confused raw Evidence replies with SDK `Result`,
+then manually reported 11 external modules for a correct ten-entry dictionary.
+JavaScript-only narrow discovery also imposed avoidable work on the HAR task.
+These outcomes are retained, not repaired or replaced.
+
+An adaptive `--interface typed-result` profile makes generic code calls and SDK
+methods consistently return `Result`, handles transport failures explicitly,
+and keeps complete discovery for capture tasks. `freeze-snapshot.py` creates a
+temporary authenticated bundle and an additional plan; both arms import those
+exact bytes instead of reanalyzing under dynamic parent result budgets. Run its
+trials with `--interface typed-result --compositional-followup --max-rounds 16`.
+This combines an interface correction and a stricter input control, so comparing
+the two cohorts cannot isolate either change's effect. Original `current` and
+`typed` profiles remain available to reproduce the earlier interfaces.
 Source inspection: fresh main `d7651b6a0`, 2026-10-15. This follows the
 `experiment/browser-electron-codemode-20261015` pilot, commit `6494c98c6`.
 

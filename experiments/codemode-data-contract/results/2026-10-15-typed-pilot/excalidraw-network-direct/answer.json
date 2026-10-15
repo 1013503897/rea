@@ -1,0 +1,97 @@
+{
+  "groups": [
+    {
+      "hostname": "excalidraw.com",
+      "status": -1,
+      "count": 1,
+      "record_ordinals": [
+        38
+      ]
+    },
+    {
+      "hostname": "excalidraw.com",
+      "status": 200,
+      "count": 28,
+      "record_ordinals": [
+        0,
+        5,
+        6,
+        7,
+        11,
+        12,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37
+      ]
+    },
+    {
+      "hostname": "excalidraw.nyc3.cdn.digitaloceanspaces.com",
+      "status": 200,
+      "count": 7,
+      "record_ordinals": [
+        1,
+        2,
+        3,
+        4,
+        13,
+        14,
+        15
+      ]
+    },
+    {
+      "hostname": "queue.simpleanalyticscdn.com",
+      "status": 202,
+      "count": 1,
+      "record_ordinals": [
+        9
+      ]
+    },
+    {
+      "hostname": "scripts.simpleanalyticscdn.com",
+      "status": 200,
+      "count": 1,
+      "record_ordinals": [
+        8
+      ]
+    },
+    {
+      "hostname": "sentry.io",
+      "status": 200,
+      "count": 1,
+      "record_ordinals": [
+        10
+      ]
+    }
+  ],
+  "observed_records": 39,
+  "coverage_exhausted": true,
+  "artifact_sha256": "680483155d4e0d4a67aca437de5309e741580f4710c170de508b8d0bd9fdb9e9",
+  "evidence_ids": [
+    "ev_d778c748f38af1f4b688d29cf54dc9e5fa23f20105b32613829ae38636a6984a",
+    "ev_19c67ae83e4d0eb7565a6d93a85de3a01f590d019bf6dd8988e84394c043208c"
+  ],
+  "limitations": [
+    "One frozen, historical startup capture; not a complete API inventory.",
+    "Recorded URLs were not fetched and do not establish live runtime or deployment behavior.",
+    "Status -1 is the producer-recorded HAR value, not an HTTP response status."
+  ]
+}
