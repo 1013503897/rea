@@ -32,8 +32,8 @@ import {
 import {
   acquireHopperTargetLease,
   acquireLinuxHopperApplicationLease,
-} from "./HopperTargetLease.js";
-import type { HopperTargetLease } from "./HopperTargetLease.js";
+} from "../process/HopperLease.js";
+import type { HopperTargetLease } from "../process/HopperLease.js";
 import { HOPPER_SHUTDOWN_TIMEOUT_MS } from "./HopperSessionValues.js";
 import { verifyMacHopperNativeHelper } from "./HopperMacPublisher.js";
 import { inspectLinuxHopperLauncher } from "../application/LinuxHopper.js";

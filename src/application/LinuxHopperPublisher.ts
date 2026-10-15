@@ -3,7 +3,10 @@ import { copyFile, lstat, mkdir, rename, writeFile } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 
 import { z } from "zod";
-import { ArtifactResourceScope } from "../artifacts/ArtifactResourceScope.js";
+import {
+  ArtifactResourceScope,
+  type ArtifactResourceOwner,
+} from "../artifacts/ArtifactResourceScope.js";
 import { ArtifactReaderFailure } from "../artifacts/ArtifactReader.js";
 import { homeDirectoryFromEnvironment } from "../config/homeDirectory.js";
 import { err, ok, type Result } from "../domain/result.js";
@@ -12,6 +15,11 @@ import { readBoundedFileBytes } from "../process/BoundedFileBytes.js";
 import { verifyDetachedPgpSignature } from "../process/DetachedPgpSignature.js";
 import { execFileOutput } from "../process/ExecFileOutput.js";
 import { PrivateRuntimeRoot } from "../process/PrivateRuntimeRoot.js";
+import { waitForAbortableDelay } from "../process/ProviderDeadline.js";
+import {
+  acquireHopperReleaseCacheLease,
+  type HopperTargetLease,
+} from "../process/HopperLease.js";
 import {
   downloadHopperPackage,
   HOPPER_DOWNLOAD_BYTES,
@@ -270,88 +278,156 @@ export class LinuxHopperPublisher {
           "The Hopper release cache is not a caller-owned directory.",
         );
       const target = join(this.cacheRoot, verified.release.main_exe_hash);
-      await this.#withTemporary(async (stage) => {
-        await copyFile(archive, join(stage, "archive"));
-        if (
-          (await hashStableFile(join(stage, "archive"), signal)).sha256 !==
-          verified.packageSha256
-        )
-          throw new HopperReleaseError(
-            "integrity",
-            "The verified package changed before cache retention.",
-          );
-        await writeFile(join(stage, "public-key.asc"), verified.publicKey, {
-          flag: "wx",
-          mode: 0o600,
-        });
-        await writeFile(
-          join(stage, "release.json"),
-          JSON.stringify({
-            format: "rea-signed-hopper-release-v1",
-            family: verified.family,
-            release: verified.release,
-          }) + "\n",
-          { flag: "wx", mode: 0o600 },
-        );
-        try {
-          await rename(stage, target);
-        } catch (cause: unknown) {
-          if (!isExistingDestination(cause)) throw cause;
-          // A concurrent or previous writer is reusable only after complete authentication.
-          const existing = await this.#cachedPackage(
-            verified.release.main_exe_hash,
-            signal,
-          );
-          if (!existing.ok) {
-            if (["cancelled", "cleanup_failed"].includes(existing.error.reason))
-              throw existing.error;
-            signal?.throwIfAborted();
-            const previous = await lstat(target);
+      const lease = await this.#acquireCacheLease(
+        verified.release.main_exe_hash,
+        signal,
+      );
+      await this.#withOwnedResource(
+        {
+          kind: "lease",
+          resource: lease.socketPath ?? "hopper-release-cache-lease",
+          lease,
+        },
+        async () => {
+          signal?.throwIfAborted();
+          await this.#withTemporary(async (stage) => {
+            await copyFile(archive, join(stage, "archive"));
             if (
-              !previous.isDirectory() ||
-              previous.isSymbolicLink() ||
-              previous.uid !== process.getuid?.()
+              (await hashStableFile(join(stage, "archive"), signal)).sha256 !==
+              verified.packageSha256
             )
-              throw existing.error;
-            // Only approved retention may repair an entry. Preserve all old
-            // evidence, including malformed data, without following symlinks.
-            const backup = `${target}.backup-${randomUUID()}`;
-            await rename(target, backup);
-            const moved = await lstat(backup);
-            if (moved.dev !== previous.dev || moved.ino !== previous.ino)
               throw new HopperReleaseError(
-                "verification_unavailable",
-                `The Hopper cache entry changed during repair; its moved contents are preserved at ${backup}. Retry approved setup.`,
+                "integrity",
+                "The verified package changed before cache retention.",
               );
-            try {
-              await rename(stage, target);
-            } catch (replacementCause: unknown) {
-              // Another approved writer may have published the same release.
-              const replacement = await this.#cachedPackage(
-                verified.release.main_exe_hash,
-                signal,
-              );
-              if (!replacement.ok)
-                throw new HopperReleaseError(
-                  replacement.error.reason === "cleanup_failed"
-                    ? "cleanup_failed"
-                    : "verification_unavailable",
-                  `The Hopper cache repair did not finish; previous evidence is preserved at ${backup}. Retry approved setup.`,
-                  {
-                    cause: new AggregateError(
-                      [replacementCause, replacement.error],
-                      "Hopper cache publication and verification outcomes",
-                    ),
-                  },
-                );
-            }
-          }
-        }
-      }, this.cacheRoot);
+            await writeFile(join(stage, "public-key.asc"), verified.publicKey, {
+              flag: "wx",
+              mode: 0o600,
+            });
+            await writeFile(
+              join(stage, "release.json"),
+              JSON.stringify({
+                format: "rea-signed-hopper-release-v1",
+                family: verified.family,
+                release: verified.release,
+              }) + "\n",
+              { flag: "wx", mode: 0o600 },
+            );
+            await this.#publishCacheStage(
+              stage,
+              target,
+              verified.release.main_exe_hash,
+              signal,
+            );
+          }, this.cacheRoot);
+        },
+      );
       return ok(undefined);
     } catch (cause: unknown) {
       return err(releaseFailure(cause, signal, "verification_unavailable"));
     }
+  }
+
+  async #publishCacheStage(
+    stage: string,
+    target: string,
+    digest: string,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const existing = await this.#cachedPackage(digest, signal);
+    if (existing.ok) return;
+    if (existing.error.reason === "cache_missing") {
+      await rename(stage, target);
+      return;
+    }
+    if (
+      ![
+        "integrity",
+        "release_metadata",
+        "publisher_verification_failed",
+      ].includes(existing.error.reason)
+    )
+      throw existing.error;
+    signal?.throwIfAborted();
+    const previous = await lstat(target);
+    if (
+      !previous.isDirectory() ||
+      previous.isSymbolicLink() ||
+      previous.uid !== process.getuid?.()
+    )
+      throw existing.error;
+    // Only approved retention under the publication lease may repair an entry.
+    // Preserve malformed evidence without following links or deleting content.
+    const backup = `${target}.backup-${randomUUID()}`;
+    await rename(target, backup);
+    try {
+      const moved = await lstat(backup);
+      if (moved.dev !== previous.dev || moved.ino !== previous.ino)
+        throw new Error("The Hopper cache entry changed during repair.");
+      await rename(stage, target);
+    } catch (cause: unknown) {
+      const replacement = await this.#cachedPackage(digest, signal);
+      if (replacement.ok) return;
+      await this.#failedCachePublication(
+        target,
+        backup,
+        [cause, replacement.error],
+        replacement.error.reason === "cleanup_failed",
+      );
+    }
+  }
+
+  async #acquireCacheLease(
+    digest: string,
+    signal?: AbortSignal,
+  ): Promise<HopperTargetLease> {
+    const deadline = performance.now() + 120_000;
+    const runId = randomUUID();
+    let delay = 25;
+    while (true) {
+      signal?.throwIfAborted();
+      const acquired = await acquireHopperReleaseCacheLease({
+        cacheDirectory: this.cacheRoot,
+        launcherSha256: digest,
+        runId,
+      });
+      if (acquired.acquired) return acquired.lease;
+      const remaining = deadline - performance.now();
+      if (remaining <= 0)
+        throw new HopperReleaseError(
+          "verification_unavailable",
+          "Another approved Hopper setup still owns this release cache. Retry after it finishes.",
+        );
+      await waitForAbortableDelay(Math.min(delay, remaining), signal);
+      delay = Math.min(delay * 2, 200);
+    }
+  }
+
+  async #failedCachePublication(
+    target: string,
+    backup: string,
+    causes: unknown[],
+    cleanupFailed = false,
+  ): Promise<never> {
+    let preserved = backup;
+    try {
+      // Under the publication lease, restore the previous directory on failure.
+      // POSIX rename cannot replace another nonempty evidence directory.
+      await rename(backup, target);
+      preserved = target;
+    } catch (cause: unknown) {
+      causes.push(cause);
+    }
+    throw new HopperReleaseError(
+      cleanupFailed ? "cleanup_failed" : "verification_unavailable",
+      `The Hopper cache repair did not finish; previous evidence is preserved at ${preserved}. Retry approved setup.`,
+      {
+        cause: new AggregateError(
+          causes,
+          "Hopper cache publication and recovery outcomes",
+        ),
+      },
+    );
   }
 
   async inspectLauncher(
@@ -445,42 +521,45 @@ export class LinuxHopperPublisher {
   ): Promise<Result<VerifiedLinuxHopperPackage, HopperReleaseError>> {
     try {
       const root = join(this.cacheRoot, digest);
-      let metadata: Buffer;
       try {
-        metadata = await this.#read(
-          join(root, "release.json"),
-          RELEASE_METADATA_BYTES,
-          signal,
-        );
-      } catch (cause: unknown) {
-        if (cause instanceof Error && Reflect.get(cause, "code") === "ENOENT") {
-          try {
-            await lstat(root);
-          } catch (rootCause: unknown) {
-            if (
-              rootCause instanceof Error &&
-              Reflect.get(rootCause, "code") === "ENOENT"
-            )
-              return err(
-                new HopperReleaseError(
-                  "cache_missing",
-                  "No retained signed Hopper package identifies this launcher.",
-                  { cause },
-                ),
-              );
-            throw rootCause;
-          }
+        const directory = await lstat(root);
+        if (!directory.isDirectory() || directory.isSymbolicLink())
           throw new HopperReleaseError(
             "integrity",
-            "The retained Hopper package is missing its release metadata.",
-            { cause },
+            "The retained Hopper cache entry is not a regular directory.",
+          );
+      } catch (cause: unknown) {
+        if (cause instanceof Error && Reflect.get(cause, "code") === "ENOENT") {
+          return err(
+            new HopperReleaseError(
+              "cache_missing",
+              "No retained signed Hopper package identifies this launcher.",
+              { cause },
+            ),
           );
         }
         throw cause;
       }
-      const parsed = cacheRecordSchema.safeParse(
-        JSON.parse(decodeUtf8(metadata)),
+      // Distinguish proven malformed/missing evidence from unavailable reads or
+      // inspection tools. Only the former authorize approved cache replacement.
+      for (const name of ["release.json", "public-key.asc", "archive"])
+        await this.#assertCacheFile(join(root, name));
+      const metadata = await this.#read(
+        join(root, "release.json"),
+        RELEASE_METADATA_BYTES,
+        signal,
       );
+      let value: unknown;
+      try {
+        value = JSON.parse(decodeUtf8(metadata));
+      } catch (cause: unknown) {
+        throw new HopperReleaseError(
+          "release_metadata",
+          "The retained Hopper package metadata is malformed.",
+          { cause },
+        );
+      }
+      const parsed = cacheRecordSchema.safeParse(value);
       if (!parsed.success)
         throw new HopperReleaseError(
           "release_metadata",
@@ -496,13 +575,21 @@ export class LinuxHopperPublisher {
           "integrity",
           "The retained Hopper metadata does not identify this launcher.",
         );
-      const key = decodeUtf8(
-        await this.#read(
-          join(root, "public-key.asc"),
-          RELEASE_METADATA_BYTES,
-          signal,
-        ),
+      const keyBytes = await this.#read(
+        join(root, "public-key.asc"),
+        RELEASE_METADATA_BYTES,
+        signal,
       );
+      let key: string;
+      try {
+        key = decodeUtf8(keyBytes);
+      } catch (cause: unknown) {
+        throw new HopperReleaseError(
+          "publisher_verification_failed",
+          "The retained Hopper public key is malformed.",
+          { cause },
+        );
+      }
       return this.verifyArchive(
         parsed.data.family,
         release.value,
@@ -512,6 +599,25 @@ export class LinuxHopperPublisher {
       );
     } catch (cause: unknown) {
       return err(releaseFailure(cause, signal, "verification_unavailable"));
+    }
+  }
+
+  async #assertCacheFile(path: string): Promise<void> {
+    try {
+      const stats = await lstat(path);
+      if (!stats.isFile() || stats.isSymbolicLink())
+        throw new HopperReleaseError(
+          "integrity",
+          `Required Hopper evidence is not a regular file: ${path}.`,
+        );
+    } catch (cause: unknown) {
+      if (cause instanceof Error && Reflect.get(cause, "code") === "ENOENT")
+        throw new HopperReleaseError(
+          "integrity",
+          `Required Hopper evidence is missing: ${path}.`,
+          { cause },
+        );
+      throw cause;
     }
   }
 
@@ -613,19 +719,29 @@ export class LinuxHopperPublisher {
       prefix: "rea-hopper-publisher-",
       ...(parent === undefined ? {} : { parent }),
     });
+    return this.#withOwnedResource(
+      {
+        kind: "private-runtime-root",
+        resource: root.path,
+        root,
+      },
+      () => operation(root.path),
+    );
+  }
+
+  async #withOwnedResource<T>(
+    owner: ArtifactResourceOwner,
+    operation: () => Promise<T>,
+  ): Promise<T> {
     let outcome:
       | { readonly ok: true; readonly value: T }
       | { readonly ok: false; readonly cause: unknown };
     try {
-      outcome = { ok: true, value: await operation(root.path) };
+      outcome = { ok: true, value: await operation() };
     } catch (cause: unknown) {
       outcome = { ok: false, cause };
     }
-    const cleanup = await this.#resources.release({
-      kind: "private-runtime-root",
-      resource: root.path,
-      root,
-    });
+    const cleanup = await this.#resources.release(owner);
     if (cleanup.kind === "failed") {
       pendingCleanup.add(this.#resources);
       const causes = outcome.ok
@@ -633,7 +749,7 @@ export class LinuxHopperPublisher {
         : [outcome.cause, cleanup.cause];
       throw new HopperReleaseError(
         "cleanup_failed",
-        `Hopper publisher verification retained cleanup ownership for ${root.path}.`,
+        `Hopper publisher verification retained cleanup ownership for ${owner.resource}.`,
         {
           cause: new AggregateError(
             causes,
@@ -685,9 +801,6 @@ export const retryLinuxHopperPublisherCleanup = async (): Promise<void> => {
 
 const decodeUtf8 = (bytes: Uint8Array): string =>
   new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-const isExistingDestination = (cause: unknown): boolean =>
-  cause instanceof Error &&
-  ["EEXIST", "ENOTEMPTY"].includes(String(Reflect.get(cause, "code")));
 const releaseFailure = (
   cause: unknown,
   signal: AbortSignal | undefined,

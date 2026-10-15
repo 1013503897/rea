@@ -556,6 +556,11 @@ An empty `XDG_CACHE_HOME` uses `$HOME/.cache`. Approved setup can repair a
 damaged caller-owned entry after authenticating a fresh package; the previous
 entry is preserved beside it as `<launcher-sha256>.backup-<id>`. Ordinary doctor
 and launches reject damaged evidence and never repair it implicitly.
+Approved publications of the same canonical cache entry share a process-backed
+lease. Concurrent setup waits without moving another writer's evidence; a
+failed replacement restores the previous directory when possible and reports
+any retained backup path. Unavailable reads or native inspection tools do not
+authorize replacing existing evidence.
 Doctor and launches authenticate this evidence for offline use; an editable
 digest receipt alone cannot authorize a launcher. Verification reuses at most
 eight immutable package proofs per process, keyed by the complete package,
