@@ -38,6 +38,8 @@ def runtime_fingerprint(root):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--mode', choices=['direct', 'client-code'], default='direct')
+    parser.add_argument('--code-mode-host', choices=['inherit', 'enabled', 'disabled'],
+                        default='inherit', help='Explicit executor-host control; verify actual trace separately')
     parser.add_argument('--runtime-root', type=Path, required=True)
     parser.add_argument('--revision', required=True)
     parser.add_argument('--prompt', type=Path, required=True)
@@ -55,6 +57,8 @@ def main():
     parser.add_argument('--guide-enabled-tools', action='store_true',
                         help='Opt-in exact-name discovery guidance for selected REA tools')
     args = parser.parse_args()
+    if args.mode == 'client-code' and args.code_mode_host == 'disabled':
+        parser.error('client-code requires an enabled or inherited code-mode host')
     if args.guide_enabled_tools and args.enabled_tools is None:
         parser.error('--guide-enabled-tools requires --enabled-tools')
     enabled_tools = None
@@ -165,6 +169,8 @@ def main():
         'shell_tool = false', 'unified_exec = false',
         'code_mode = ' + ('true' if args.mode == 'client-code' else 'false'),
         'code_mode_only = ' + ('true' if args.mode == 'client-code' else 'false'),
+        *([] if args.code_mode_host == 'inherit' else [
+            'code_mode_host = ' + ('true' if args.code_mode_host == 'enabled' else 'false')]),
         '[history]', 'persistence = "none"',
         '[mcp_servers.rea]', 'command = ' + quote(node),
         'args = ' + quote(command_args), 'startup_timeout_sec = 60',
@@ -207,6 +213,7 @@ def main():
         (args.output / 'prompt.txt').write_text(prompt)
         (args.output / 'trial-settings.json').write_text(json.dumps({
             'mode': args.mode, 'model': args.model, 'reasoning': args.reasoning,
+            'requested_code_mode_host': args.code_mode_host,
             'capture_tool_context': args.capture_tool_context,
             'guide_enabled_tools': args.guide_enabled_tools,
             'driver_commit': subprocess.check_output(
