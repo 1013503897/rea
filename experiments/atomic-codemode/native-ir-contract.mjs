@@ -69,15 +69,15 @@ const documentSchema = z.object({
         code: z.string(),
         error: z.null(),
         atomic_facts: z.unknown().optional(),
-        atomic_facts_error: z.string().optional(),
+        atomic_facts_error: z.unknown().optional(),
         atomic_calls: z.unknown().optional(),
-        atomic_calls_error: z.string().optional(),
+        atomic_calls_error: z.unknown().optional(),
         atomic_parameters: z.unknown().optional(),
-        atomic_parameters_error: z.string().optional(),
+        atomic_parameters_error: z.unknown().optional(),
         atomic_switches: z.unknown().optional(),
-        atomic_switches_error: z.string().optional(),
+        atomic_switches_error: z.unknown().optional(),
         atomic_projection: z.unknown().optional(),
-        atomic_projection_error: z.string().optional(),
+        atomic_projection_error: z.unknown().optional(),
       }),
     )
     .length(1),
@@ -241,12 +241,15 @@ export function readNativeGraphEvidence(text) {
         "This retained source is not a native function record",
       );
     const { fn } = readFunction(raw);
-    if (fn.atomic_facts === undefined)
-      throw new FactFailure(
-        "capability_unavailable",
-        "Recovered graph source was not captured",
-        { native_error: fn.atomic_facts_error?.slice(0, 1024) },
+    if (fn.atomic_facts === undefined) {
+      const graph = readNativeFacet(
+        fn,
+        "atomic_facts",
+        "recovered IR",
+        (raw) => raw,
       );
+      if (!graph.ok) throw graph.error;
+    }
     const decoded = decodeGraphArchive(fn.atomic_facts);
     const view = decoded ?? JSON.stringify(fn.atomic_facts);
     requireFact(

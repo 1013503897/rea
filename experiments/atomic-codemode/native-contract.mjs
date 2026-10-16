@@ -79,6 +79,10 @@ export const readNativeFacet = (fn, name, label, parse) => {
         fn[name] === undefined,
         `Native ${label} is both present and unavailable`,
       );
+      requireFact(
+        typeof reason === "string",
+        `Native ${label} failure reason must be text`,
+      );
       return err(
         new FactFailure(
           "capability_unavailable",

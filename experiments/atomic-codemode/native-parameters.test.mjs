@@ -128,7 +128,7 @@ test("unknown type/storage is distinct from native void, malformed identities ca
 test("prototype facet works without graph/calls; unavailable/invalid prototype retains code and reason", () => {
   const available = model({
     atomic_parameters: fixture(),
-    atomic_facts_error: "capacity",
+    atomic_facts_error: { malformed: "not a failure string" },
     atomic_calls_error: "capacity",
   });
   assert.equal(available.facets.parameters.availability, "available");
