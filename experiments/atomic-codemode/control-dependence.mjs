@@ -1,9 +1,24 @@
 // Immediate postdominators on the reversed recovered CFG, using linear retained
 // state. Control dependence is derived for finite paths to recovered exits.
 import { FactFailure } from "./fact-error.mjs";
-export function controlDependencies(
+import { freezeFacts } from "./fact-reads.mjs";
+
+const workBudget = (limit) => {
+  let work = 0;
+  return () => {
+    if (++work > limit)
+      throw new FactFailure(
+        "capacity",
+        "Control-dependence work budget exceeded",
+      );
+  };
+};
+
+// Retain one linear-size index per resident graph. Selected rows are generated
+// per read, so paging does not retain a potentially quadratic relation set.
+export function createControlDependenceIndex(
   blocks,
-  { workLimit = 2_000_000, dependents } = {},
+  { workLimit = 2_000_000 } = {},
 ) {
   const exit = Symbol("recovered-exit");
   const successors = new Map(
@@ -16,16 +31,7 @@ export function controlDependencies(
     [exit, []],
     ...blocks.map((block) => [block.id, []]),
   ]);
-  const tick = (() => {
-    let work = 0;
-    return () => {
-      if (++work > workLimit)
-        throw new FactFailure(
-          "capacity",
-          "Control-dependence work budget exceeded",
-        );
-    };
-  })();
+  const tick = workBudget(workLimit);
   for (const [from, targets] of successors) {
     if (!targets.length) targets.push(exit);
     for (const to of targets) reverse.get(to).push(from);
@@ -36,39 +42,58 @@ export function controlDependencies(
     reverse,
     tick,
   );
-  const relations = [];
-  for (const block of blocks) {
-    if (!parent.has(block.id)) continue;
-    for (const edge of block.successors) {
-      let runner = edge.target;
-      while (
-        parent.has(runner) &&
-        runner !== parent.get(block.id) &&
-        runner !== exit
-      ) {
-        tick();
-        if (!dependents || dependents.has(runner))
-          relations.push({ controller: block.id, dependent: runner, edge });
-        runner = parent.get(runner);
+  const coverage = freezeFacts({
+    scope:
+      "derived control dependence in the recovered graph; zero-successor blocks treated as exits; finite paths only",
+    status:
+      visited.size === blocks.length + 1
+        ? "complete-for-recovered-finite-exit-paths"
+        : "partial",
+    exit_unreachable_blocks: blocks
+      .filter((block) => !visited.has(block.id))
+      .map((block) => block.id),
+    nontermination: "unknown",
+    runtime_reachability: "unknown",
+  });
+  function* relations(dependents) {
+    const tick = workBudget(workLimit);
+    for (const block of blocks) {
+      if (!parent.has(block.id)) continue;
+      for (const edge of block.successors) {
+        let runner = edge.target;
+        while (
+          parent.has(runner) &&
+          runner !== parent.get(block.id) &&
+          runner !== exit
+        ) {
+          tick();
+          if (!dependents || dependents.has(runner))
+            yield { controller: block.id, dependent: runner, edge };
+          runner = parent.get(runner);
+        }
       }
     }
   }
-  return {
+  return Object.freeze({
     relations,
-    coverage: {
-      scope:
-        "derived control dependence in the recovered graph; zero-successor blocks treated as exits; finite paths only",
-      status:
-        visited.size === blocks.length + 1
-          ? "complete-for-recovered-finite-exit-paths"
-          : "partial",
-      exit_unreachable_blocks: blocks
-        .filter((block) => !visited.has(block.id))
-        .map((block) => block.id),
-      nontermination: "unknown",
-      runtime_reachability: "unknown",
+    coverage,
+    read: ({ seeds, offset = 0, limit = 20 }) => {
+      const selected = new Set(seeds),
+        items = [];
+      let total = 0;
+      // Exhaust for a truthful total, retaining only the requested page.
+      for (const row of relations(selected)) {
+        if (total >= offset && items.length < limit) items.push(row);
+        total++;
+      }
+      return {
+        items,
+        total,
+        next_offset: offset + limit < total ? offset + limit : null,
+        relation_coverage: coverage,
+      };
     },
-  };
+  });
 }
 
 function postdominatorParents(exit, successors, reverse, tick) {

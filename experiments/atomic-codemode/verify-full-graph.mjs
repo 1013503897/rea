@@ -7,6 +7,8 @@ import { Client } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import Ajv2020 from "ajv/dist/2020.js";
 import { readNativeGraphEvidence } from "./native-ir-contract.mjs";
+import { finiteExitControlOracle } from "./control-path-oracle.mjs";
+import { familyCounters } from "./family-counters.mjs";
 import {
   createVerifierRun,
   completeVerifierRun,
@@ -14,13 +16,20 @@ import {
 } from "../../scripts/lib/verifier-run.mjs";
 
 const [binary, output, goldenPath, partialPath] = process.argv.slice(2);
+const evidenceDirectory = process.env.REA_ATOMIC_EVIDENCE_DIR;
+assert.ok(
+  evidenceDirectory,
+  "Set REA_ATOMIC_EVIDENCE_DIR for producer comparison",
+);
 assert.equal(
   process.versions.node,
   (await readFile(resolve(".nvmrc"), "utf8")).trim(),
   "Use the repository's pinned Node before running native analysis",
 );
-const golden = JSON.parse(await readFile(goldenPath, "utf8")).functions[0];
-const graph = golden.atomic_facts;
+const goldenText = await readFile(goldenPath, "utf8");
+const golden = JSON.parse(goldenText).functions[0];
+const graph = JSON.parse(readNativeGraphEvidence(goldenText).text);
+const oracle = finiteExitControlOracle(graph.blocks);
 const partial = JSON.parse(await readFile(partialPath, "utf8")).functions[0]
   .atomic_projection;
 const formerFrontier = partial.coverage.frontier
@@ -28,6 +37,7 @@ const formerFrontier = partial.coverage.frontier
   .map((row) => row.definition);
 const run = createVerifierRun(),
   calls = [],
+  phases = [],
   failures = [];
 const direct = process.env.REA_ATOMIC_ADAPTER === "direct";
 const client = new Client({
@@ -67,13 +77,29 @@ const read = async (name, input) => {
   return value.data;
 };
 let sourceReview;
+const measure = async (phase, work) => {
+  const before = await familyCounters(),
+    started = performance.now();
+  const result = await work();
+  const elapsed_ms = performance.now() - started,
+    after = await familyCounters();
+  phases.push({
+    phase,
+    elapsed_ms,
+    family_cpu_seconds: (after.cpu - before.cpu) / 1e6,
+    cumulative_family_memory_peak_bytes: after.peak,
+  });
+  return result;
+};
 try {
   await client.connect(transport);
   const catalog = await client.listTools(),
     ajv = new Ajv2020({ strict: false });
   for (const tool of catalog.tools) ajv.compile(tool.inputSchema);
   await call("open_binary", { path: binary });
-  const capture = await read("snapshot", { entry: "0xea6d0" }),
+  const capture = await measure("fresh-native-capture", () =>
+      read("snapshot", { entry: "0xea6d0" }),
+    ),
     snapshot = capture.snapshot;
   assert.equal(capture.facets.recovered_ir.availability, "available");
   assert.equal(capture.facets.operations.count, 21349);
@@ -125,6 +151,91 @@ try {
     ),
   );
   assert.deepEqual(edges.items, expectedEdges);
+  const key = (row) =>
+    `${row.controller}|${row.dependent}|${row.edge_id ?? row.edge.id}`;
+  const selectedControls = await measure("first-selected-controllers", () =>
+    read("relations", {
+      snapshot,
+      kind: "controllers",
+      seeds: [1154, 1159],
+      limit: 128,
+    }),
+  );
+  assert.deepEqual(selectedControls.unretained_seeds, []);
+  assert.deepEqual(
+    selectedControls.items.map(key).sort(),
+    oracle.relations
+      .filter((r) => [1154, 1159].includes(r.dependent))
+      .map(key)
+      .sort(),
+  );
+  const allControls = [];
+  await measure("all-retained-controller-pairs", async () => {
+    for (let i = 0; i < graph.blocks.length; i += 128) {
+      const seeds = graph.blocks.slice(i, i + 128).map((b) => b.id);
+      let offset = 0;
+      do {
+        const page = await read("relations", {
+          snapshot,
+          kind: "controllers",
+          seeds,
+          offset,
+          limit: 128,
+        });
+        assert.deepEqual(page.unretained_seeds, []);
+        assert.deepEqual(
+          page.relation_coverage.exit_unreachable_blocks,
+          oracle.exit_unreachable_blocks,
+        );
+        for (const row of page.items) {
+          const block = graph.blocks.find((b) => b.id === row.controller);
+          assert.deepEqual(
+            row.edge,
+            block.successors.find((e) => e.id === row.edge.id),
+          );
+        }
+        allControls.push(...page.items);
+        offset = page.next_offset;
+      } while (offset !== null);
+    }
+  });
+  assert.deepEqual(
+    allControls.map(key).sort(),
+    oracle.relations.map(key).sort(),
+  );
+  const warm = await measure("same-selected-controllers-warm", () =>
+    read("relations", {
+      snapshot,
+      kind: "controllers",
+      seeds: [1154, 1159],
+      limit: 128,
+    }),
+  );
+  assert.deepEqual(warm, selectedControls);
+  for (const kind of ["incoming", "outgoing", "controllers"]) {
+    const missing = await read("relations", {
+      snapshot,
+      kind,
+      seeds: [999999],
+    });
+    assert.equal(missing.total, 0);
+    assert.deepEqual(missing.unretained_seeds, [999999]);
+    const one = await read("relations", {
+      snapshot,
+      kind,
+      seeds: [1159],
+      limit: 128,
+    });
+    const mixed = await read("relations", {
+      snapshot,
+      kind,
+      seeds: [1159, 999999, 1159],
+      limit: 128,
+    });
+    assert.deepEqual(mixed.items, one.items);
+    assert.equal(mixed.total, one.total);
+    assert.deepEqual(mixed.unretained_seeds, [999999]);
+  }
   const operands = await read("relations", {
     snapshot,
     kind: "operands",
@@ -152,10 +263,7 @@ try {
   assert.equal(decoded.view.encoding, "gzip-base64");
   assert.equal(decoded.source.sha256, capture.source.sha256);
   const text = await readFile(
-    join(
-      process.env.REA_ATOMIC_EVIDENCE_DIR,
-      `${capture.source.evidence_id}.txt`,
-    ),
+    join(evidenceDirectory, `${capture.source.evidence_id}.txt`),
     "utf8",
   );
   assert.equal(
@@ -196,6 +304,7 @@ try {
     logical_graph_equals_diagnostic_golden: true,
     ordinary_record_and_calls_equal_golden: true,
     former_projection_frontier_readable: formerFrontier,
+    control_pairs_match_independent_path_oracle: allControls.length,
     complete_evidence_views_verified: true,
   };
   await call("close_binary", {});
@@ -213,6 +322,7 @@ await writeFile(
     direct,
     node_version: process.version,
     calls,
+    phases,
     failures,
     sourceReview,
     lifecycle,

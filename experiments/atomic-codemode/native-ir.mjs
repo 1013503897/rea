@@ -8,7 +8,7 @@ import {
   createSwitchViews,
 } from "./native-switch-views.mjs";
 import { parseNativeFunction } from "./native-ir-contract.mjs";
-import { controlDependencies } from "./control-dependence.mjs";
+import { createControlDependenceIndex } from "./control-dependence.mjs";
 import { freezeFacts as freeze } from "./fact-reads.mjs";
 import {
   indexCallFacet,
@@ -145,6 +145,7 @@ function createViews(facts, code, indexes) {
     memory_alias_dependencies: "unknown",
   });
   const core = createOperationViews(indexes, coverage);
+  let controls;
   return Object.freeze({
     ...core,
     code,
@@ -154,22 +155,25 @@ function createViews(facts, code, indexes) {
     edges: (input) => {
       if (isNativeOperationRelation(input.kind))
         return core.operationRelations(input);
+      const seeds = [...new Set(input.seeds)],
+        unretained_seeds = seeds.filter((id) => !blocks.has(id));
       if (input.kind === "controllers") {
-        const controls = controlDependencies(facts.blocks, {
-          dependents: new Set(input.seeds),
-        });
+        controls ??= createControlDependenceIndex(facts.blocks);
         return {
-          ...page(controls.relations, input),
-          relation_coverage: controls.coverage,
+          ...controls.read({ ...input, seeds }),
+          unretained_seeds,
         };
       }
-      return page(
-        input.seeds.flatMap(
-          (seed) =>
-            (input.kind === "incoming" ? incoming : outgoing).get(seed) ?? [],
+      return {
+        ...page(
+          seeds.flatMap(
+            (seed) =>
+              (input.kind === "incoming" ? incoming : outgoing).get(seed) ?? [],
+          ),
+          input,
         ),
-        input,
-      );
+        unretained_seeds,
+      };
     },
   });
 }

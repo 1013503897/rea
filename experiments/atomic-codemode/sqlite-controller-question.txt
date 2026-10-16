@@ -1,0 +1,36 @@
+Investigate sqlite3VdbeExec in {{artifact_path}} statically, starting from:
+- cannot open savepoint - SQL statements in progress
+- cannot release savepoint - SQL statements in progress
+
+Establish the format-owning implementation despite same-name callable entries.
+Reuse one retained VM capture and selected structured facts. Locate the shared
+recovered error CALL, the block containing it, and the PHI alternatives for its
+format argument, including each incoming edge binding and passing storage.
+
+For that shared-call block, obtain the complete direct control-dependence set
+in the retained recovered CFG. Then obtain the direct controllers of each of
+those controller blocks: exactly one additional level, not a transitive closure.
+Keep the two levels separate. For every conditional controller in these sets,
+report its branch operation, both successor-edge IDs/destinations/polarities,
+condition identity/test, and Boolean definition. Trace operands to constants
+and LOAD boundaries, preserving SSA identity, input indexes, widths and signedness.
+Which conditions share exactly the same loaded SSA value? Are matching storage
+coordinates enough to equate the other loaded values?
+
+Explain the alternative guard combinations in this local two-level fragment.
+Does the list of control-dependence relations mean that all listed predicates
+must hold simultaneously? Use the recovered value identities and edge choices
+to support the answer; do not claim these are all earlier runtime conditions.
+
+For each direct controller of the shared-call block, supply one recovered-edge
+witness from the selected successor to that block, and one from the alternative
+successor to any recovered zero-successor exit that avoids the shared-call block.
+Give block sequences and edge IDs. Any valid witnesses suffice; shortest paths
+are unnecessary. These graph paths do not prove runtime feasibility.
+
+Check the four selected guard sites, relevant load/spill instructions, format
+setups and shared machine CALL with focused instruction windows. Separate native
+optimized edge polarity/origins from actual machine branch transfers. Keep the
+answer focused with real Evidence IDs, target digest and explicit recovered-graph,
+alias, machine-flow, nontermination and runtime limits. Complete retained Evidence
+remains available; do not return the complete C report or graph. Close the lease.

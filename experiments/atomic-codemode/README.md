@@ -19,6 +19,12 @@ The [capability map](capability-map.md) distinguishes verified task coverage,
 experimental exporter requirements and remaining unknowns before interpreting
 adapter comparisons.
 
+The [control-query study](control-query-study.md) verifies every derived control
+triple on the real SQLite VM, fixes unknown CFG seeds and reuses a lazy
+postdominator index. Its [two-level investigation](controller-oracle.md) is
+frozen before model runs and separates alternative path predicates, SSA identity
+and finite recovered-edge witnesses from runtime claims.
+
 The [exact-value query study](value-query-study.md) adds location-to-value and
 value-to-operand-use queries, including inputs/constants without defining operations.
 Real stripped OpenSSH checks preserve all 250 SSA versions / 369 occurrences at

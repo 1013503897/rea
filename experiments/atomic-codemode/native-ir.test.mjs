@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { gzipSync } from "node:zlib";
 import { parseNativeIR } from "./native-ir.mjs";
 import { readNativeGraphEvidence } from "./native-ir-contract.mjs";
-import { controlDependencies } from "./control-dependence.mjs";
+import { createControlDependenceIndex } from "./control-dependence.mjs";
+import { finiteExitControlOracle } from "./control-path-oracle.mjs";
 
 const id = (n) => `0x${n}:0`;
 const val = (n, definition = null) => ({
@@ -272,6 +273,76 @@ test("malformed identities, dangling relationships, foreign entry and phi reorde
   );
 });
 
+test("CFG relations distinguish unknown seeds from retained blocks with no rows", () => {
+  const model = parseNativeIR(JSON.stringify(diamond()), "0x1000");
+  for (const kind of ["incoming", "outgoing", "controllers"]) {
+    const known = model.edges({ kind, seeds: [1], limit: 128 });
+    const mixed = model.edges({
+      kind,
+      seeds: [1, 999999, 1, 999999],
+      limit: 128,
+    });
+    assert.deepEqual(mixed.items, known.items);
+    assert.equal(mixed.total, known.total);
+    assert.deepEqual(mixed.unretained_seeds, [999999]);
+    const unknown = model.edges({ kind, seeds: [999999] });
+    assert.equal(unknown.total, 0);
+    assert.deepEqual(unknown.unretained_seeds, [999999]);
+  }
+  const first = model.edges({ kind: "controllers", seeds: [1] });
+  assert.deepEqual(first.unretained_seeds, []);
+  assert.throws(
+    () => first.relation_coverage.exit_unreachable_blocks.push(0),
+    TypeError,
+  );
+  assert.throws(() => {
+    first.items[0].edge.target = 999999;
+  }, TypeError);
+  first.items[0].controller = 999999;
+  assert.equal(
+    model.edges({ kind: "controllers", seeds: [1] }).items[0].controller,
+    0,
+  );
+  const none = model.edges({ kind: "controllers", seeds: [3] });
+  assert.equal(none.total, 0);
+  assert.deepEqual(none.unretained_seeds, []);
+});
+
+test("all three-node directed graphs agree with independent finite-exit path queries", () => {
+  const key = (row) =>
+    `${row.controller}|${row.dependent}|${row.edge_id ?? row.edge.id}`;
+  for (let mask = 0; mask < 512; mask++) {
+    const blocks = Array.from({ length: 3 }, (_, id) => ({
+      id,
+      successors: Array.from({ length: 3 }, (_, target) => target)
+        .filter((target) => mask & (1 << (id * 3 + target)))
+        .map((target, index) => ({ id: `${id}:${index}`, target })),
+    }));
+    const expected = finiteExitControlOracle(blocks),
+      index = createControlDependenceIndex(blocks);
+    const actual = [...index.relations()];
+    assert.deepEqual(
+      actual.map(key).sort(),
+      expected.relations.map(key).sort(),
+      `graph ${mask}`,
+    );
+    assert.deepEqual(
+      index.coverage.exit_unreachable_blocks,
+      expected.exit_unreachable_blocks,
+    );
+    const pages = [],
+      total = actual.length;
+    let offset = 0;
+    do {
+      const page = index.read({ seeds: [0, 1, 2], offset, limit: 1 });
+      assert.equal(page.total, total);
+      pages.push(...page.items);
+      offset = page.next_offset;
+    } while (offset !== null);
+    assert.deepEqual(pages, actual);
+  }
+});
+
 test("typed slices retain symbolic input frontiers and precise definition bindings", () => {
   const model = parseNativeIR(JSON.stringify(diamond()), "0x1000");
   const result = model.slice({
@@ -340,21 +411,24 @@ test("control dependence handles multiple exits, loops, unreachable exits and bo
     { id: 2, successors: [] },
     { id: 3, successors: [{ target: 3 }] },
   ];
-  const result = controlDependencies(blocks);
+  const result = createControlDependenceIndex(blocks);
   assert.deepEqual(
-    result.relations.map((r) => [r.controller, r.dependent]),
+    [...result.relations()].map((r) => [r.controller, r.dependent]),
     [
       [0, 1],
       [0, 2],
     ],
   );
   assert.deepEqual(result.coverage.exit_unreachable_blocks, [3]);
-  assert.throws(() => controlDependencies(blocks, { workLimit: 1 }), /budget/u);
+  assert.throws(
+    () => createControlDependenceIndex(blocks, { workLimit: 1 }),
+    /budget/u,
+  );
   const linear = Array.from({ length: 12000 }, (_, id) => ({
     id,
     successors: id < 11999 ? [{ target: id + 1 }] : [],
   }));
-  assert.equal(controlDependencies(linear).relations.length, 0);
+  assert.equal([...createControlDependenceIndex(linear).relations()].length, 0);
 });
 
 test("postdominator control dependence agrees with independently enumerated paths for every four-node DAG", () => {
@@ -393,7 +467,7 @@ test("postdominator control dependence agrees with independently enumerated path
           .map((dependent) => `${block.id}:${edge.target}:${dependent}`),
       ),
     );
-    const actual = controlDependencies(blocks).relations.map(
+    const actual = [...createControlDependenceIndex(blocks).relations()].map(
       (row) => `${row.controller}:${row.edge.target}:${row.dependent}`,
     );
     assert.deepEqual(actual.sort(), expected.sort(), `DAG mask ${mask}`);
