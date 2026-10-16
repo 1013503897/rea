@@ -43,6 +43,8 @@ def main():
                         help='Caller-selected experimental stdio MCP entrypoint; leaves production dispatcher unchanged')
     parser.add_argument('--server-name', default='rea')
     parser.add_argument('--protocol-profile', choices=['canonical', 'atomic'], default='canonical')
+    parser.add_argument('--profile-parent', type=Path,
+                        help='Absolute parent outside the repository for the isolated model workspace')
     parser.add_argument('--revision', required=True)
     parser.add_argument('--prompt', type=Path, required=True)
     parser.add_argument('--artifact-path', help='Replace {{artifact_path}} in a question template')
@@ -104,7 +106,10 @@ def main():
     args.output.mkdir(parents=True, exist_ok=False, mode=0o700)
     runtime_files, runtime_digest = runtime_fingerprint(repository)
     (args.output / 'runtime-files.json').write_text(json.dumps(runtime_files))
-    profile = Path(tempfile.mkdtemp(prefix='profile-', dir=args.output))
+    if args.profile_parent and (not args.profile_parent.is_absolute()
+            or args.profile_parent.resolve().is_relative_to(repository.resolve())):
+        raise ValueError('profile-parent must be an absolute directory outside runtime-root')
+    profile = Path(tempfile.mkdtemp(prefix='rea-model-profile-', dir=args.profile_parent or args.output))
     trial_codex_home = profile / 'codex'
     account = profile / 'account'
     workspace = profile / 'workspace'
@@ -236,6 +241,7 @@ def main():
             'runtime_root': str(repository),
             'mcp_server_name': args.server_name,
             'protocol_profile': args.protocol_profile,
+            'isolated_profile_parent': str(args.profile_parent) if args.profile_parent else str(args.output),
             'mcp_entrypoint': str(args.mcp_entrypoint) if args.mcp_entrypoint else None,
             'mcp_entrypoint_sha256': file_digest(args.mcp_entrypoint) if args.mcp_entrypoint else None,
             'selected_artifact_path': args.artifact_path,

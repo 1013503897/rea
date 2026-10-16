@@ -3,19 +3,18 @@ import { methods } from "./api.mjs";
 
 const MAX_OUTPUT = 32768;
 const MAX_BRIDGE = 2 * 1024 * 1024;
+const failure = (code, message) => ({ ok: false, error: { code, message } });
 export const executeJavaScript = async (
   session,
   code,
-  { signal = new AbortController().signal, timeoutMs = 120000 } = {},
+  {
+    signal = new AbortController().signal,
+    timeoutMs = 120000,
+    cpuBudgetMs = 2000,
+  } = {},
 ) => {
   if (Buffer.byteLength(code) > 32768)
-    return {
-      ok: false,
-      error: {
-        code: "code_budget",
-        message: "JavaScript source exceeds 32 KiB",
-      },
-    };
+    return failure("code_budget", "JavaScript source exceeds 32 KiB");
   const started = performance.now();
   const context = session.context;
   const lease = context?.lease;
@@ -27,41 +26,36 @@ export const executeJavaScript = async (
   const runtime = QuickJS.newRuntime();
   runtime.setMemoryLimit(64 * 1024 * 1024);
   runtime.setMaxStackSize(512 * 1024);
-  runtime.setInterruptHandler(() => combined.aborted || Date.now() >= deadline);
+  const budget = { used: 0, deadline: 0, exhausted: false };
+  const runGuest = (work) => {
+    budget.deadline = Date.now() + Math.max(1, cpuBudgetMs - budget.used);
+    const before = performance.now();
+    try {
+      return work();
+    } finally {
+      budget.used += performance.now() - before;
+    }
+  };
+  runtime.setInterruptHandler(() => {
+    budget.exhausted ||= Date.now() >= budget.deadline;
+    return budget.exhausted || combined.aborted || Date.now() >= deadline;
+  });
   const vm = runtime.newContext();
   const pending = new Set();
   const calls = [];
   const state = { disposed: false, evidence: new Set() };
-  let promiseHandle;
   const pump = () => {
     if (!state.disposed) {
-      const result = runtime.executePendingJobs();
-      if (result.error) result.error.dispose();
+      const result = runGuest(() => runtime.executePendingJobs());
+      if (result.error) {
+        result.error.dispose();
+        stop.abort();
+      }
     }
   };
   installBridge(vm, session, { combined, lease, calls, pending, pump, state });
   try {
-    const bootstrap = `globalThis.rea=Object.freeze(Object.fromEntries(${JSON.stringify(Object.keys(methods))}.map(name=>[name,async(input={})=>JSON.parse(await __analysis(name,JSON.stringify(input)))])));`;
-    vm.unwrapResult(vm.evalCode(bootstrap)).dispose();
-    promiseHandle = vm.unwrapResult(
-      vm.evalCode(
-        `(async()=>JSON.stringify(await(async()=>{\n${code}\n})()))()`,
-      ),
-    );
-    const resolved = vm.resolvePromise(promiseHandle);
-    pump();
-    // A never-settling guest Promise must not hang the MCP request forever.
-    const aborted = new Promise((_, reject) =>
-      combined.addEventListener(
-        "abort",
-        () => reject(new Error("Execution cancelled or timed out")),
-        { once: true },
-      ),
-    );
-    const result = await Promise.race([resolved, aborted]);
-    const value = vm.unwrapResult(result);
-    const text = vm.getString(value);
-    value.dispose();
+    const text = await evaluateGuest(vm, code, { runGuest, pump, combined });
     if (Buffer.byteLength(text) > MAX_OUTPUT)
       return {
         ok: false,
@@ -84,8 +78,14 @@ export const executeJavaScript = async (
     return {
       ok: false,
       error: {
-        code: combined.aborted ? "cancelled" : "javascript_error",
-        message: error.message ?? String(error),
+        code: budget.exhausted
+          ? "cpu_budget"
+          : combined.aborted
+            ? "cancelled"
+            : "javascript_error",
+        message: budget.exhausted
+          ? "Guest synchronous execution budget exceeded"
+          : (error.message ?? String(error)),
       },
       calls,
       elapsed_ms: performance.now() - started,
@@ -95,7 +95,6 @@ export const executeJavaScript = async (
     stop.abort();
     await Promise.allSettled(pending);
     state.disposed = true;
-    promiseHandle?.dispose();
     vm.dispose();
     runtime.dispose();
   }
@@ -169,4 +168,39 @@ const installBridge = (
   });
   vm.setProp(vm.global, "__analysis", bridge);
   bridge.dispose();
+};
+
+const evaluateGuest = async (vm, code, { runGuest, pump, combined }) => {
+  const bootstrap = `globalThis.rea=Object.freeze(Object.fromEntries(${JSON.stringify(Object.keys(methods))}.map(name=>[name,async(input={})=>JSON.parse(await __analysis(name,JSON.stringify(input)))])));`;
+  vm.unwrapResult(runGuest(() => vm.evalCode(bootstrap))).dispose();
+  const promiseHandle = vm.unwrapResult(
+    runGuest(() =>
+      vm.evalCode(
+        `(async()=>JSON.stringify(await(async()=>{\n${code}\n})()))()`,
+      ),
+    ),
+  );
+  try {
+    const resolved = vm.resolvePromise(promiseHandle);
+    pump();
+    // A never-settling guest Promise must not hang the MCP request forever.
+    const aborted = new Promise((_, reject) => {
+      if (combined.aborted) {
+        reject(new Error("Execution cancelled"));
+        return;
+      }
+      combined.addEventListener(
+        "abort",
+        () => reject(new Error("Execution cancelled or timed out")),
+        { once: true },
+      );
+    });
+    const result = await Promise.race([resolved, aborted]);
+    const value = vm.unwrapResult(result);
+    const text = vm.getString(value);
+    value.dispose();
+    return text;
+  } finally {
+    promiseHandle.dispose();
+  }
 };

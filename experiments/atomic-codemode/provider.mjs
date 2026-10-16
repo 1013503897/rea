@@ -335,8 +335,7 @@ export class KunaFactOwner {
         "unknown_snapshot",
         "Snapshot is not owned by the current lease",
       );
-    const { file } = this.#sources.get(descriptor.evidence_id);
-    const text = await readFile(file, "utf8");
+    const text = await this.#sourceText(descriptor.evidence_id);
     const code = text.split("\n0\nBasic Block", 1)[0];
     const lines = code.split("\n");
     return {
@@ -361,9 +360,7 @@ export class KunaFactOwner {
         "unknown_evidence",
         "Evidence is not retained by the current lease",
       );
-    const text = await readFile(record.file, "utf8");
-    if (sha256(text) !== record.source.sha256)
-      throw new FactFailure("evidence_changed", "Retained evidence changed");
+    const text = await this.#sourceText(input.evidence_id);
     return {
       source: record.source,
       text: text.slice(input.offset, input.offset + input.limit),

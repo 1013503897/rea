@@ -89,8 +89,12 @@ export const methods = {
     "await rea.slice({snapshot:s,seeds:branchIds,max_operations:48})",
   ),
   code: definition(
-    "Read selected display lines of the native reconstructed C retained with this exact SSA source; offset is zero-based. No additional decompilation.",
-    { snapshot, ...page },
+    "Read native reconstructed C retained with this exact SSA source; offset is zero-based. A large limit can read the complete function inside Code Mode: filter locally before returning text. The bridge byte budget, not an arbitrary line count, bounds the result. No additional decompilation.",
+    {
+      snapshot,
+      offset: page.offset,
+      limit: z.number().int().positive().default(64),
+    },
     "code",
     "await rea.code({snapshot:s,offset:100,limit:64})",
   ),
@@ -105,6 +109,38 @@ export const methods = {
     "await rea.evidence({evidence_id:id,offset:0,limit:4096})",
   ),
 };
+
+// Compact return contracts let code compose before first observing a response.
+const returns = {
+  strings:
+    "data:{source:{evidence_id,sha256},items:[{address,value,string:{encoding,byte_length}}],total,next_offset,coverage}",
+  references:
+    "data:{results:[{ok,address,source:{evidence_id},items:[{from,to,kind,fromFunction:{address,name}|null,toFunction:{address,name}|null,instruction}],total,next_offset,coverage}|{ok:false,address,error}]}",
+  snapshot:
+    "data:{snapshot:string,entry,source:{evidence_id,sha256},coverage:{operations,blocks,control_flow,unrepresented_outgoing_blocks,issues}}",
+  operations:
+    "data:{items:[{id,address,block,source_line,kind,statement,definitions:[{definition,use,occurrence}],constants:[{value,printed_size_bytes}]}],total,next_offset,evidence_id,coverage}. fields projects optional columns; identity fields remain.",
+  relations:
+    "data:{items:[{definition,use,occurrence}] for definitions/uses OR [{from:number,to:number,operation:string|null,kind,polarity?,predicate?,source_line}] for incoming/outgoing,total,next_offset,evidence_id,coverage}. definitions/uses seeds are operation-ID strings; incoming/outgoing seeds are numeric block IDs.",
+  slice:
+    "data:{operations:[operation rows as above],coverage:{status,boundaries:[{id,reason}],missing,source_issues,runtime_reachability,memory_alias_dependencies},evidence_id}",
+  code: "data:{evidence_id,start_line,text,total_lines,next_offset,coverage}; text is reconstructed C. Use a large limit to inspect/filter the full text within code without returning it all.",
+  evidence:
+    "data:{source:{evidence_id,sha256,bytes,arguments},text,total_code_units,next_offset}; source has complete native output, including code before the SSA graph.",
+};
+methods.relations.input = methods.relations.input.superRefine(
+  (value, context) => {
+    const type = ["incoming", "outgoing"].includes(value.kind)
+      ? "number"
+      : "string";
+    if (value.seeds.some((seed) => typeof seed !== type))
+      context.addIssue({
+        code: "custom",
+        path: ["seeds"],
+        message: `${value.kind} requires ${type} seeds`,
+      });
+  },
+);
 
 export class AtomicSession {
   #owner;
@@ -206,6 +242,7 @@ export const reference = (query = "") => {
       name: `rea.${name}`,
       description: methods[name].description,
       input_schema: z.toJSONSchema(methods[name].input),
+      returns: returns[name],
       example: methods[name].example,
     })),
     limits: {

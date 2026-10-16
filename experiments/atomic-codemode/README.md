@@ -40,7 +40,7 @@ REA_KUNA_COMMAND=/absolute/path/to/kuna node experiments/atomic-codemode/server.
 
 The local MCP registration for real model trials is named `rea-codemode`.
 `agent-trial.py --mcp-entrypoint /absolute/path/to/server.mjs
---server-name rea-codemode --protocol-profile atomic` creates an isolated
+--server-name rea-codemode --protocol-profile atomic --profile-parent /tmp` creates an isolated
 configuration, home and empty working directory for the model. Shell/file tools,
 web search and delegation are disabled. No repository or oracle is placed in that
 workspace. The copied authentication file is removed with the isolated profile.
@@ -50,7 +50,7 @@ and complete sources outside the model workspace when explicitly selected by the
 evaluator. The ambient environment and credentials are not logged.
 
 Current bounds: 64 MiB guest heap, 32 KiB code/output, 64 host calls per execution,
-120 seconds wall deadline; native requests have existing supervision, an 8 MiB
+120 seconds wall deadline and 2 seconds of guest synchronous execution; native requests have existing supervision, an 8 MiB
 capture budget and 1 GiB function-memory limit. Retained source storage is 64 MiB
 per target, with two resident SSA indexes of at most 2 MiB each. Sources are
 content-digested and retained until close; explicit evaluator copies survive

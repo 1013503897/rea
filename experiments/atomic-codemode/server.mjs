@@ -64,7 +64,19 @@ const createServer = () => {
     "reference",
     "Look up the rea JavaScript API by method name or analyst concept before writing Code Mode calls. Empty query returns the complete API reference.",
     z.strictObject({ query: z.string().default("") }),
-    (input) => reference(input.query),
+    (input) => {
+      const docs = reference(input.query);
+      if (process.env.REA_ATOMIC_ADAPTER === "direct") {
+        docs.language =
+          "Direct MCP calls: use facts_<method> with the same JSON arguments; results have {ok,context,data}.";
+        docs.methods = docs.methods.map((method) => ({
+          ...method,
+          name: method.name.replace("rea.", "facts_"),
+          example: undefined,
+        }));
+      }
+      return docs;
+    },
   );
   if (process.env.REA_ATOMIC_ADAPTER === "direct") {
     for (const [name, contract] of Object.entries(methods))

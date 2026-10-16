@@ -37,3 +37,13 @@ test("output budgets and failures survive without silently clipping evidence", a
   );
   assert.equal(failure.ok, false);
 });
+
+test("guest CPU budget is independent from the native-analysis wall deadline", async () => {
+  const before = performance.now();
+  const result = await executeJavaScript(fake, "while(true){}", {
+    timeoutMs: 5000,
+    cpuBudgetMs: 25,
+  });
+  assert.equal(result.error.code, "cpu_budget");
+  assert.ok(performance.now() - before < 2000);
+});
