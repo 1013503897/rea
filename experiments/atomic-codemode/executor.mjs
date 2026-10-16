@@ -54,28 +54,25 @@ export const executeJavaScript = async (
     }
   };
   installBridge(vm, session, { combined, lease, calls, pending, pump, state });
+  let outcome;
   try {
     const text = await evaluateGuest(vm, code, { runGuest, pump, combined });
     if (Buffer.byteLength(text) > MAX_OUTPUT)
-      return {
+      outcome = {
         ok: false,
         error: {
           code: "output_budget",
           message:
             "Return a smaller projection (32 KiB UTF-8 output budget); native Evidence remains retained",
         },
-        calls,
       };
-    return {
-      ok: true,
-      context,
-      evidence_ids: [...state.evidence],
-      value: text === "undefined" ? null : JSON.parse(text),
-      calls,
-      elapsed_ms: performance.now() - started,
-    };
+    else
+      outcome = {
+        ok: true,
+        value: text === "undefined" ? null : JSON.parse(text),
+      };
   } catch (error) {
-    return {
+    outcome = {
       ok: false,
       error: {
         code: budget.exhausted
@@ -87,8 +84,6 @@ export const executeJavaScript = async (
           ? "Guest synchronous execution budget exceeded"
           : (error.message ?? String(error)),
       },
-      calls,
-      elapsed_ms: performance.now() - started,
     };
   } finally {
     clearTimeout(timer);
@@ -98,6 +93,13 @@ export const executeJavaScript = async (
     vm.dispose();
     runtime.dispose();
   }
+  return {
+    ...outcome,
+    context,
+    evidence_ids: [...state.evidence],
+    calls,
+    elapsed_ms: performance.now() - started,
+  };
 };
 
 const installBridge = (
@@ -130,7 +132,10 @@ const installBridge = (
           const id = row?.source?.evidence_id ?? row?.evidence_id;
           if (id) state.evidence.add(id);
         }
+        if (response.error?.details?.evidence_id)
+          state.evidence.add(response.error.details.evidence_id);
         calls[index].status = response.ok ? "ok" : "error";
+        if (!response.ok) calls[index].error = response.error;
         calls[index].elapsed_ms = performance.now() - before;
         let serialized = JSON.stringify(response);
         if (Buffer.byteLength(serialized) > MAX_BRIDGE)

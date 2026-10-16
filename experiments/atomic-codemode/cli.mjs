@@ -8,11 +8,12 @@ if (!binary || !script)
 const session = new AtomicSession();
 try {
   await session.open(binary);
-  console.log(
-    JSON.stringify(
-      await executeJavaScript(session, await readFile(script, "utf8")),
-    ),
+  const result = await executeJavaScript(
+    session,
+    await readFile(script, "utf8"),
   );
+  console.log(JSON.stringify(result));
+  process.exitCode = result.ok ? 0 : 1;
 } finally {
   session.abort();
   await session.close();

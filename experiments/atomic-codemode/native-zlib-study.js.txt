@@ -1,0 +1,23 @@
+const read = async (promise) => {
+  const result = await promise;
+  if (!result.ok) throw new Error(JSON.stringify(result));
+  return result.data;
+};
+const found = await read(rea.strings({ query: "incorrect header check", limit: 1 }));
+const literal = found.items[0].address;
+const refs = await read(rea.references({ addresses: [literal] }));
+const entry = refs.results[0].items[0].fromFunction.address;
+const snapshot = await read(rea.snapshot({ entry }));
+const s = snapshot.snapshot;
+const seed = await read(rea.operations({ snapshot: s, constant: literal, fields: ["kind", "statement", "inputs", "output"] }));
+const uses = await read(rea.relations({ snapshot: s, kind: "uses", seeds: seed.items.map((row) => row.id) }));
+const consumers = await read(rea.operations({ snapshot: s, ids: uses.items.map((row) => row.use) }));
+const blockIds = [...new Set(consumers.items.map((row) => row.block))];
+const blocks = await read(rea.blocks({ snapshot: s, ids: blockIds }));
+const controls = await read(rea.relations({ snapshot: s, kind: "controllers", seeds: blockIds, limit: 128 }));
+const guards = await read(rea.operations({ snapshot: s, block_ids: [...new Set(controls.items.map((row) => row.controller))], kind: "branch", fields: ["kind", "statement", "inputs"] }));
+const phi = await read(rea.operations({ snapshot: s, kind: "phi", fields: ["inputs", "output"], limit: 2 }));
+const valueIds = [...new Set(phi.items.flatMap((op) => op.inputs.map((input) => input.value_id)).filter(Boolean))];
+const values = await read(rea.values({ snapshot: s, ids: valueIds }));
+const slice = await read(rea.slice({ snapshot: s, seeds: guards.items.map((row) => row.id), max_operations: 64 }));
+return { literal, entry, source: snapshot.source, coverage: snapshot.coverage, blocks, controls, guards, phi, values, slice: { coverage: slice.coverage, value_frontier: slice.value_frontier, operations: slice.operations.map(({ id, statement }) => ({ id, statement })) } };

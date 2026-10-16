@@ -18,7 +18,7 @@ It does not add target execution, patching or GUI control.
 
 Three boundaries own the implementation:
 
-- `provider.mjs`: existing REA native target/process owners and parsed Kuna
+- `provider.mjs`, `native-ir.mjs`: existing REA native target/process owners and parsed Kuna
   string/reference/SSA facts, retained sources, freshness and cleanup.
 - `api.mjs`: named, validated fact/relationship contracts and session admission.
   SDK callers, CLI scripts and both MCP adapters use these same methods.
@@ -52,15 +52,23 @@ evaluator. The ambient environment and credentials are not logged.
 Current bounds: 64 MiB guest heap, 32 KiB code/output, 64 host calls per execution,
 120 seconds wall deadline and 2 seconds of guest synchronous execution; native requests have existing supervision, an 8 MiB
 capture budget and 1 GiB function-memory limit. Retained source storage is 64 MiB
-per target, with two resident SSA indexes of at most 2 MiB each. Sources are
+per target, with two resident indexes (at most 2 MiB diagnostic or 8 MiB native
+source each). Sources are
 content-digested and retained until close; explicit evaluator copies survive
 close. Capacity failures are explicit, not clipped facts. Leases and snapshot
 handles prevent cross-session joins.
 
-The diagnostic SSA format still has incomplete CFG, phi predecessor and
-memory-alias coverage. These are active capability gaps to investigate with real
-model traces, not success criteria waived by the prototype. Other providers are
-not yet wired to this experimental service.
+The diagnostic SSA format still has incomplete CFG and phi predecessor coverage.
+The opt-in [native recovered IR experiment](native-engine.md) adds full recovered
+CFG edges, exact value/operand identities, phi incoming-edge bindings, selected
+`values`/`blocks` reads and derived control dependence. It requires an explicitly
+pinned patched engine; stock Kuna does not gain those capabilities from a wrapper.
+Runtime successors, memory aliases and machine-semantic equivalence remain
+unknown. Other providers are not yet wired to this experimental service.
+
+The initial [actual model comparison](trials.md) favors the focused traditional
+workflow. Code Mode reduces atomic round trips but has not yet established a
+whole-task advantage. The revised native relations need real-model evaluation.
 
 Completion requires actual model Code Mode use, independently checked task
 answers, shared atomic/direct/Code Mode semantics, needed relation coverage,

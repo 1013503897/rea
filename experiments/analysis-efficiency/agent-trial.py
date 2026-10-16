@@ -22,7 +22,7 @@ def file_digest(path):
     return digest.hexdigest()
 
 
-def runtime_fingerprint(root):
+def runtime_fingerprint(root, entrypoint=None):
     files = []
     for name in ['dist', 'bridge']:
         for path in sorted((root / name).rglob('*')):
@@ -30,6 +30,18 @@ def runtime_fingerprint(root):
                 raise ValueError('Runtime fingerprint does not follow symlinks')
             if path.is_file():
                 files.append({'path': path.relative_to(root).as_posix(), 'sha256': file_digest(path)})
+    if entrypoint is not None:
+        # Include the experimental modules and their installed QuickJS JS/WASM,
+        # plus the shared fact owner; the entrypoint alone does not pin them.
+        for directory in [entrypoint.parent, root / 'experiments/atomic-re-tools']:
+            for path in sorted(directory.rglob('*')):
+                if path.suffix not in {'.mjs', '.cjs', '.js', '.wasm'} and path.name not in {'package.json', 'package-lock.json'}:
+                    continue
+                if path.is_symlink():
+                    raise ValueError('Experimental runtime fingerprint does not follow symlinks')
+                if path.is_file():
+                    label = path.relative_to(root).as_posix() if path.is_relative_to(root) else path.as_posix()
+                    files.append({'path': label, 'sha256': file_digest(path)})
     files.sort(key=lambda row: row['path'])
     text = json.dumps(files, separators=(',', ':'), ensure_ascii=False)
     return files, hashlib.sha256(text.encode()).hexdigest()
@@ -104,7 +116,7 @@ def main():
                         else Path.home() / '.codex')
     source_auth = source_auth_home / 'auth.json'
     args.output.mkdir(parents=True, exist_ok=False, mode=0o700)
-    runtime_files, runtime_digest = runtime_fingerprint(repository)
+    runtime_files, runtime_digest = runtime_fingerprint(repository, args.mcp_entrypoint)
     (args.output / 'runtime-files.json').write_text(json.dumps(runtime_files))
     if args.profile_parent and (not args.profile_parent.is_absolute()
             or args.profile_parent.resolve().is_relative_to(repository.resolve())):
@@ -313,6 +325,7 @@ def main():
         summary = {
             'mode': args.mode, 'requested_model': args.model, 'reasoning': args.reasoning,
             'runtime_revision': args.revision,
+            'runtime_inputs_unchanged': runtime_fingerprint(repository, args.mcp_entrypoint)[1] == runtime_digest,
             'capture_tool_context_requested': args.capture_tool_context,
             'selected_artifact_sha256_before': target_digest,
             'selected_artifact_sha256_after': final_target_digest,
@@ -327,6 +340,8 @@ def main():
         }
         (args.output / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
         print(json.dumps(summary))
+        if not summary['runtime_inputs_unchanged']:
+            raise RuntimeError('Runtime inputs changed during the trial; retain costs but reject the comparison')
     finally:
         try:
             if args.capture_tool_context:

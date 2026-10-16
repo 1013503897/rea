@@ -47,3 +47,23 @@ test("guest CPU budget is independent from the native-analysis wall deadline", a
   assert.equal(result.error.code, "cpu_budget");
   assert.ok(performance.now() - before < 2000);
 });
+
+test("failed compositions keep completed facts and their provenance after draining", async () => {
+  const owner = {
+    context: { lease: "retained" },
+    call: async () => ({ ok: true, data: { evidence_id: "ev_retained" } }),
+  };
+  for (const ending of [
+    'throw new Error("after analysis")',
+    'return "x".repeat(40000)',
+  ]) {
+    const result = await executeJavaScript(
+      owner,
+      `await rea.strings({}); ${ending}`,
+    );
+    assert.equal(result.ok, false);
+    assert.deepEqual(result.evidence_ids, ["ev_retained"]);
+    assert.deepEqual(result.context, owner.context);
+    assert.equal(result.calls[0].status, "ok");
+  }
+});

@@ -1,0 +1,636 @@
+diff --git a/decompiler/crates/kuna-cli/src/decompile.rs b/decompiler/crates/kuna-cli/src/decompile.rs
+index ad249b04..9eb551e5 100644
+--- a/decompiler/crates/kuna-cli/src/decompile.rs
++++ b/decompiler/crates/kuna-cli/src/decompile.rs
+@@ -841,6 +841,7 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
+     let mut target: Option<String> = None;
+     let mut addr = false;
+     let mut json = false;
++    let mut atomic_facts = false;
+     let mut bfd_target: Option<String> = None;
+     let mut raw = false;
+     let mut regions = false;
+@@ -871,6 +872,7 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
+         match a {
+             "--addr" => addr = true,
+             "--json" => json = true,
++            "--atomic-facts" => atomic_facts = true,
+             "--raw" => raw = true,
+             "--raw-image" => raw_image = true,
+             "--base" => base = Some(parse_cli_address(&take_value(argv, &mut i, "--base")?)?),
+@@ -980,6 +982,9 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
+     }
+ 
+     if json {
++        if atomic_facts && (!cfg!(feature = "embed-specs") || sleighpath.is_some()) {
++            return Err("--atomic-facts requires embedded specs and does not accept --sleighpath".into());
++        }
+         // Refused, not ignored: each of these is a `decomp_dbg` transcript the
+         // in-process JSON path never produces, and silently dropping half a
+         // request is the failure mode `--json` exists to end.
+@@ -997,6 +1002,7 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
+             binary: &binary,
+             target: &target,
+             by_address: addr,
++            atomic_facts,
+             forwarded: &forwarded,
+             mode: mode.as_deref(),
+             bfd_target: bfd_target.as_deref(),
+@@ -1007,6 +1013,10 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
+         }));
+     }
+ 
++    if atomic_facts {
++        return Err("--atomic-facts requires --json".into());
++    }
++
+     // (kuna outlang, DIV-80) The auto policy -- follow the binary when the caller
+     // named no language. See `decompile_all::detected_output_language`.
+     if !saw_language && !options.iter().any(|(n, _)| n == "setlanguage") {
+@@ -1106,6 +1116,7 @@ struct JsonRequest<'a> {
+     binary: &'a str,
+     target: &'a str,
+     by_address: bool,
++    atomic_facts: bool,
+     /// The `--option` / `--language` tokens, in argv order.
+     forwarded: &'a [String],
+     mode: Option<&'a str>,
+@@ -1127,6 +1138,18 @@ struct JsonRequest<'a> {
+ /// drift.
+ fn run_json(req: &JsonRequest) -> i32 {
+     let mut argv: Vec<String> = vec![req.binary.to_string(), "--json".into()];
++    if req.atomic_facts {
++        match crate::embedded_specs::tree() {
++            Some(Ok(root)) => {
++                argv.push("--sleighpath".into());
++                argv.push(root.to_string_lossy().into_owned());
++            }
++            _ => {
++                eprintln!("error: atomic facts require readable embedded specs");
++                return 2;
++            }
++        }
++    }
+     if req.by_address {
+         argv.push("--addr".into());
+         argv.push(if looks_like_addr(req.target) {
+@@ -1168,7 +1191,7 @@ fn run_json(req: &JsonRequest) -> i32 {
+     // it has to reconcile against a prose stderr line — the missing error channel
+     // is half of why this flag exists. The verdict follows the document, matching
+     // `run`'s stdout-then-stderr ordering.
+-    let (text, failure) = match decompile_json(&args, req.target) {
++    let (text, failure) = match decompile_json(&args, req.target, req.atomic_facts) {
+         Ok(answered) => answered,
+         Err(message) => (
+             decompile_all::render_result_json(
+@@ -1197,7 +1220,7 @@ fn run_json(req: &JsonRequest) -> i32 {
+ /// was asked about exactly that function — so `--json` cannot turn the text
+ /// surface's non-zero verdict into a success; the reason is in the document too,
+ /// as the record's `error` and as the run-level one.
+-fn decompile_json(args: &AllArgs, target: &str) -> Result<(String, Option<String>), String> {
++fn decompile_json(args: &AllArgs, target: &str, atomic_facts: bool) -> Result<(String, Option<String>), String> {
+     let mut prog = decompile_all::load_program(args, DriverDefaults::Decompile)?;
+     let targets = decompile_all::resolve_targets(&prog, args)?;
+     let interior = crate::interior::selections(&prog, args, &targets);
+@@ -1217,7 +1240,7 @@ fn decompile_json(args: &AllArgs, target: &str) -> Result<(String, Option<String
+         });
+     }
+ 
+-    let funcs = decompile_all::decompile_entries(&mut prog, args, targets, false);
++    let funcs = decompile_all::decompile_entries(&mut prog, args, targets, false, atomic_facts);
+     let assertions = prog.assertion_outcomes();
+     let mut failure = funcs.iter().find_map(|f| {
+         f.error.as_ref().map(|reason| {
+diff --git a/decompiler/crates/kuna-cli/src/decompile_all.rs b/decompiler/crates/kuna-cli/src/decompile_all.rs
+index 698c7243..1f812ce6 100644
+--- a/decompiler/crates/kuna-cli/src/decompile_all.rs
++++ b/decompiler/crates/kuna-cli/src/decompile_all.rs
+@@ -744,6 +744,7 @@ fn run_jobs_worker(args: &Args) -> Result<(), String> {
+                 park_recovered_proto: false,
+                 single_target: false,
+                 want_tokens: false,
++                want_atomic_facts: false,
+                 want_pointer_arguments: args.jobs_pointerargs,
+             };
+             let mut pending = entries.into_iter();
+@@ -1264,7 +1265,7 @@ fn decompile_all(args: &Args, filters: &Filters) -> Result<AllRun, String> {
+     let funcs = if callee_first {
+         decompile_entries_callee_first(&mut prog, args, targets, explicit)
+     } else {
+-        decompile_entries(&mut prog, args, targets, /* pointer_arguments= */ true)
++        decompile_entries(&mut prog, args, targets, /* pointer_arguments= */ true, false)
+     };
+     Ok(AllRun { funcs, discovered, assertions: prog.assertion_outcomes(), interior })
+ }
+@@ -1319,6 +1320,7 @@ pub(crate) fn decompile_entries(
+     args: &Args,
+     targets: Vec<FunctionEntry>,
+     pointer_arguments: bool,
++    want_atomic_facts: bool,
+ ) -> Vec<FuncResult> {
+     arm_fn_budgets(prog, args);
+     let opts = DecompileOptions {
+@@ -1326,6 +1328,7 @@ pub(crate) fn decompile_entries(
+         want_provenance: args.json,
+         single_target: targets.len() == 1,
+         want_pointer_arguments: pointer_arguments,
++        want_atomic_facts,
+         ..DecompileOptions::default()
+     };
+     kuna_console::project::decompile_targets_with(prog, targets, &opts)
+@@ -2152,6 +2155,17 @@ fn result_json(
+                     // Always present, `[]` unless the option is on.
+                     ("types".into(), types),
+                 ];
++                if let Some(facts) = f.detail.as_ref().and_then(|d| d.atomic_facts.as_ref()) {
++                    match facts {
++                        Ok(facts) => {
++                            match serde_json::to_value(facts) {
++                                Ok(value) => record.push(("atomic_facts".into(), Json::from(value))),
++                                Err(error) => record.push(("atomic_facts_error".into(), Json::Str(format!("atomic facts serialization failed: {error}")))),
++                            }
++                        }
++                        Err(reason) => record.push(("atomic_facts_error".into(), Json::Str(reason.clone()))),
++                    }
++                }
+                 if !f.stack_objects.is_empty() {
+                     record.push(("stack_objects".into(), Json::Array(
+                         f.stack_objects.iter().map(stack_object_json).collect(),
+diff --git a/decompiler/crates/kuna-cli/src/decompile_all/callee_first.rs b/decompiler/crates/kuna-cli/src/decompile_all/callee_first.rs
+index 3eb2a6e4..2b951ba2 100644
+--- a/decompiler/crates/kuna-cli/src/decompile_all/callee_first.rs
++++ b/decompiler/crates/kuna-cli/src/decompile_all/callee_first.rs
+@@ -28,6 +28,7 @@ pub(super) fn decompile_entries_callee_first(
+         park_recovered_proto: false,
+         single_target: targets.len() == 1,
+         want_tokens: false,
++        want_atomic_facts: false,
+         want_pointer_arguments: true,
+     };
+     decompile_callee_first(prog, args, targets, explicit, base)
+diff --git a/decompiler/crates/kuna-cli/src/jsonfmt.rs b/decompiler/crates/kuna-cli/src/jsonfmt.rs
+index 198b85a6..22c1e086 100644
+--- a/decompiler/crates/kuna-cli/src/jsonfmt.rs
++++ b/decompiler/crates/kuna-cli/src/jsonfmt.rs
+@@ -28,6 +28,19 @@ pub enum Json {
+     Object(Vec<(String, Json)>),
+ }
+ 
++impl From<serde_json::Value> for Json {
++    fn from(value: serde_json::Value) -> Self {
++        match value {
++            serde_json::Value::Null => Json::Null,
++            serde_json::Value::Bool(value) => Json::Bool(value),
++            serde_json::Value::Number(value) => Json::Number(value.to_string()),
++            serde_json::Value::String(value) => Json::Str(value),
++            serde_json::Value::Array(values) => Json::Array(values.into_iter().map(Json::from).collect()),
++            serde_json::Value::Object(values) => Json::Object(values.into_iter().map(|(key, value)| (key, Json::from(value))).collect()),
++        }
++    }
++}
++
+ /// Render `v` exactly as CPython's `json.dumps(v, indent=2)` would (ASCII-safe
+ /// string escaping, `", "`/`": "` item/key separators collapsed to the indent
+ /// form: items separated by `,\n`, keys by `": "`).
+diff --git a/decompiler/crates/kuna-cli/src/project_stream.rs b/decompiler/crates/kuna-cli/src/project_stream.rs
+index e40b18c9..b8cae233 100644
+--- a/decompiler/crates/kuna-cli/src/project_stream.rs
++++ b/decompiler/crates/kuna-cli/src/project_stream.rs
+@@ -858,6 +858,7 @@ fn export(
+         // every function of the export.
+         single_target: false,
+         want_tokens: false,
++        want_atomic_facts: false,
+         want_pointer_arguments: false,
+     };
+ 
+diff --git a/decompiler/crates/kuna-console/src/inspect.rs b/decompiler/crates/kuna-console/src/inspect.rs
+index 74024b10..1ecc4fae 100644
+--- a/decompiler/crates/kuna-console/src/inspect.rs
++++ b/decompiler/crates/kuna-console/src/inspect.rs
+@@ -24,6 +24,7 @@ pub const FUNCTION_ROW_CAP: usize = 4096;
+ pub struct FuncDetail {
+     pub tokens: Vec<CodeToken>,
+     pub tokens_error: Option<String>,
++    pub atomic_facts: Option<Result<kuna_decomp::atomic_facts::FunctionFacts, String>>,
+ }
+ 
+ impl FuncDetail {
+@@ -40,13 +41,13 @@ impl FuncDetail {
+     ) -> Self {
+         let mut tokens = kuna_srcmap::resolve(fd, var_refs, raw, untrimmed, variables);
+         if let Err(error) = kuna_srcmap::verify(&tokens, code) {
+-            return FuncDetail { tokens: Vec::new(), tokens_error: Some(error) };
++            return FuncDetail { tokens: Vec::new(), tokens_error: Some(error), ..Default::default() };
+         }
+         for t in &mut tokens {
+             t.address = t.address.map(|a| prog.output_code_offset(a));
+             t.callee = t.callee.map(|a| prog.output_code_offset(a));
+         }
+-        FuncDetail { tokens, tokens_error: None }
++        FuncDetail { tokens, tokens_error: None, ..Default::default() }
+     }
+ }
+ 
+diff --git a/decompiler/crates/kuna-console/src/project.rs b/decompiler/crates/kuna-console/src/project.rs
+index bc401db2..775ca348 100644
+--- a/decompiler/crates/kuna-console/src/project.rs
++++ b/decompiler/crates/kuna-console/src/project.rs
+@@ -245,6 +245,8 @@ pub struct DecompileOptions {
+     /// Capture the token source map ([`FuncResult::detail`]); implies the
+     /// provenance render.
+     pub want_tokens: bool,
++    /// Retain the read-only recovered IR from the same function instance.
++    pub want_atomic_facts: bool,
+     /// Record [`FuncResult::pointerargs`] for a buffered driver. A batch that
+     /// returns its results ([`decompile_targets_with`]) reconciles them itself;
+     /// a pulled caller owns that step.
+@@ -278,6 +280,7 @@ pub fn decompile_targets(
+         park_recovered_proto: false,
+         single_target: targets.len() == 1,
+         want_tokens: false,
++        want_atomic_facts: false,
+         want_pointer_arguments: false,
+     };
+     decompile_batch(prog, targets, &opts)
+@@ -321,6 +324,7 @@ pub fn export_options(single_target: bool) -> DecompileOptions {
+         park_recovered_proto: false,
+         single_target,
+         want_tokens: false,
++        want_atomic_facts: false,
+         want_pointer_arguments: true,
+     }
+ }
+@@ -509,6 +513,7 @@ pub fn decompile_pulled(
+         header_carries_types,
+         single_target,
+         want_tokens,
++        want_atomic_facts,
+         want_pointer_arguments,
+         ..
+     } = *opts;
+@@ -838,11 +843,15 @@ pub fn decompile_pulled(
+                         }
+                     }
+                     let var_refs = provenance.apply_to_variables_with_refs(&fd, &mut variables);
+-                    let detail = want_tokens.then(|| {
++                    let mut detail = want_tokens.then(|| {
+                         Box::new(crate::inspect::FuncDetail::resolve(
+                             prog, &fd, &var_refs, &raw_tokens, &untrimmed, &code, &variables,
+                         ))
+                     });
++                    if want_atomic_facts {
++                        detail.get_or_insert_with(Default::default).atomic_facts =
++                            Some(kuna_decomp::atomic_facts::collect(prog.arch(), &fd));
++                    }
+                     for variable in &mut variables {
+                         for address in &mut variable.addresses {
+                             *address = prog.output_code_offset(*address);
+diff --git a/decompiler/crates/kuna-decomp/Cargo.toml b/decompiler/crates/kuna-decomp/Cargo.toml
+index 40b093b6..8f03b654 100644
+--- a/decompiler/crates/kuna-decomp/Cargo.toml
++++ b/decompiler/crates/kuna-decomp/Cargo.toml
+@@ -15,11 +15,11 @@ kuna-sleigh.workspace = true
+ thiserror.workspace = true
+ smallvec.workspace = true
+ slotmap.workspace = true
++serde = { version = "1", features = ["derive"] }
+ 
+ [dev-dependencies]
+ # Verifier-only: the datatest <stringmatch> engine (item w10-structure-printbody).
+ regex = { workspace = true }
+-serde = { version = "1", features = ["derive"] }
+ toml = { version = "1.1", default-features = false, features = ["parse", "serde", "std"] }
+ 
+ [build-dependencies]
+diff --git a/decompiler/crates/kuna-decomp/src/substrate/funcdata_printraw.rs b/decompiler/crates/kuna-decomp/src/substrate/funcdata_printraw.rs
+index 39927ceb..844950a6 100644
+--- a/decompiler/crates/kuna-decomp/src/substrate/funcdata_printraw.rs
++++ b/decompiler/crates/kuna-decomp/src/substrate/funcdata_printraw.rs
+@@ -376,7 +376,7 @@ fn callother_operator_name(
+ /// dispatch.  The special op-codes (LOAD/STORE/branches/calls/RETURN/marker)
+ /// match their `TypeOp*::printRaw` override; everything else falls to the
+ /// generic Binary/Unary/Func shape keyed by the [`TypeOpClass`].
+-fn render_op(s: &mut String, arch: &Architecture, fd: &Funcdata, op: OpId) -> Result<(), String> {
++pub(crate) fn render_op(s: &mut String, arch: &Architecture, fd: &Funcdata, op: OpId) -> Result<(), String> {
+     let opc = fd.obank().get(op).ok_or_else(|| "render_op: stale op".to_string())?.code();
+     let num_input = fd.obank().get(op).ok_or_else(|| "render_op: stale op".to_string())?.num_input();
+     let in_at = |i: int4| -> Option<VarnodeId> { fd.obank().get(op).and_then(|o| o.get_in(i)) };
+diff --git a/decompiler/crates/kuna-decomp/src/substrate/mod.rs b/decompiler/crates/kuna-decomp/src/substrate/mod.rs
+index 00528cb5..08da88eb 100644
+--- a/decompiler/crates/kuna-decomp/src/substrate/mod.rs
++++ b/decompiler/crates/kuna-decomp/src/substrate/mod.rs
+@@ -11,6 +11,7 @@ pub mod funcdata_block;
+ pub mod funcdata_encode;
+ pub mod funcdata_op;
+ pub mod funcdata_printraw;
++pub mod atomic_facts;
+ pub mod funcdata_varnode;
+ pub mod dtype;
+ pub mod context;
+diff --git a/docs/spec/00-overview.md b/docs/spec/00-overview.md
+index ce499c4f..f54772b3 100644
+--- a/docs/spec/00-overview.md
++++ b/docs/spec/00-overview.md
+@@ -3431,3 +3431,21 @@ Reserving it creates no analysis varnode and changes no physical mapping or
+ emitted C. Ghidra receives temporary storage for the logical local, rather than
+ a persistable ordinary stack-variable location; ordinary symbol storage and
+ register-plus-stack parameter JOINs keep their existing encoding.
++
++## Experimental read-only atomic facts
++
++The opt-in `decompile --json --atomic-facts` surface captures the same live
++function after C rendering (`decompiler/crates/kuna-decomp/src/substrate/atomic_facts.rs`).
++It does not change the analysis phases or C output. The default path does not
++collect these records. This experiment requires embedded processor specs and
++selects those assets explicitly; a caller-provided `--sleighpath` is rejected.
++
++The export retains ordered basic-block predecessors and successors, slotmap
++value identities, operation sequence identities, operand indexes, outputs and
++phi input-to-predecessor-edge bindings. IDs belong to this captured function
++model; instruction addresses are origins, not SSA value identities. Native
++recovered graph completeness does not establish runtime successor coverage,
++memory alias dependencies or machine-semantic equivalence. Indirect-branch
++operations and definitions outside block membership remain explicit. Capacity
++failures make this facet unavailable with a reason and preserve the C record;
++they do not emit a clipped graph labeled complete.
+diff --git a/decompiler/crates/kuna-decomp/src/substrate/atomic_facts.rs b/decompiler/crates/kuna-decomp/src/substrate/atomic_facts.rs
+new file mode 100644
+index 00000000..65e18270
+--- /dev/null
++++ b/decompiler/crates/kuna-decomp/src/substrate/atomic_facts.rs
+@@ -0,0 +1,274 @@
++//! Opt-in, read-only export of the recovered function IR for the REA experiment.
++//! IDs are local to this captured model; addresses alone are not SSA identities.
++use crate::{
++    architecture::Architecture,
++    context::{OpId, VarnodeId},
++    funcdata::Funcdata,
++};
++use kuna_num::opcodes::OpCode;
++use serde::Serialize;
++use slotmap::Key;
++use std::collections::BTreeSet;
++
++#[derive(Debug, Clone, Serialize)]
++pub struct FunctionFacts {
++    pub schema_version: u32,
++    pub blocks: Vec<BlockFact>,
++    pub operations: Vec<OperationFact>,
++    pub values: Vec<ValueFact>,
++    pub coverage: Coverage,
++}
++#[derive(Debug, Clone, Serialize)]
++pub struct Coverage {
++    pub scope: &'static str,
++    pub machine_semantic_equivalence: &'static str,
++    pub indirect_branch_operations: Vec<String>,
++    pub omitted_definition_ids: Vec<String>,
++    pub issues: Vec<String>,
++}
++#[derive(Debug, Clone, Serialize)]
++pub struct BlockFact {
++    pub id: i32,
++    pub start: String,
++    pub operations: Vec<String>,
++    pub predecessors: Vec<i32>,
++    pub successors: Vec<EdgeFact>,
++}
++#[derive(Debug, Clone, Serialize)]
++pub struct EdgeFact {
++    pub id: String,
++    pub target: i32,
++    pub index: i32,
++    pub polarity: Option<&'static str>,
++    pub condition_value: Option<String>,
++    pub condition_test: Option<&'static str>,
++}
++#[derive(Debug, Clone, Serialize)]
++pub struct OperationFact {
++    pub id: String,
++    pub address: String,
++    pub block: i32,
++    pub opcode: String,
++    pub statement: String,
++    pub is_dead: bool,
++    pub inputs: Vec<InputFact>,
++    pub output: Option<String>,
++}
++#[derive(Debug, Clone, Serialize)]
++pub struct InputFact {
++    pub input_index: i32,
++    pub value_id: Option<String>,
++    pub phi_predecessor: Option<i32>,
++    pub phi_predecessor_edge: Option<String>,
++}
++#[derive(Debug, Clone, Serialize)]
++pub struct ValueFact {
++    pub id: String,
++    pub space: Option<String>,
++    pub offset: String,
++    pub size_bytes: i32,
++    pub is_constant: bool,
++    pub is_input: bool,
++    pub is_annotation: bool,
++    pub definition: Option<String>,
++    pub type_name: String,
++}
++fn value_id(id: VarnodeId) -> String {
++    format!("v{:x}", id.data().as_ffi())
++}
++fn operation_id(fd: &Funcdata, id: OpId) -> Result<String, String> {
++    let operation = fd.obank().get(id).ok_or("stale operation identity")?;
++    let seq = operation.get_seq_num();
++    Ok(format!(
++        "0x{:x}:{:x}",
++        seq.get_addr().get_offset(),
++        seq.get_time()
++    ))
++}
++
++pub fn collect(arch: &Architecture, fd: &Funcdata) -> Result<FunctionFacts, String> {
++    // Bounds cover allocations before JSON serialization, independently of the
++    // transport byte budget. Overflow is an unavailable facet, not clipped IR.
++    const MAX_OPERATIONS: usize = 12_000;
++    const MAX_VALUES: usize = 36_000;
++    const MAX_INPUTS: usize = 50_000;
++    const MAX_DISPLAY_BYTES: usize = 2 * 1024 * 1024;
++    if fd.bblocks_get_size() <= 0 {
++        return Err("recovered basic-block graph is unavailable".into());
++    }
++    if fd.bblocks_get_size() > 12_000 {
++        return Err("atomic block capacity exceeded".into());
++    }
++    let mut blocks = Vec::new();
++    let mut operations = Vec::new();
++    let mut value_keys = BTreeSet::new();
++    let mut retained_ops = BTreeSet::new();
++    let mut input_count = 0usize;
++    let mut edge_count = 0usize;
++    let mut display_bytes = 0usize;
++    let mut coverage = Coverage {
++        scope: "complete native recovered basic-block graph; block-member operations",
++        machine_semantic_equivalence: "unknown",
++        indirect_branch_operations: Vec::new(),
++        omitted_definition_ids: Vec::new(),
++        issues: Vec::new(),
++    };
++    for block_index in 0..fd.bblocks_get_size() {
++        let block_key = fd.bblocks_get_block(block_index);
++        let block = fd.bblocks_ref().block(block_key);
++        let members = fd.bb_ops(block_key);
++        if members.len() > MAX_OPERATIONS - operations.len() {
++            return Err("atomic operation capacity exceeded".into());
++        }
++        edge_count = edge_count
++            .checked_add(block.size_out() as usize)
++            .ok_or("atomic CFG edge count overflow")?;
++        if edge_count > MAX_INPUTS {
++            return Err("atomic CFG edge capacity exceeded".into());
++        }
++        let tail = members.last().and_then(|id| fd.obank().get(*id));
++        let conditional =
++            tail.filter(|op| op.code() == OpCode::CPUI_CBRANCH && block.size_out() == 2);
++        let condition_value = conditional.and_then(|op| op.get_in(1)).map(value_id);
++        let condition_test = conditional.map(|op| {
++            if op.is_boolean_flip() {
++                "eq-zero"
++            } else {
++                "ne-zero"
++            }
++        });
++        let successors = (0..block.size_out())
++            .map(|i| EdgeFact {
++                id: format!("{}:{i}", block.get_index()),
++                target: fd.bblocks_ref().block(block.get_out(i)).get_index(),
++                index: i,
++                polarity: conditional.map(|_| if i == 0 { "false" } else { "true" }),
++                condition_value: condition_value.clone(),
++                condition_test,
++            })
++            .collect();
++        blocks.push(BlockFact {
++            id: block.get_index(),
++            start: format!("0x{:x}", fd.bblocks_block_start(block_key).get_offset()),
++            operations: members
++                .iter()
++                .map(|id| operation_id(fd, *id))
++                .collect::<Result<_, _>>()?,
++            predecessors: (0..block.size_in())
++                .map(|i| fd.bblocks_ref().block(block.get_in(i)).get_index())
++                .collect(),
++            successors,
++        });
++        for key in members {
++            if operations.len() >= MAX_OPERATIONS {
++                return Err("atomic operation capacity exceeded".into());
++            }
++            let op = fd.obank().get(key).ok_or("stale block operation")?;
++            let id = operation_id(fd, key)?;
++            if !retained_ops.insert(id.clone()) {
++                return Err("operation belongs to multiple recovered blocks".into());
++            }
++            if op.get_parent() != Some(block_key) {
++                return Err("operation/block ownership mismatch".into());
++            }
++            input_count = input_count
++                .checked_add(op.num_input() as usize)
++                .ok_or("atomic input count overflow")?;
++            if input_count > MAX_INPUTS {
++                return Err("atomic input-edge capacity exceeded".into());
++            }
++            if op.code() == OpCode::CPUI_BRANCHIND {
++                coverage.indirect_branch_operations.push(id.clone());
++            }
++            let phi = op.code() == OpCode::CPUI_MULTIEQUAL;
++            if phi && block.size_in() != op.num_input() {
++                coverage
++                    .issues
++                    .push(format!("{id}: phi/predecessor count mismatch"));
++            }
++            let inputs = (0..op.num_input())
++                .map(|index| {
++                    let value = op.get_in(index);
++                    if let Some(v) = value {
++                        value_keys.insert(v);
++                    }
++                    InputFact {
++                        input_index: index,
++                        value_id: value.map(value_id),
++                        phi_predecessor: if phi && block.size_in() == op.num_input() {
++                            Some(fd.bblocks_ref().block(block.get_in(index)).get_index())
++                        } else {
++                            None
++                        },
++                        phi_predecessor_edge: if phi && block.size_in() == op.num_input() {
++                            Some(format!(
++                                "{}:{}",
++                                fd.bblocks_ref().block(block.get_in(index)).get_index(),
++                                block.get_in_rev_index(index)
++                            ))
++                        } else {
++                            None
++                        },
++                    }
++                })
++                .collect();
++            if let Some(v) = op.get_out() {
++                value_keys.insert(v);
++            }
++            if value_keys.len() > MAX_VALUES {
++                return Err("atomic value capacity exceeded".into());
++            }
++            let mut statement = String::new();
++            crate::funcdata_printraw::render_op(&mut statement, arch, fd, key)?;
++            display_bytes = display_bytes
++                .checked_add(statement.len())
++                .ok_or("atomic display count overflow")?;
++            if display_bytes > MAX_DISPLAY_BYTES {
++                return Err("atomic display capacity exceeded".into());
++            }
++            operations.push(OperationFact {
++                id,
++                address: format!("0x{:x}", op.get_seq_num().get_addr().get_offset()),
++                block: block.get_index(),
++                opcode: format!("{:?}", op.code()),
++                statement,
++                is_dead: op.is_dead(),
++                inputs,
++                output: op.get_out().map(value_id),
++            });
++        }
++    }
++    let mut values = Vec::with_capacity(value_keys.len());
++    let mut missing = BTreeSet::new();
++    for key in value_keys {
++        let value = fd.vbank().get(key).ok_or("stale input/output value")?;
++        let definition = value.get_def().map(|id| operation_id(fd, id)).transpose()?;
++        if let Some(ref id) = definition {
++            if !retained_ops.contains(id) {
++                missing.insert(id.clone());
++            }
++        }
++        values.push(ValueFact {
++            id: value_id(key),
++            space: value
++                .get_addr()
++                .get_space()
++                .map(|space| space.get_name().to_string()),
++            offset: format!("0x{:x}", value.get_offset()),
++            size_bytes: value.get_size(),
++            is_constant: value.is_constant(),
++            is_input: value.is_input(),
++            is_annotation: value.is_annotation(),
++            definition,
++            type_name: value.get_type().get_name().to_string(),
++        });
++    }
++    coverage.omitted_definition_ids = missing.into_iter().collect();
++    Ok(FunctionFacts {
++        schema_version: 1,
++        blocks,
++        operations,
++        values,
++        coverage,
++    })
++}

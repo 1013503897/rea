@@ -1,6 +1,7 @@
 // One named contract registry shared by SDK, CLI, direct MCP and Code Mode.
 import { z } from "zod";
-import { KunaFactOwner, FactFailure } from "./provider.mjs";
+import { KunaFactOwner } from "./provider.mjs";
+import { FactFailure } from "./fact-error.mjs";
 
 const hex = z.string().regex(/^0x(?:0|[1-9a-f][0-9a-f]{0,15})$/u);
 const snapshot = z.string().startsWith("snap_");
@@ -19,7 +20,18 @@ const kinds = z.enum([
   "return",
 ]);
 const fields = z
-  .array(z.enum(["kind", "statement", "definitions", "constants"]))
+  .array(
+    z.enum([
+      "kind",
+      "statement",
+      "definitions",
+      "constants",
+      "opcode",
+      "inputs",
+      "output",
+      "is_dead",
+    ]),
+  )
   .min(1)
   .optional();
 const definition = (description, input, method, example) => ({
@@ -63,10 +75,16 @@ export const methods = {
     'await rea.operations({snapshot:s,constant:"0x2000",fields:["statement"]})',
   ),
   relations: definition(
-    "Read explicit definitions/uses for operation IDs, or incoming/outgoing CFG edges for block IDs. Branch polarity refers to the printed predicate. CFG is partial; printed occurrences are not p-code input indexes or phi predecessor bindings.",
+    "Read definitions/uses for operation IDs, incoming/outgoing CFG edges or derived controllers for block IDs. Native IR includes exact operand/phi bindings and the complete recovered graph; diagnostic SSA has partial CFG and printed occurrences only. controllers requires native IR and concerns finite paths to recovered exits, not runtime feasibility.",
     {
       snapshot,
-      kind: z.enum(["definitions", "uses", "incoming", "outgoing"]),
+      kind: z.enum([
+        "definitions",
+        "uses",
+        "incoming",
+        "outgoing",
+        "controllers",
+      ]),
       seeds: z
         .array(z.union([z.string(), z.number().int().nonnegative()]))
         .min(1)
@@ -75,6 +93,45 @@ export const methods = {
     },
     "relations",
     'await rea.relations({snapshot:s,kind:"uses",seeds:[op.id]})',
+  ),
+  values: definition(
+    "Read identified native SSA values in a batch. Offset is an address-space offset, not a computed arbitrary-width value. Width, constants, function inputs, annotation status and defining operation are separate facts. Requires native IR.",
+    {
+      snapshot,
+      ids: z.array(z.string()).max(128).optional(),
+      fields: z
+        .array(
+          z.enum([
+            "space",
+            "offset",
+            "size_bytes",
+            "is_constant",
+            "is_input",
+            "is_annotation",
+            "definition",
+            "type_name",
+          ]),
+        )
+        .min(1)
+        .optional(),
+      ...page,
+    },
+    "values",
+    "await rea.values({snapshot:s,ids:op.inputs.map(i=>i.value_id).filter(Boolean)})",
+  ),
+  blocks: definition(
+    "Read native recovered blocks by stable snapshot-local ID, with ordered predecessors, successor edges and member operation IDs. Requires native IR. A recovered CFG does not establish all runtime successors.",
+    {
+      snapshot,
+      ids: z.array(z.number().int().nonnegative()).max(128).optional(),
+      fields: z
+        .array(z.enum(["start", "operations", "predecessors", "successors"]))
+        .min(1)
+        .optional(),
+      ...page,
+    },
+    "blocks",
+    "await rea.blocks({snapshot:s,ids:[op.block]})",
   ),
   slice: definition(
     "Compose a bounded backward definition traversal from explicit operation IDs. Default load/phi cutoffs keep boundaries visible; choose stop_kinds:[] to traverse beyond them. Complete reachability and memory aliases remain unknown.",
@@ -119,9 +176,13 @@ const returns = {
   snapshot:
     "data:{snapshot:string,entry,source:{evidence_id,sha256},coverage:{operations,blocks,control_flow,unrepresented_outgoing_blocks,issues}}",
   operations:
-    "data:{items:[{id,address,block,source_line,kind,statement,definitions:[{definition,use,occurrence}],constants:[{value,printed_size_bytes}]}],total,next_offset,evidence_id,coverage}. fields projects optional columns; identity fields remain.",
+    "data:{items:[{id,address,block,source_line,kind,statement,definitions,constants,inputs?,output?,opcode?}],total,next_offset,evidence_id,coverage}. Native inputs:[{input_index,value_id,phi_predecessor}], output:value_id|null; definitions:[{definition,use,input_index,value_id,phi_predecessor}]. Diagnostic definitions use printed occurrence instead. fields projects columns; identity remains.",
   relations:
-    "data:{items:[{definition,use,occurrence}] for definitions/uses OR [{from:number,to:number,operation:string|null,kind,polarity?,predicate?,source_line}] for incoming/outgoing,total,next_offset,evidence_id,coverage}. definitions/uses seeds are operation-ID strings; incoming/outgoing seeds are numeric block IDs.",
+    "data:{items:definition/use edges OR CFG edges{from,to,operation,polarity?,condition_value?,condition_test?} OR controllers{controller,dependent,edge},total,next_offset,evidence_id,coverage,relation_coverage?}. definitions/uses seeds are operation-ID strings; incoming/outgoing/controllers seeds are numeric block IDs. Native def/use edges include input_index,value_id,phi_predecessor; diagnostic edges include occurrence only.",
+  values:
+    "data:{items:[{id,space,offset,size_bytes,is_constant,is_input,is_annotation,definition,type_name}],total,next_offset,evidence_id,coverage}; definitions are operation IDs, offsets are exact hex strings.",
+  blocks:
+    "data:{items:[{id,start,operations,predecessors,successors:[{target,index,polarity,condition_value,condition_test}]}],total,next_offset,evidence_id,coverage}; IDs are local to this snapshot.",
   slice:
     "data:{operations:[operation rows as above],coverage:{status,boundaries:[{id,reason}],missing,source_issues,runtime_reachability,memory_alias_dependencies},evidence_id}",
   code: "data:{evidence_id,start_line,text,total_lines,next_offset,coverage}; text is reconstructed C. Use a large limit to inspect/filter the full text within code without returning it all.",
@@ -130,7 +191,7 @@ const returns = {
 };
 methods.relations.input = methods.relations.input.superRefine(
   (value, context) => {
-    const type = ["incoming", "outgoing"].includes(value.kind)
+    const type = ["incoming", "outgoing", "controllers"].includes(value.kind)
       ? "number"
       : "string";
     if (value.seeds.some((seed) => typeof seed !== type))
@@ -214,6 +275,7 @@ export class AtomicSession {
       } catch (error) {
         return {
           ok: false,
+          context: this.context,
           error: {
             code:
               error instanceof z.ZodError

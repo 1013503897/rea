@@ -47,7 +47,7 @@ try {
   ]);
   const ajv = new Ajv2020({ strict: false });
   for (const tool of catalog.tools) ajv.compile(tool.inputSchema);
-  await call("open_binary", { path: binary });
+  const opened = await call("open_binary", { path: binary });
   await call("reference", { query: "relations" });
   const result = await call("execute_javascript", {
     code: `
@@ -63,11 +63,40 @@ const uses=await rea.relations({snapshot:s,kind:"uses",seeds:seed.data.items.map
 const consumers=await rea.operations({snapshot:s,ids:uses.data.items.map(x=>x.use)});
 const incoming=await rea.relations({snapshot:s,kind:"incoming",seeds:consumers.data.items.map(x=>x.block)});
 const slice=await rea.slice({snapshot:s,seeds:incoming.data.items.map(x=>x.operation).filter(Boolean)});
-return {literal,entry,snapshot:s,selected:slice.data.operations.length,guards:slice.data.operations.map(x=>x.statement),coverage:slice.data.coverage,evidence_id:slice.data.evidence_id};`,
+return {literal,entry,snapshot:s,consumer_blocks:[...new Set(consumers.data.items.map(x=>x.block))],selected:slice.data.operations.length,guards:slice.data.operations.map(x=>x.statement),coverage:slice.data.coverage,evidence_id:slice.data.evidence_id};`,
   });
   assert.equal(result.value.selected, 19);
   assert.equal(result.value.coverage.status, "partial");
   assert.ok(result.value.guards.some((s) => s.includes("/ #0x1f")));
+  if (opened.context.analysis_model === "experimental-native-ir-v1") {
+    const native = await call("execute_javascript", {
+      code: `const s=${JSON.stringify(result.value.snapshot)};
+const read=async(p)=>{const r=await p;if(!r.ok)throw new Error(JSON.stringify(r));return r.data;};
+const blocks=await read(rea.blocks({snapshot:s,ids:${JSON.stringify(result.value.consumer_blocks)}}));
+const controls=await read(rea.relations({snapshot:s,kind:"controllers",seeds:blocks.items.map(b=>b.id)}));
+const guards=await read(rea.operations({snapshot:s,block_ids:controls.items.map(r=>r.controller),kind:"branch",fields:["inputs"]}));
+const phi=await read(rea.operations({snapshot:s,kind:"phi",fields:["inputs","output"],limit:2}));
+const values=await read(rea.values({snapshot:s,ids:phi.items.flatMap(o=>o.inputs.map(i=>i.value_id)).filter(Boolean)}));
+return {blocks,controls,guards,phi,values};`,
+    });
+    assert.equal(native.value.controls.total, 2);
+    assert.deepEqual(native.value.guards.items.map((op) => op.address).sort(), [
+      "0xd9ec",
+      "0xda32",
+    ]);
+    assert.ok(
+      native.value.phi.items.every((op) =>
+        op.inputs.every(
+          (input) => typeof input.phi_predecessor_edge === "string",
+        ),
+      ),
+    );
+    assert.equal(
+      native.value.blocks.coverage.control_flow,
+      "complete-for-recovered-graph",
+    );
+    assert.ok(native.value.values.items.length > 0);
+  }
   await call("close_binary");
 } catch (error) {
   failure = error.stack ?? String(error);
