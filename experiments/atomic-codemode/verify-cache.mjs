@@ -1,9 +1,10 @@
 // A real MCP cold/warm read benchmark. No model runs in this verifier.
 import assert from "node:assert/strict";
-import { readFile, writeFile } from "node:fs/promises";
+import { writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { Client } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
+import { familyCounters as counters } from "./family-counters.mjs";
 import {
   createVerifierRun,
   completeVerifierRun,
@@ -11,22 +12,6 @@ import {
 } from "../../scripts/lib/verifier-run.mjs";
 
 const [binary, output, entry = "0xc1e0"] = process.argv.slice(2);
-const group = (await readFile("/proc/self/cgroup", "utf8"))
-  .trim()
-  .split("\n")
-  .find((row) => row.startsWith("0::"))
-  ?.slice(3);
-assert.ok(group?.includes("rea-efficiency-"), "Run under resource-run.py");
-const counters = async () => ({
-  cpu: Number(
-    (await readFile(`/sys/fs/cgroup${group}/cpu.stat`, "utf8")).match(
-      /usage_usec (\d+)/u,
-    )[1],
-  ),
-  peak: Number(
-    (await readFile(`/sys/fs/cgroup${group}/memory.peak`, "utf8")).trim(),
-  ),
-});
 const verifier = createVerifierRun();
 const client = new Client({ name: "rea-cache-verifier", version: "0.1.0" });
 const transport = new StdioClientTransport({

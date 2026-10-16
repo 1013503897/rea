@@ -162,3 +162,6 @@ be examined before exporting case-to-edge/target relations; a successor ordinal
 is not a case value. This is a fact-export limitation, not evidence that Kuna
 itself cannot recover the labels. The source-capture/concurrent-read cost
 variation also needs a bounded, matched diagnostic before further speed claims.
+The [subsequent four-case public MCP diagnostic](overlap-study.md) confirms
+provider admission is serialized and does not reproduce the long capture;
+the original cause remains unknown rather than being declared fixed.
