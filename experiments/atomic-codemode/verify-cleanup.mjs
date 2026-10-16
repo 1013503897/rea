@@ -22,8 +22,8 @@ const run = createVerifierRun(),
 const owners = [];
 try {
   for (const action of ["close", "replace"]) {
-    const session = new AtomicSession(async (path) => {
-      const owner = await KunaFactOwner.open(path);
+    const session = new AtomicSession(async (path, options) => {
+      const owner = await KunaFactOwner.open(path, options);
       owners.push(owner);
       return owner;
     });

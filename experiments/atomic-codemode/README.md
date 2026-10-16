@@ -6,6 +6,11 @@ This is an **in-progress experiment**, not an integrated provider release. Branc
 prototype. Historical measurements in `../atomic-re-tools/` retain their original
 baselines. No PR or merge is intended.
 
+The branch was subsequently [refreshed from main `60bf10245`](main-refresh-study.md).
+Shared installation/file cleanup and string parsing now follow that main's
+owners. Historical model measurements retain their original frozen runtimes;
+the refresh has separate real-provider verification and resource receipts.
+
 The goal is a real model completing reverse-engineering questions through
 composable facts, with Code Mode as the calling adapter. A configured feature flag,
 a scripted verifier or a small response does not prove that goal.

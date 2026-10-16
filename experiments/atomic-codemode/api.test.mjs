@@ -130,6 +130,64 @@ test("close drains admitted reads and a failed cleanup retains ownership for ret
   await session.close();
   assert.equal(session.context, null);
 });
+for (const action of ["close", "replace"])
+  test(`failed open retains session file owners through ${action} and cleanup retry`, async () => {
+    let acquisitions = 0,
+      cleanupAttempts = 0,
+      releasable = false;
+    const primary = new Error(
+      "Engine inspection failed after acquiring a file",
+    );
+    const session = new AtomicSession(async (path, { fileResources }) => {
+      acquisitions++;
+      if (acquisitions === 1)
+        return fileResources.run(async () => {
+          fileResources.retain({
+            kind: "lease",
+            resource: "/selected/engine",
+            lease: {
+              release: async () => {
+                cleanupAttempts++;
+                if (!releasable) throw new Error("Descriptor remains open");
+              },
+            },
+          });
+          throw primary;
+        });
+      return {
+        context: { lease: "recovered", selected_path: path },
+        close: async () => {},
+      };
+    });
+    await assert.rejects(session.open("first"), (error) => error === primary);
+    assert.equal(session.context, null);
+    assert.equal(
+      (await session.call("strings", { query: "x" })).error.code,
+      "no_target",
+    );
+    const retry = () =>
+      action === "close" ? session.close() : session.open("second");
+    await assert.rejects(
+      retry(),
+      (error) =>
+        error.code === "cleanup_incomplete" &&
+        error.details.resources.length === 1 &&
+        error.details.resources[0] === "/selected/engine",
+    );
+    assert.equal(acquisitions, 1, "Unresolved owners block replacement");
+    assert.equal(cleanupAttempts, 1);
+    releasable = true;
+    assert.equal((await retry()).ok, true);
+    assert.equal(cleanupAttempts, 2);
+    if (action === "close") {
+      assert.equal(session.context, null);
+      assert.equal((await session.open("second")).ok, true);
+    }
+    assert.equal(acquisitions, 2);
+    assert.equal(session.context.lease, "recovered");
+    await session.close();
+    assert.equal(cleanupAttempts, 2, "Released owners are not retried");
+  });
 test("cancellation before admission makes no provider query; advertised reference schemas compile", async () => {
   const provider = factory();
   const session = new AtomicSession(provider.create);

@@ -4,6 +4,8 @@ import { KunaFactOwner } from "./provider.mjs";
 import { FactFailure } from "./fact-error.mjs";
 import { MAX_BYTE_BATCH_BYTES } from "./limits.mjs";
 import { createReference } from "./reference.mjs";
+import { ArtifactResourceScope } from "../../dist/artifacts/ArtifactResourceScope.js";
+import { ArtifactReaderFailure } from "../../dist/artifacts/ArtifactReader.js";
 
 const hex = z.string().regex(/^0x(?:0|[1-9a-f][0-9a-f]{0,15})$/u);
 const snapshot = z.string().startsWith("snap_");
@@ -333,6 +335,7 @@ methods.references.input = methods.references.input.superRefine(
 export class AtomicSession {
   #owner;
   #tail = Promise.resolve();
+  #files = new ArtifactResourceScope();
   constructor(factory = KunaFactOwner.open) {
     this.factory = factory;
   }
@@ -347,11 +350,27 @@ export class AtomicSession {
   abort() {
     this.#owner?.cancel();
   }
+  async #releaseFiles() {
+    try {
+      await this.#files.retryCleanup();
+    } catch (cause) {
+      const cleanup = ArtifactReaderFailure.cleanupObservation(
+        cause,
+        "Target session files",
+      );
+      throw new FactFailure("cleanup_incomplete", cleanup.reason, {
+        resources: cleanup.resources,
+      });
+    }
+  }
   open(path) {
     return this.#admit(async () => {
+      await this.#releaseFiles();
       if (this.#owner) await this.#owner.close();
       this.#owner = undefined;
-      this.#owner = await this.factory(path);
+      this.#owner = await this.factory(path, {
+        fileResources: this.#files,
+      });
       return {
         ok: true,
         context: this.context,
@@ -363,6 +382,7 @@ export class AtomicSession {
   close() {
     return this.#admit(async () => {
       if (this.#owner) await this.#owner.close();
+      await this.#releaseFiles();
       this.#owner = undefined;
       return { ok: true, closed: true };
     });

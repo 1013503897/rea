@@ -1,14 +1,16 @@
-import { parseKunaStringInventory } from "../../dist/kuna/KunaStringInventory.js";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
+import { KunaStringInventoryReader } from "../../dist/kuna/KunaStringInventory.js";
 import { requireResult } from "./fact-error.mjs";
 import { freezeFacts, pageFacts } from "./fact-reads.mjs";
 
-export const parseStringFacts = (text, input) =>
-  freezeFacts(
-    requireResult(
-      parseKunaStringInventory(text, input),
-      "invalid_provider_output",
-    ),
+export const parseStringFacts = async (text, input) => {
+  const reader = new KunaStringInventoryReader();
+  await pipeline(Readable.from([text]), reader);
+  return freezeFacts(
+    requireResult(reader.finish(input), "invalid_provider_output"),
   );
+};
 
 export const selectStringFacts = (inventory, input) => ({
   ...pageFacts(

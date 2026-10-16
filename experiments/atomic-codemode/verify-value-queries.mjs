@@ -14,6 +14,11 @@ import {
 } from "../../scripts/lib/verifier-run.mjs";
 
 const [binary, output, callerSource, emitterSource] = process.argv.slice(2);
+const evidenceDirectory = process.env.REA_ATOMIC_EVIDENCE_DIR;
+assert.ok(
+  evidenceDirectory,
+  "Set REA_ATOMIC_EVIDENCE_DIR for producer comparison",
+);
 assert.equal(process.versions.node, (await readFile(".nvmrc", "utf8")).trim());
 const sources = await Promise.all(
   [callerSource, emitterSource].map((path) => readFile(path, "utf8")),
@@ -33,13 +38,11 @@ const valuesByID = new Map(graph.values.map((v) => [v.id, v]));
 for (const op of graph.operations)
   for (const input of op.inputs)
     if (byValue.has(input.value_id))
-      byValue
-        .get(input.value_id)
-        .push({
-          operation: op.id,
-          ...input,
-          definition: valuesByID.get(input.value_id).definition,
-        });
+      byValue.get(input.value_id).push({
+        operation: op.id,
+        ...input,
+        definition: valuesByID.get(input.value_id).definition,
+      });
 assert.equal(expectedValues.length, 250);
 assert.equal(
   [...byValue.values()].reduce((n, rows) => n + rows.length, 0),
@@ -218,10 +221,7 @@ try {
     [emitter, emitterGolden],
   ]) {
     const text = await readFile(
-      join(
-        process.env.REA_ATOMIC_EVIDENCE_DIR,
-        `${capture.source.evidence_id}.txt`,
-      ),
+      join(evidenceDirectory, `${capture.source.evidence_id}.txt`),
       "utf8",
     );
     assert.deepEqual(JSON.parse(text).functions[0], golden);

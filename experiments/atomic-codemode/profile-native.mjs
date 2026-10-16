@@ -5,7 +5,9 @@ import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { parseBinaryTarget } from "../../dist/application/BinaryTargetResolver.js";
-import { inspectKunaInstallation } from "../../dist/kuna/KunaInstallation.js";
+import { ArtifactResourceScope } from "../../dist/artifacts/ArtifactResourceScope.js";
+import { ArtifactReaderFailure } from "../../dist/artifacts/ArtifactReader.js";
+import { inspectNativeInstallation } from "./native-installation.mjs";
 import { KunaTargetCommands } from "../../dist/kuna/KunaTargetCommands.js";
 import { PrivateRuntimeRoot } from "../../dist/process/PrivateRuntimeRoot.js";
 import { spawnOwnedProviderProcess } from "../../dist/process/ProviderProcess.js";
@@ -51,15 +53,17 @@ const verifier = createVerifierRun(),
   runs = [],
   failures = [];
 const root = await PrivateRuntimeRoot.create({ prefix: "rea-atomic-profile-" });
+const files = new ArtifactResourceScope();
 let commands, installation, target;
 try {
   target = requireResult(await parseBinaryTarget(binary));
-  installation = requireResult(
-    await inspectKunaInstallation({
+  installation = await inspectNativeInstallation(
+    {
       ...process.env,
       REA_KUNA_COMMAND: engine,
       REA_KUNA_CACHE_DIR: join(root.path, "engine-cache"),
-    }),
+    },
+    files,
   );
   commands = new KunaTargetCommands(target, {
     signal: new AbortController().signal,
@@ -168,6 +172,14 @@ try {
     stack: error.stack,
   });
 } finally {
+  try {
+    await files.close();
+  } catch (error) {
+    failures.push({
+      code: "cleanup_incomplete",
+      ...ArtifactReaderFailure.cleanupObservation(error, engine),
+    });
+  }
   let closed = true;
   if (commands) {
     const result = await commands.close();

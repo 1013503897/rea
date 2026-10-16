@@ -3,7 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { writeFile, readFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { parseBinaryTarget } from "../../dist/application/BinaryTargetResolver.js";
-import { inspectKunaInstallation } from "../../dist/kuna/KunaInstallation.js";
+import { inspectNativeInstallation } from "./native-installation.mjs";
 import { KunaTargetCommands } from "../../dist/kuna/KunaTargetCommands.js";
 import { referenceReader } from "./reference-reads.mjs";
 import { PrivateRuntimeRoot } from "../../dist/process/PrivateRuntimeRoot.js";
@@ -49,15 +49,16 @@ export class KunaFactOwner {
   }));
   #nativeIR = false;
   context;
-  static async open(path, environment = process.env) {
+  static async open(path, { environment = process.env, fileResources }) {
     const owner = new KunaFactOwner();
     owner.#target = requireResult(
       await parseBinaryTarget(path),
       "invalid_target",
     );
-    owner.#installation = requireResult(
-      await inspectKunaInstallation(environment),
-      "provider_unavailable",
+    owner.#installation = await inspectNativeInstallation(
+      environment,
+      fileResources,
+      owner.#lifetime.signal,
     );
     const nativeIRHash = environment.REA_ATOMIC_NATIVE_IR_ENGINE_SHA256;
     if (
@@ -204,7 +205,7 @@ export class KunaFactOwner {
       ],
       signal,
     );
-    this.#strings ??= parseStringFacts(
+    this.#strings ??= await parseStringFacts(
       await this.#sourceText(capture.source.evidence_id),
       capture.input,
     );

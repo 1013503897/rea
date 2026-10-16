@@ -7,6 +7,10 @@ starts from two formats, without addresses, and accepts machine-supported
 answers without requiring native-only SSA identities. This tests a local
 cross-function warning/guard path, not reverse engineering the whole application.
 
+A later [main refresh](main-refresh-study.md) has its own compatibility checks.
+The model costs below still refer to the original frozen runtime; they were not
+remeasured on the refreshed compiled REA runtime.
+
 ## Correctness and coverage
 
 All four complete answers pass the frozen oracle/source review: both format
