@@ -23,6 +23,10 @@ The [path-query study](path-query-study.md) adds a shared, bounded recovered-CFG
 witness query with exclusions and paging. Both actual MCP adapters verify the
 same four real SQLite witnesses without requiring the model to fetch the entire
 graph. This establishes graph-relative facts; predicate feasibility stays unknown.
+Both real models now use the query and answer correctly on the same frozen
+controller task: direct takes 200.8 seconds / 495,895 cumulative input tokens;
+Code Mode takes 203.3 seconds / 554,477. Code Mode has lower uncached input,
+but no stable overall advantage is established. All prior pairs stay reported.
 
 The [control-query study](control-query-study.md) verifies every derived control
 triple on the real SQLite VM, fixes unknown CFG seeds and reuses a lazy

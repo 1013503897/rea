@@ -67,3 +67,11 @@ paged witness under explicit exclusions, with zero-edge/not-found/unknown
 outcomes. Both real SQLite MCP lanes preserve every original edge field; complete
 native function fidelity is checked. This removes an observed graph-reading
 burden without establishing feasible runtime paths or an adapter cost advantage.
+
+The completed path-query pair answers the unchanged two-level task correctly in
+both actual models; each uses four path reads and three selected block reads,
+without a complete graph inventory in model context. Direct and Code Mode have
+similar wall time with mixed token/resource costs. Stock 1.833 explicitly rejects
+the unsupported path query while preserving readable Evidence/code in a real SDK
+check. These are scoped observations, not stock-provider parity or complete
+runtime reachability coverage.
