@@ -1,0 +1,76 @@
+"""Summarize actual model usage and owned process-family counters, without grading answers."""
+
+import argparse
+import collections
+import json
+from pathlib import Path
+
+
+def summarize(directory):
+    summary = json.loads((directory / 'summary.json').read_text())
+    resource_records = [json.loads(line) for line in directory.with_suffix('.log').read_text().splitlines()
+                        if line.startswith('{"resource_scope":')]
+    if len(resource_records) != 1:
+        raise ValueError(f'{directory}: expected one process-family resource receipt')
+    resources = resource_records[0]
+    observation = resources['payload_resource_observation']
+    if observation['phase'] != 'payload-exited-observer-alive':
+        raise ValueError(f'{directory}: payload-exit counters were not observed')
+    usage = collections.Counter()
+    for turn in summary['usage']:
+        usage.update(turn)
+    calls = summary['completed_mcp_calls']  # This runner key also retains failed attempts.
+    statuses = collections.Counter(call['status'] for call in calls)
+    methods = collections.Counter()
+    source_ids = set()
+    api_failures = []
+    trace_path = directory.with_suffix('.trace.jsonl')
+    if trace_path.exists():
+        for line in trace_path.read_text().splitlines():
+            entry = json.loads(line)
+            result = entry['result']
+            if entry['tool'] == 'execute_javascript':
+                for call in result.get('calls', []):
+                    methods[call['method']] += 1
+                    if call['status'] != 'ok':
+                        api_failures.append(call)
+                source_ids.update(result.get('evidence_ids', []))
+    usage['uncached_input_tokens'] = usage['input_tokens'] - usage['cached_input_tokens']
+    cleanup = json.loads((directory / 'cleanup.json').read_text())
+    return {
+        'trial': directory.name,
+        'runtime_revision': summary['runtime_revision'],
+        'requested_model': summary['requested_model'],
+        'reasoning': summary['reasoning'],
+        'usage': dict(usage),
+        'outer_attempts': len(calls),
+        'outer_statuses': dict(statuses),
+        'outer_failures': [{k: call[k] for k in ('tool', 'status', 'error')}
+                           for call in calls if call['status'] != 'completed'],
+        'inner_code_mode_calls': dict(methods),
+        'inner_api_failures': api_failures,
+        'code_mode_evidence_count': len(source_ids),
+        'model_wall_seconds': summary['wall_seconds'],
+        'family_wall_seconds': resources['elapsed_seconds'],
+        'family_cpu_seconds': observation['cpu_stat']['usage_usec'] / 1_000_000,
+        'family_memory_peak_bytes': observation['memory_peak_bytes'],
+        'memory_events': observation['resource_events']['memory.events'],
+        'resource_abort': resources['abort'],
+        'payload_cleanup_verified': observation['payload_cleanup_verified'],
+        'profile_cleanup': cleanup,
+        'target_sha256': summary['selected_artifact_sha256_before'],
+        'target_unchanged': summary['selected_artifact_bytes_unchanged'],
+        'correctness': 'requires separate answer/source-oracle review',
+        'scope': 'Actual cumulative usage includes discovery/retries; cached input is included in input, reasoning in output. Memory is kernel cgroup peak including charged file cache. Server-side compute and resolved model build are unmeasured.',
+    }
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('directories', type=Path, nargs='+')
+    options = parser.parse_args()
+    print(json.dumps([summarize(path) for path in options.directories], indent=2))
+
+
+if __name__ == '__main__':
+    main()

@@ -58,5 +58,57 @@ Private captures remain under `.cache/atomic-codemode/zlib-codemode-v1/`, with
 trial settings and cleanup proof. The adjacent trace retains actual model code
 and inner API calls; the `*-evidence/` directory retains the three complete native
 sources and their identity/digest metadata. Credentials and raw captures are not
-committed. Direct atomic, revised Code Mode and traditional-provider trials have
-not yet established an equivalent completed-task comparison.
+committed.
+
+The second round used the pinned `c5cefd622` runtime, the same target, question,
+model alias/reasoning and client version, with the empty model profiles outside
+the repository under `/tmp`. Both atomic modes use the same eight fact methods;
+only the calling adapter changes. The traditional comparison forces the real
+Kuna provider and selects nine relevant production tools in the client:
+`open_binary`, `close_binary`, `binary_session`, `search_strings`, `xrefs`,
+`procedure_address`, `procedure_pseudo_code`, `procedure_assembly`,
+`analyze_function`. The production catalog remains complete. This is a favorable
+focused baseline, not the default full-catalog experience.
+
+| Measurement | Atomic direct v2 | Atomic + Code Mode v2 | Traditional v2 |
+| --- | ---: | ---: | ---: |
+| Outer MCP attempts, including failures | 27 | 12 | 9 |
+| Completed / failed outer attempts | 27 / 0 | 12 / 0 | 7 / 2 |
+| Internal Code Mode API reads | — | 21 | — |
+| Cumulative model input tokens | 590,872 | 453,734 | 344,105 |
+| Cached input tokens (included) | 496,512 | 401,664 | 297,344 |
+| Uncached input tokens | 94,360 | 52,070 | 46,761 |
+| Output tokens | 5,874 | 4,738 | 3,076 |
+| Reasoning tokens (included in output) | 2,228 | 1,716 | 832 |
+| Model runner wall seconds | 170.813 | 148.397 | 106.352 |
+| Bounded family elapsed seconds | 171.801 | 149.585 | 106.747 |
+| Bounded family CPU seconds | 11.898 | 22.129 | 20.666 |
+| Kernel process-family memory peak MiB | 578.2 | 544.3 | 843.4 |
+| OOM kills | 0 | 0 | 0 |
+
+The traditional trace includes a client approval-policy rejection for
+`binary_session` and a failed name lookup for `inflate`; the model recovered
+through string/xref/address discovery. Both attempts and their costs remain in
+the comparison. A completed transport call does not itself establish a valid
+analysis result; answers and the retained calls were reviewed separately.
+
+All three answers identify the same two local error branches and modulo-31
+condition, with supporting addresses and limitations consistent with the
+independent instruction/arithmetic checks. This establishes a completed local
+task comparison. It does not prove global runtime reachability or correctness
+on arbitrary binaries. All target digests remained unchanged, temporary model
+profiles were removed, and observed payload cleanup succeeded.
+
+Code Mode reduces direct atomic round trips on this trial, but traditional tools
+win both cumulative input tokens and wall time. The prototype still makes the
+model assemble incomplete CFG/phi/value relationships and repeatedly inspect
+operations or C. Fixing the arbitrary C page cap reduced internal C reads from
+16 to 2; the overall first-to-second trial changes are not a controlled causal
+measurement because return contracts and profile placement changed too.
+
+These are single stochastic samples, with fresh provider/session caches, warm
+and uncontrolled OS file caches, and actual model prompt-cache usage reported.
+No warm-session paired reruns, confidence interval, server-side model compute or
+pricing was measured. Reproduce the ledger with `summarize-trials.py` over the
+private trial directories; it reads actual model usage and the payload-exit
+cgroup receipt and deliberately does not grade answers.
