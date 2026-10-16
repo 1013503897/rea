@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import Ajv2020 from "ajv/dist/2020.js";
-import { AtomicSession, methods, reference } from "./api.mjs";
+import { methods, reference } from "./api.mjs";
+import { AtomicSession } from "./session.mjs";
 
 const factory = () => {
   let sequence = 0;

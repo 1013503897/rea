@@ -2,7 +2,8 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { z } from "zod";
-import { AtomicSession, methods, reference } from "./api.mjs";
+import { methods, reference } from "./api.mjs";
+import { AtomicSession } from "./session.mjs";
 import { executeJavaScript } from "./executor.mjs";
 import { referenceInput } from "./reference.mjs";
 import { EXECUTION_LIMITS } from "./limits.mjs";
@@ -84,7 +85,7 @@ const createServer = () => {
   );
   register(
     "reference",
-    "Discover fact methods with view:index and an empty query: returns names and descriptions without schemas. Then request only needed full contracts with view:contracts and exact displayed names or canonical IDs separated by spaces/commas. One topic query searches descriptions; empty query with view:contracts returns all contracts. These are static declared methods, not live provider availability.",
+    "Discover fact methods with view:index and an empty query: returns names and short intent summaries without schemas. Then request only needed full contracts and semantics with view:contracts and exact displayed names or canonical IDs separated by spaces/commas. One topic query searches full descriptions; empty query with view:contracts returns all contracts. These are static declared methods, not live provider availability.",
     referenceInput,
     (input) =>
       reference(input.query, {

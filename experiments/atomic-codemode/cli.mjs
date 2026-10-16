@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { AtomicSession } from "./api.mjs";
+import { AtomicSession } from "./session.mjs";
 import { executeJavaScript } from "./executor.mjs";
 
 const [binary, script] = process.argv.slice(2);

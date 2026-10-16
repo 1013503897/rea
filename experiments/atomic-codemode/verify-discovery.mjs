@@ -6,6 +6,7 @@ import { Client } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import Ajv2020 from "ajv/dist/2020.js";
 import { EXECUTION_LIMITS } from "./limits.mjs";
+import { methods } from "./api.mjs";
 import {
   createVerifierRun,
   completeVerifierRun,
@@ -37,6 +38,17 @@ for (const direct of [false, true]) {
   try {
     await client.connect(transport);
     const catalog = await client.listTools();
+    assert.deepEqual(
+      catalog.tools.map((tool) => tool.name).sort(),
+      [
+        "open_binary",
+        "close_binary",
+        "reference",
+        ...(direct
+          ? Object.keys(methods).map((name) => `facts_${name}`)
+          : ["execute_javascript"]),
+      ].sort(),
+    );
     const prefix = direct ? "facts_" : "rea.";
     const ids = [
       "switches",
@@ -183,7 +195,11 @@ for (const direct of [false, true]) {
     assert.deepEqual(missing.unmatched_queries, ["unknown"]);
     const all = await call("");
     assert.equal(all.methods.length, 15);
-    for (const method of all.methods) ajv.compile(method.input_schema);
+    for (const method of all.methods) {
+      ajv.compile(method.input_schema);
+      assert.equal(method.description, methods[method.method].description);
+      assert.equal(methods[method.method].method, method.method);
+    }
     const index = await call("", "index");
     assert.equal(index.coverage.view, "index");
     assert.deepEqual(
@@ -205,7 +221,7 @@ for (const direct of [false, true]) {
       all.methods.map((m) => ({
         method: m.method,
         name: m.name,
-        description: m.description,
+        description: methods[m.method].summary,
       })),
     );
     assert.ok(
@@ -215,6 +231,7 @@ for (const direct of [false, true]) {
     assert.ok(JSON.stringify(selected).length < JSON.stringify(all).length);
     results.push({
       direct,
+      catalog_tools: catalog.tools.map((tool) => tool.name),
       selected,
       all_reference_bytes: Buffer.byteLength(JSON.stringify(all)),
       index_bytes: Buffer.byteLength(JSON.stringify(index)),

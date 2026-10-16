@@ -1,11 +1,7 @@
 // One named contract registry shared by SDK, CLI, direct MCP and Code Mode.
 import { z } from "zod";
-import { KunaFactOwner } from "./provider.mjs";
-import { FactFailure } from "./fact-error.mjs";
 import { MAX_BYTE_BATCH_BYTES } from "./limits.mjs";
 import { createReference } from "./reference.mjs";
-import { ArtifactResourceScope } from "../../dist/artifacts/ArtifactResourceScope.js";
-import { ArtifactReaderFailure } from "../../dist/artifacts/ArtifactReader.js";
 
 const hex = z.string().regex(/^0x(?:0|[1-9a-f][0-9a-f]{0,15})$/u);
 const snapshot = z.string().startsWith("snap_");
@@ -49,7 +45,8 @@ const fields = z
     ]),
   )
   .optional();
-const definition = (description, input, method, example) => ({
+const definition = ({ summary, description }, input, method, example) => ({
+  summary,
   description,
   input: z.strictObject(input),
   method,
@@ -87,7 +84,12 @@ const relationInput = z.discriminatedUnion("kind", [
 ]);
 export const methods = {
   switches: definition(
-    "Inspect recovered indirect branches and their independent native jump-table metadata, without returning all case rows. Selector is the current recovered BRANCHIND input, which may be normalized rather than the machine jump address. Native consumed mask and signed rendering hint are not complete runtime/signedness proofs. Null tables/defaults stay unknown. The native model default out-edge is separate from any machine out-of-range guard destination. Use relations kind:cases for selected raw table rows, labels and their native mapping to recovered edges; row/edge ordinals are not case values. Available even when the full graph is unavailable if this independent facet was captured.",
+    {
+      summary:
+        "Select recovered switches/table metadata; fetch cases separately. Native defaults may differ from machine guards.",
+      description:
+        "Inspect recovered indirect branches and their independent native jump-table metadata, without returning all case rows. Selector is the current recovered BRANCHIND input, which may be normalized rather than the machine jump address. Native consumed mask and signed rendering hint are not complete runtime/signedness proofs. Null tables/defaults stay unknown. The native model default out-edge is separate from any machine out-of-range guard destination. Use relations kind:cases for selected raw table rows, labels and their native mapping to recovered edges; row/edge ordinals are not case values. Available even when the full graph is unavailable if this independent facet was captured.",
+    },
     {
       snapshot,
       ids: z.array(z.string()).max(128).optional(),
@@ -99,7 +101,12 @@ export const methods = {
     'await rea.switches({snapshot:s,origin_addresses:["0x1000"]})',
   ),
   functions: definition(
-    "Search retained native callable entries by literal name/alias, exact name, or entry addresses. Names can match several entries, including PLT/import stubs and implementations; preserve all matches and select by address. A name does not establish runtime symbol binding.",
+    {
+      summary:
+        "Select callable entries and aliases, preserving ambiguous names; reported sizes are bounds, not assured extents.",
+      description:
+        "Search retained native callable entries by literal name/alias, exact name, or entry addresses. Names can match several entries, including PLT/import stubs and implementations; preserve all matches and select by address. A name does not establish runtime symbol binding.",
+    },
     {
       query: z.string().default(""),
       exact: z.boolean().default(false),
@@ -112,13 +119,23 @@ export const methods = {
     'await rea.functions({query:"format_error",exact:true})',
   ),
   strings: definition(
-    "Search retained string inventory by literal text. Paging does not establish artifact completeness.",
+    {
+      summary:
+        "Search retained encoded strings by literal text; discovery and reference attribution remain unknown.",
+      description:
+        "Search retained string inventory by literal text. Paging does not establish artifact completeness.",
+    },
     { query: z.string(), ...page },
     "strings",
     'await rea.strings({query:"incorrect header check"})',
   ),
   references: definition(
-    "Batch incoming or outgoing lifted-code references without decompilation. Address scope selects exact target (incoming) or source instruction (outgoing); function scope selects outgoing native owning-function references and requires an entry address. Unknown function applicability stays unknown. Kind filtering is pushed to the native query; source rows, endpoints and Evidence identity remain. Recovered IR calls are a separate representation and may omit machine calls. Interior string references require a separate extent query.",
+    {
+      summary:
+        "Read incoming exact-address or outgoing address/function xrefs with occurrence identity and ownership coverage.",
+      description:
+        "Batch incoming or outgoing lifted-code references without decompilation. Address scope selects exact target (incoming) or source instruction (outgoing); function scope selects outgoing native owning-function references and requires an entry address. Unknown function applicability stays unknown. Kind filtering is pushed to the native query; source rows, endpoints and Evidence identity remain. Recovered IR calls are a separate representation and may omit machine calls. Interior string references require a separate extent query.",
+    },
     {
       addresses: z.array(hex).min(1).max(16),
       direction: z.enum(["incoming", "outgoing"]).default("incoming"),
@@ -136,13 +153,23 @@ export const methods = {
     'await rea.references({addresses:["0x2000"]})',
   ),
   snapshot: definition(
-    "Analyze an explicit function entry once; return a retained capture handle, facets and coverage. Reuses the source within this target lease. Code, recovered calls and values remain independently available when full recovered IR exceeds capacity. A bounded call-rooted operation/definition projection may also be available; inspect facets.operations and coverage before reads. CFG queries still require the complete recovered graph. Available calls include compact by_opcode counts of known/unknown targets over the whole retained call facet; no paging is needed for these counts. Selected calls and complete Evidence remain readable.",
+    {
+      summary:
+        "Capture one function's analysis; return a snapshot, retained Evidence, facet availability and scoped counts.",
+      description:
+        "Analyze an explicit function entry once; return a retained capture handle, facets and coverage. Reuses the source within this target lease. Code, recovered calls and values remain independently available when full recovered IR exceeds capacity. A bounded call-rooted operation/definition projection may also be available; inspect facets.operations and coverage before reads. CFG queries still require the complete recovered graph. Available calls include compact by_opcode counts of known/unknown targets over the whole retained call facet; no paging is needed for these counts. Selected calls and complete Evidence remain readable.",
+    },
     { entry: hex },
     "snapshot",
     'await rea.snapshot({entry:"0x1000"})',
   ),
   bytes: definition(
-    "Read selected native loaded-image bytes without instruction decoding. Batch up to 16 exact virtual-address windows and 64 KiB total selected bytes; hex uses twice that space before provenance. Short reads remain partial. These are not live process memory or an original-file-offset mapping. Global code discovery is not performed.",
+    {
+      summary:
+        "Read batched static loaded-image byte ranges with source identity and per-window partial outcomes.",
+      description:
+        "Read selected native loaded-image bytes without instruction decoding. Batch up to 16 exact virtual-address windows and 64 KiB total selected bytes; hex uses twice that space before provenance. Short reads remain partial. These are not live process memory or an original-file-offset mapping. Global code discovery is not performed.",
+    },
     {
       windows: z.array(byteWindow).min(1).max(16),
     },
@@ -150,7 +177,12 @@ export const methods = {
     'await rea.bytes({windows:[{address:"0x2000",length:32}]})',
   ),
   instructions: definition(
-    "Batch selected machine instruction windows. Read exact bytes and native disassembly to verify actual control transfers; optimized recovered CFG edges can bypass machine blocks. Address+size with the artifact context identifies the byte range. A caller-selected decode start does not prove execution/alignment.",
+    {
+      summary:
+        "Decode selected static machine-byte windows, distinct from optimized IR edges and runtime execution.",
+      description:
+        "Batch selected machine instruction windows. Read exact bytes and native disassembly to verify actual control transfers; optimized recovered CFG edges can bypass machine blocks. Address+size with the artifact context identifies the byte range. A caller-selected decode start does not prove execution/alignment.",
+    },
     {
       windows: z
         .array(
@@ -169,7 +201,12 @@ export const methods = {
     'await rea.instructions({windows:[{address:"0x1000",count:8}],fields:["bytes","text"]})',
   ),
   operations: definition(
-    "Select SSA operations by IDs, source instruction origins, block IDs, constant literal or kind. Native default rows are compact summaries: opcode/kind/output and input/definition/constant counts; request detailed fields explicitly or page input slots via relations kind:operands. Filters intersect; identities and native is_dead are retained. Availability may be a complete recovered graph or a bounded call-rooted projection; inspect coverage before inferring absence. A literal match is not object identity. origin_addresses selects optimized recovered IR origins; use instructions for actual machine control transfers.",
+    {
+      summary:
+        "Select snapshot-local IR operations by identity, origin, constant or kind, with native/projection scope.",
+      description:
+        "Select SSA operations by IDs, source instruction origins, block IDs, constant literal or kind. Native default rows are compact summaries: opcode/kind/output and input/definition/constant counts; request detailed fields explicitly or page input slots via relations kind:operands. Filters intersect; identities and native is_dead are retained. Availability may be a complete recovered graph or a bounded call-rooted projection; inspect coverage before inferring absence. A literal match is not object identity. origin_addresses selects optimized recovered IR origins; use instructions for actual machine control transfers.",
+    },
     {
       snapshot,
       ids: z.array(z.string()).max(128).optional(),
@@ -184,6 +221,8 @@ export const methods = {
     'await rea.operations({snapshot:s,constant:"0x2000",fields:["statement"]})',
   ),
   relations: {
+    summary:
+      "Read typed SSA operands/def-use, CFG/controllers or switch cases by identities; preserve unknown/partial scope.",
     description:
       "Read native operand occurrences, operation definitions/uses, value_uses or case rows. value_uses takes value-ID seeds and returns exact operation/input-slot occurrences, including function inputs and constants without defining operations; null definition stays explicit, not a missing use. Uses cover retained operations, not runtime or memory aliases. Other data-flow/case seeds are operation IDs; incoming/outgoing CFG edges or derived controllers for block IDs. Native CFG/controller reads deduplicate seeds and report unretained_seeds; an unknown block is not a retained block with no relations. Incoming/outgoing rows keep caller seed then native edge order; controllers keep native controller/edge then postdominator order. cases pages one relation per case/out-edge, with a stable case_id; an unmapped case has one explicit unknown-edge row. total counts relations, not table rows. cases filters optional case_values (native labels tagged value) and case_indices (original row ordinals); both filters intersect and paging spans deduplicated seeds in caller order. Rows preserve missing/no-label status, original recovered target, and separate recovered edges. Partial/unavailable tables and unmapped rows are explicit; no runtime feasibility claim. operands pages every selected input slot, including constants, function inputs and null slots; input_indices optionally selects slots in caller order. Identity is snapshot + operation + input_index; value_id/definition and exact phi predecessor/edge bindings remain separate. Out-of-range slots of retained operations are absent; unretained_seeds remain unknown. A bounded call-rooted projection supports operands/definitions/uses but no CFG; uses cover retained selected operations only. Diagnostic SSA lacks native operands and has partial CFG/printed occurrences. controllers requires a complete recovered graph and concerns finite paths to recovered exits, not runtime feasibility.",
     input: relationInput,
@@ -192,7 +231,12 @@ export const methods = {
       'await rea.relations({snapshot:s,kind:"operands",seeds:[op.id],input_indices:[0,2]})',
   },
   values: definition(
-    "Read native SSA values by IDs or exact locations [{space,offset,size_bytes}], with width required. Locations match retained metadata, including const/unique spaces, not pointee contents, aliases or live memory. Filters intersect; IDs retain caller order, otherwise locations retain caller order and values retain native order per location. Empty IDs/locations select none. Null-space values cannot resolve a location and stay explicit in location_coverage; unretained_locations means no known retained coordinate match, not absent machine storage. Scope may be a full graph, bounded call-rooted definition projection, or call-boundary values only; is_input filters retained operand/output values, not an original source signature. Offset is an address-space offset, not a computed arbitrary-width value. Width, constants, function inputs, annotation status and defining operation are separate facts. Requires the pinned native exporter.",
+    {
+      summary:
+        "Select SSA values by ID or exact space/offset/width; keep versions, inputs and constants distinct, without alias inference.",
+      description:
+        "Read native SSA values by IDs or exact locations [{space,offset,size_bytes}], with width required. Locations match retained metadata, including const/unique spaces, not pointee contents, aliases or live memory. Filters intersect; IDs retain caller order, otherwise locations retain caller order and values retain native order per location. Empty IDs/locations select none. Null-space values cannot resolve a location and stay explicit in location_coverage; unretained_locations means no known retained coordinate match, not absent machine storage. Scope may be a full graph, bounded call-rooted definition projection, or call-boundary values only; is_input filters retained operand/output values, not an original source signature. Offset is an address-space offset, not a computed arbitrary-width value. Width, constants, function inputs, annotation status and defining operation are separate facts. Requires the pinned native exporter.",
+    },
     {
       snapshot,
       ids: z.array(z.string()).max(128).optional(),
@@ -218,7 +262,12 @@ export const methods = {
     "await rea.values({snapshot:s,ids:op.inputs.map(i=>i.value_id).filter(Boolean)})",
   ),
   calls: definition(
-    "Select structured recovered call sites and argument bindings. Target comes from native call specifications, never the fspec annotation offset or display text. Each argument separates its SSA value from its passing storage. Calls and their boundary values survive full graph capacity failure. target_value_id retains input zero independently of target resolution; it may be an fspec annotation or an unresolved indirect target value. A null output describes this recovered operation, not proof of a void source signature. Input slots are not original source parameter ordinals; missing storage and indirect/runtime targets remain unknown. To investigate across functions, snapshot the selected callee and select values with is_input:true, comparing exact space/offset/width. Requires the pinned native exporter.",
+    {
+      summary:
+        "Read recovered calls, target knowledge, arguments and passing storage; signatures and runtime binding remain uncertain.",
+      description:
+        "Select structured recovered call sites and argument bindings. Target comes from native call specifications, never the fspec annotation offset or display text. Each argument separates its SSA value from its passing storage. Calls and their boundary values survive full graph capacity failure. target_value_id retains input zero independently of target resolution; it may be an fspec annotation or an unresolved indirect target value. A null output describes this recovered operation, not proof of a void source signature. Input slots are not original source parameter ordinals; missing storage and indirect/runtime targets remain unknown. To investigate across functions, snapshot the selected callee and select values with is_input:true, comparing exact space/offset/width. Requires the pinned native exporter.",
+    },
     {
       snapshot,
       ids: z.array(z.string()).max(128).optional(),
@@ -243,7 +292,12 @@ export const methods = {
     'await rea.calls({snapshot:s,origin_addresses:["0x1100"]})',
   ),
   blocks: definition(
-    "Read native recovered blocks by stable snapshot-local ID, with ordered predecessors, successor edges and member operation IDs. origin_start describes optimized IR provenance, not a machine block extent. Requires an available native recovered IR graph. Runtime successors remain unknown.",
+    {
+      summary:
+        "Select recovered CFG blocks and edges; origin addresses are provenance, not machine block extents.",
+      description:
+        "Read native recovered blocks by stable snapshot-local ID, with ordered predecessors, successor edges and member operation IDs. origin_start describes optimized IR provenance, not a machine block extent. Requires an available native recovered IR graph. Runtime successors remain unknown.",
+    },
     {
       snapshot,
       ids: z.array(z.number().int().nonnegative()).max(128).optional(),
@@ -258,7 +312,12 @@ export const methods = {
     "await rea.blocks({snapshot:s,ids:[op.block]})",
   ),
   slice: definition(
-    "Compose a bounded backward definition traversal from explicit operation IDs. Native default operation rows are compact summaries; request detailed fields or use paged operand relations for wide nodes. Available over a complete recovered graph or bounded call-rooted projection. Missing defining bodies retain frontier reasons; complete use sets and CFG are unavailable for a projection. Default load/phi cutoffs keep boundaries visible; choose stop_kinds:[] to traverse beyond them. Complete reachability and memory aliases remain unknown.",
+    {
+      summary:
+        "Trace bounded backward definitions with explicit LOAD/PHI/frontier cutoffs; memory aliases remain unknown.",
+      description:
+        "Compose a bounded backward definition traversal from explicit operation IDs. Native default operation rows are compact summaries; request detailed fields or use paged operand relations for wide nodes. Available over a complete recovered graph or bounded call-rooted projection. Missing defining bodies retain frontier reasons; complete use sets and CFG are unavailable for a projection. Default load/phi cutoffs keep boundaries visible; choose stop_kinds:[] to traverse beyond them. Complete reachability and memory aliases remain unknown.",
+    },
     {
       snapshot,
       seeds: z.array(z.string()).min(1).max(64),
@@ -271,7 +330,12 @@ export const methods = {
     'await rea.slice({snapshot:s,seeds:callIds,stop_kinds:["load"],fields:["opcode","inputs","output","constants"]})',
   ),
   code: definition(
-    "Read reconstructed code from the same retained function capture, even when its graph facet is unavailable. offset is zero-based. A large limit reads the complete code inside Code Mode for local filtering. The bridge byte budget bounds the result. No additional decompilation.",
+    {
+      summary:
+        "Read selected lines of retained reconstructed code, including when graph capture is unavailable.",
+      description:
+        "Read reconstructed code from the same retained function capture, even when its graph facet is unavailable. offset is zero-based. A large limit reads the complete code inside Code Mode for local filtering. The bridge byte budget bounds the result. No additional decompilation.",
+    },
     {
       snapshot,
       offset: page.offset,
@@ -281,7 +345,12 @@ export const methods = {
     "await rea.code({snapshot:s,offset:100,limit:64})",
   ),
   evidence: definition(
-    "Read complete retained native source in UTF-16-code-unit pages by evidence_id; no reanalysis. component:source preserves exact original wire JSON. component:recovered_ir reads the decoded graph source, including lossless compressed graphs; source hash remains the original capture and view has its own hash/byte count. This is source inspection, not a claim that malformed graph facts are valid. Available until close_binary.",
+    {
+      summary:
+        "Page complete retained source or decoded graph Evidence with source/view identities and freshness checks.",
+      description:
+        "Read complete retained native source in UTF-16-code-unit pages by evidence_id; no reanalysis. component:source preserves exact original wire JSON. component:recovered_ir reads the decoded graph source, including lossless compressed graphs; source hash remains the original capture and view has its own hash/byte count. This is source inspection, not a claim that malformed graph facts are valid. Available until close_binary.",
+    },
     {
       evidence_id: z.string().startsWith("ev_"),
       component: z.enum(["source", "recovered_ir"]).default("source"),
@@ -332,115 +401,5 @@ methods.references.input = methods.references.input.superRefine(
       });
   },
 );
-export class AtomicSession {
-  #owner;
-  #tail = Promise.resolve();
-  #files = new ArtifactResourceScope();
-  constructor(factory = KunaFactOwner.open) {
-    this.factory = factory;
-  }
-  #admit(work) {
-    const pending = this.#tail.then(work, work);
-    this.#tail = pending.catch(() => {});
-    return pending;
-  }
-  get context() {
-    return this.#owner?.context ?? null;
-  }
-  abort() {
-    this.#owner?.cancel();
-  }
-  async #releaseFiles() {
-    try {
-      await this.#files.retryCleanup();
-    } catch (cause) {
-      const cleanup = ArtifactReaderFailure.cleanupObservation(
-        cause,
-        "Target session files",
-      );
-      throw new FactFailure("cleanup_incomplete", cleanup.reason, {
-        resources: cleanup.resources,
-      });
-    }
-  }
-  open(path) {
-    return this.#admit(async () => {
-      await this.#releaseFiles();
-      if (this.#owner) await this.#owner.close();
-      this.#owner = undefined;
-      this.#owner = await this.factory(path, {
-        fileResources: this.#files,
-      });
-      return {
-        ok: true,
-        context: this.context,
-        methods: Object.keys(methods),
-        evidence_lifetime: "current target lease",
-      };
-    });
-  }
-  close() {
-    return this.#admit(async () => {
-      if (this.#owner) await this.#owner.close();
-      await this.#releaseFiles();
-      this.#owner = undefined;
-      return { ok: true, closed: true };
-    });
-  }
-  call(
-    name,
-    input,
-    signal = new AbortController().signal,
-    lease = this.context?.lease,
-  ) {
-    return this.#admit(async () => {
-      try {
-        if (signal.aborted)
-          throw new FactFailure(
-            "cancelled",
-            "Request was cancelled before admission",
-          );
-        if (!this.#owner)
-          throw new FactFailure(
-            "no_target",
-            "Call open_binary before analysis",
-          );
-        if (lease !== this.context.lease)
-          throw new FactFailure(
-            "stale_context",
-            "Target lease changed; do not join facts across leases",
-          );
-        if (!Object.hasOwn(methods, name))
-          throw new FactFailure(
-            "unknown_method",
-            `Unknown API method: ${name}`,
-          );
-        const contract = methods[name];
-        const parsed = contract.input.parse(input);
-        const data = await this.#owner[contract.method](parsed, signal);
-        if (signal.aborted)
-          throw new FactFailure(
-            "cancelled",
-            "Request was cancelled after observations were collected",
-            { partial_observation: data },
-          );
-        return { ok: true, context: this.context, data };
-      } catch (error) {
-        return {
-          ok: false,
-          context: this.context,
-          error: {
-            code:
-              error instanceof z.ZodError
-                ? "invalid_input"
-                : (error.code ?? "analysis_failed"),
-            message: error.message,
-            details: error.details ?? {},
-          },
-        };
-      }
-    });
-  }
-}
 
 export const reference = createReference(methods);

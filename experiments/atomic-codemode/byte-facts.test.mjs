@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { parseByteFacts } from "./byte-facts.mjs";
-import { AtomicSession } from "./api.mjs";
+import { AtomicSession } from "./session.mjs";
 
 const make = () => ({
   binary: "/input",

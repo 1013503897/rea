@@ -114,7 +114,10 @@ export const createReference =
     const catalog = selected.keys.map((method) => ({
       method,
       name: labels[method],
-      description: methods[method].description,
+      description:
+        view === "index"
+          ? methods[method].summary
+          : methods[method].description,
     }));
     const coverage = {
       declared_methods: Object.keys(methods).length,
@@ -128,7 +131,7 @@ export const createReference =
         coverage,
         unmatched_queries: selected.unmatched,
         notes: [
-          "Static declared methods, not live provider availability. Request exact displayed names with view:contracts for schemas; inspect snapshot facets for runtime coverage.",
+          "Intent summaries of static declared methods, not full contracts or live availability. Request exact displayed names with view:contracts for schemas and semantics; inspect snapshot facets for runtime coverage.",
         ],
       };
     return {

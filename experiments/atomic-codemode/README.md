@@ -28,6 +28,12 @@ now pass: Code Mode reduces cumulative input but increases uncached input, time,
 CPU and memory in this pair. Correct facts support both calling strategies;
 the query-cache improvement is separate from those mixed whole-task costs.
 
+The [discovery-summary study](discovery-summary-study.md) addresses repeated
+metadata from that pair. The complete method index now uses owned intent
+summaries; all full contracts and advertised tools remain available. Contracts
+and session admission have separate owners, with native loading deferred to open.
+Its repeat uses the same frozen control question and retains the earlier results.
+
 The [exact-value query study](value-query-study.md) adds location-to-value and
 value-to-operand-use queries, including inputs/constants without defining operations.
 Real stripped OpenSSH checks preserve all 250 SSA versions / 369 occurrences at
@@ -49,8 +55,10 @@ Three boundaries own the implementation:
 
 - `provider.mjs`, `native-ir.mjs`: existing REA native target/process owners and parsed Kuna
   string/reference/SSA facts, retained sources, freshness and cleanup.
-- `api.mjs`: named, validated fact/relationship contracts and session admission.
-  SDK callers, CLI scripts and both MCP adapters use these same methods.
+- `api.mjs`: named, validated fact/relationship contracts and their intent summaries.
+  `session.mjs` owns shared admission and lease/file cleanup, loading the native
+  provider only on open. SDK callers, CLI scripts and both MCP adapters use these
+  same contracts and application owner.
 - `executor.mjs`, `server.mjs`, `cli.mjs`: bounded JavaScript composition and
   presentation. No analysis is reimplemented in the execution environment.
 

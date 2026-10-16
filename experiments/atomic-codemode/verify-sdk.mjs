@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { writeFile } from "node:fs/promises";
-import { AtomicSession } from "./api.mjs";
+import { AtomicSession } from "./session.mjs";
 
 const [binary, output] = process.argv.slice(2);
 assert.ok(binary && output, "Usage: verify-sdk.mjs ZLIB OUTPUT");

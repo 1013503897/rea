@@ -7,6 +7,8 @@ import { createReference } from "./reference.mjs";
 test("reference index discovers named methods without constructing unrequested schemas", () => {
   const registry = {
     sample: {
+      summary:
+        "Discover a declared capability; inspect its full contract before use.",
       description: "Declared capability; live coverage is unknown.",
       get input() {
         throw new Error("Schema was not requested");
@@ -22,7 +24,7 @@ test("reference index discovers named methods without constructing unrequested s
     {
       method: "sample",
       name: "facts_sample",
-      description: registry.sample.description,
+      description: registry.sample.summary,
     },
   ]);
   assert.equal(index.coverage.view, "index");
@@ -41,13 +43,19 @@ test("reference index discovers named methods without constructing unrequested s
   );
   assert.ok(
     all.methods.every(
-      (m) => !Object.hasOwn(m, "input_schema") && !Object.hasOwn(m, "returns"),
+      (m) =>
+        m.description === methods[m.method].summary &&
+        typeof m.description === "string" &&
+        m.description.length > 0 &&
+        !Object.hasOwn(m, "input_schema") &&
+        !Object.hasOwn(m, "returns"),
     ),
   );
   assert.ok(
     Buffer.byteLength(JSON.stringify(all)) <
       Buffer.byteLength(JSON.stringify(reference())),
   );
+  assert.ok(all.notes.some((note) => note.includes("not full contracts")));
 });
 
 test("named reference lists preserve caller order and exact schemas across presentations", () => {
@@ -101,6 +109,14 @@ test("topic/all reference selection and shared schema ownership remain explicit"
   assert.ok(
     reference("memory aliases").methods.some((m) => m.method === "slice"),
   );
+  assert.deepEqual(
+    reference("memory aliases", { view: "index" }).methods.map((m) => m.method),
+    reference("memory aliases").methods.map((m) => m.method),
+  );
+  for (const entry of reference().methods) {
+    assert.equal(entry.description, methods[entry.method].description);
+    assert.equal(methods[entry.method].method, entry.method);
+  }
   const before = reference("snapshot").methods[0];
   assert.throws(() => {
     before.input_schema.properties.entry.type = "number";

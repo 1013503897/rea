@@ -2,7 +2,7 @@
 // The failure is simulated; native reads and the successful retry use real owners.
 import assert from "node:assert/strict";
 import { stat, writeFile } from "node:fs/promises";
-import { AtomicSession } from "./api.mjs";
+import { AtomicSession } from "./session.mjs";
 import { KunaFactOwner } from "./provider.mjs";
 import { KunaTargetCommands } from "../../dist/kuna/KunaTargetCommands.js";
 import { ProviderCleanupError } from "../../dist/domain/providerCleanupError.js";
