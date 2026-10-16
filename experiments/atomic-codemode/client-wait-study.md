@@ -52,8 +52,11 @@ The native/API contracts are unchanged.
 
 ## Executed repeat
 
-Both runs pin `790cdfdef`, with Code Mode first and direct second. Both complete
-answers again pass the frozen oracle: format ownership before capture, selector
+Both runs pin `790cdfdef`, with Code Mode first and direct second. Their shared
+frozen runtime is preserved by tag
+[`experiment/atomic-codemode-wait-runtime-20261016`](https://github.com/morluto/rea/tree/experiment/atomic-codemode-wait-runtime-20261016),
+which retains the original revision before commit-attribution metadata cleanup.
+Both complete answers again pass the frozen oracle: format ownership before capture, selector
 widths, all five selected case identities/edges/targets, signed table arithmetic,
 the absent explicit `0xb6` case and distinct native-default/machine-guard
 destinations. Direct cites eleven observed source IDs; Code Mode cites ten.
