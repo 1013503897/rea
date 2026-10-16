@@ -286,5 +286,7 @@ work through both real MCP adapters; all graph fields and ordinary C/calls match
 the prior complete golden. Same-lease reuse is about 67 ms after a 39.7-second
 fresh capture, with resource limits and no OOM. The [next question/oracle](savepoint-control-oracle.md)
 start from names/error messages and exercise the new condition/CFG coverage.
-Actual model results remain pending; source fidelity is not machine equivalence,
-provider parity or a general speedup.
+The first [real-model pair](savepoint-control-study.md) answers both local guards
+correctly without a whole-report fetch. Code Mode uses fewer MCP requests, but
+whole-task costs are mixed; a discovery-controlled repeat is pending. Source
+fidelity is not machine equivalence, provider parity or a general speedup.

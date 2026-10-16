@@ -64,6 +64,7 @@ bytes**. The public byte budget remains 8,388,608. Raw receipts/source copies ar
 | ---------------------------------------- | ------------------: | ----------: | --------------: |
 | Initial build                            |             441.295 |     391.223 |         2,194.8 |
 | Focused native tests, including compile  |              98.589 |      98.034 |           632.9 |
+| Final budget-version native tests        |             176.333 |     175.748 |           644.1 |
 | Formatted cached rebuild                 |              26.999 |      26.749 |           499.3 |
 | Collector-budget rebuild                 |             361.041 |     342.220 |         2,192.9 |
 | First probe: hidden text-cap failure     |              39.279 |      39.010 |           650.9 |
@@ -87,6 +88,9 @@ and patch forward/reverse checks pass. Patch-context spaces are format markers.
 The three small-function records retain their prior ordinary representations;
 the current reader also accepts the old engine's explicit full-graph refusal,
 independent calls and 4,096-operation projection through real MCP reads.
+The final native test rerun also passes the same ten selected cases after the
+collector-budget change. Other CLI integration tests were compiled but filtered
+out; they are not additional executed coverage.
 Native full corpus/stages/workspace and whole-REA gates remain unexecuted or
 previously resource-limited; no upstream/PR/integration readiness is claimed.
 
@@ -110,5 +114,7 @@ The [question/oracle](savepoint-control-oracle.md) are fixed before model trials
 with function name/messages but no supplied code addresses. Selected independent
 machine evidence checks local guards, load/spill/setup and shared call. Recovered
 CFG/use coverage still does not establish full machine flow, memory aliases,
-nontermination or feasible execution. Real-model costs/answers remain to be
-measured; public scripted checks do not establish them.
+nontermination or feasible execution. The first [real-model pair](savepoint-control-study.md)
+now passes the frozen question through both adapters; its whole-task costs are
+mixed and include discovery noise and a Code Mode parameter retry. Public
+scripted checks alone do not establish those model outcomes.
