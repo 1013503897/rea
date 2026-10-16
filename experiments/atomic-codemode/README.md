@@ -191,3 +191,9 @@ retry. Both public MCP adapters preserve that error and retry successfully.
 These use an injected tagged failure, not an observed engine cleanup incident;
 native reads and subsequent cleanup use the real provider. See the recorded
 scope and resource receipts in [native-engine.md](native-engine.md).
+
+A [subsequent diagnostic probe](projection-experiment.md) measures the VM's full
+17 MB recovered graph and much smaller selected definition neighborhoods. It
+supports trying a bounded operation/value facet, while preserving unresolved
+definitions and unavailable CFG. This is offline feasibility evidence; selected
+definition bodies remain an unimplemented public API gap.

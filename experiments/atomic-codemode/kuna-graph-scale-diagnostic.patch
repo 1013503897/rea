@@ -1,0 +1,28 @@
+--- a/decompiler/crates/kuna-decomp/src/substrate/atomic_facts.rs
++++ b/decompiler/crates/kuna-decomp/src/substrate/atomic_facts.rs
+@@ -64,10 +64,10 @@
+ pub fn collect(arch: &Architecture, fd: &Funcdata) -> Result<FunctionFacts, String> {
+     // Bounds cover allocations before JSON serialization, independently of the
+     // transport byte budget. Overflow is an unavailable facet, not clipped IR.
+-    const MAX_OPERATIONS: usize = 12_000;
+-    const MAX_VALUES: usize = 36_000;
+-    const MAX_INPUTS: usize = 50_000;
+-    const MAX_DISPLAY_BYTES: usize = 2 * 1024 * 1024;
++    const MAX_OPERATIONS: usize = 32_000;
++    const MAX_VALUES: usize = 72_000;
++    const MAX_INPUTS: usize = 128_000;
++    const MAX_DISPLAY_BYTES: usize = 16 * 1024 * 1024;
+     if fd.bblocks_get_size() <= 0 {
+         return Err("recovered basic-block graph is unavailable".into());
+     }
+--- a/decompiler/crates/kuna-decomp/src/substrate/atomic_values.rs
++++ b/decompiler/crates/kuna-decomp/src/substrate/atomic_values.rs
+@@ -7,7 +7,7 @@
+ use slotmap::Key;
+ use std::collections::BTreeSet;
+
+-pub const MAX_TEXT_BYTES: usize = 2 * 1024 * 1024;
++pub const MAX_TEXT_BYTES: usize = 16 * 1024 * 1024;
+ #[derive(Debug, Clone, Serialize)]
+ pub struct ValueFact {
+     pub id: String,
