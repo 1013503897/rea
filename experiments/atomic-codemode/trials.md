@@ -112,3 +112,41 @@ No warm-session paired reruns, confidence interval, server-side model compute or
 pricing was measured. Reproduce the ledger with `summarize-trials.py` over the
 private trial directories; it reads actual model usage and the payload-exit
 cgroup receipt and deliberately does not grade answers.
+
+The first native-IR model trial pins `a7e9f8843`, the same zlib question and model
+settings, with patched Kuna SHA-256
+`7d357e75ff252d04913fe9e55f3d02c71bceb0fe5cbdac12e9a47ef84151cfcc`.
+Its source is upstream v1.833 plus `kuna-native-ir.patch`, built at optimization
+level 1 with embedded specs and a fresh owned per-lease engine cache. The prior
+stock-release comparison is not an engine/profile-controlled native-IR ablation.
+
+The real model uses `relations(kind:"controllers")`, incoming edges, blocks,
+indexed definition slices and native values. The answer agrees with the local
+guard oracle, and correctly identifies accumulator phi predecessors 42, 43 and
+38 while retaining unknown concrete state, path selection, memory aliases and
+runtime successor coverage. API/transport calls succeed, the runtime input digest
+is unchanged across the trial, the target digest is unchanged, the copied model
+profile is removed and observed payload cleanup succeeds.
+
+| Measurement | Native IR + Code Mode v3 |
+| --- | ---: |
+| Outer MCP attempts / failed | 15 / 0 |
+| Internal API reads | 24 |
+| Cumulative model input tokens | 600,857 |
+| Cached input tokens (included) | 534,784 |
+| Uncached input tokens | 66,073 |
+| Output / included reasoning tokens | 4,131 / 649 |
+| Model runner wall seconds | 117.773 |
+| Bounded family elapsed seconds | 119.211 |
+| Bounded family CPU seconds | 15.339 |
+| Kernel process-family memory peak MiB | 560.1 |
+| OOM kills | 0 |
+
+The capability gap is narrower, but this trial still does not beat the earlier
+traditional workflow on whole-task costs. The model performs four slices and
+eleven operation reads. More precise facts allow useful qualification of the
+answer, but also invite further investigation after the local question is
+already substantially supported. This is a reason to test task-specific value
+tracing and small-function counterexamples, rather than to claim that more
+granular tool catalogs are inherently efficient. Private artifacts are named
+`zlib-native-codemode-v3*` beside the earlier trials.

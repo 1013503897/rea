@@ -1,0 +1,9 @@
+Analyze {{artifact_path}} statically. In inflate (entry 0xc1e0), study the header
+accumulator join immediately before the wrapper checks, at the block whose
+instruction origin starts at 0xd9c9. Identify each incoming source of the 64-bit
+accumulator used to build/check the zlib header. Bind the alternatives to their
+predecessor control-flow paths and the instructions that add bytes or retain the
+previous accumulator. Explain the byte order and which concrete values or path
+conditions remain unknown from static analysis. Give supporting addresses and
+real Evidence references. A local value-origin explanation is sufficient; do not
+claim that a path is feasible from function entry without supporting evidence.

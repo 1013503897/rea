@@ -40,6 +40,7 @@ def summarize(directory):
     return {
         'trial': directory.name,
         'runtime_revision': summary['runtime_revision'],
+        'runtime_inputs_unchanged': summary.get('runtime_inputs_unchanged'),
         'requested_model': summary['requested_model'],
         'reasoning': summary['reasoning'],
         'usage': dict(usage),

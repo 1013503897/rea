@@ -1,0 +1,6 @@
+Analyze {{artifact_path}} statically. Find where the "malformed MATCH expression"
+diagnostic is produced. Explain the local condition that selects this diagnostic,
+how the diagnostic value is constructed, and which return/error paths are distinct.
+Give supporting function and instruction addresses and real Evidence references.
+Distinguish local static conditions from demonstrated runtime feasibility, and
+keep the answer focused on this diagnostic rather than the entire parser.
