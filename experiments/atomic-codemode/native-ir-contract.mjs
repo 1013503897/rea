@@ -4,6 +4,7 @@ import { FactFailure } from "./fact-error.mjs";
 import { NATIVE_OUTPUT_BYTES } from "./limits.mjs";
 import { readCallFacet } from "./native-call-contract.mjs";
 import { readProjectionFacet } from "./native-projection-contract.mjs";
+import { readSwitchFacet } from "./native-switch-contract.mjs";
 import { operation, parseOperation } from "./native-operation-contract.mjs";
 import {
   decodeGraphArchive,
@@ -69,6 +70,8 @@ const documentSchema = z.object({
         atomic_facts_error: z.string().optional(),
         atomic_calls: z.unknown().optional(),
         atomic_calls_error: z.string().optional(),
+        atomic_switches: z.unknown().optional(),
+        atomic_switches_error: z.string().optional(),
         atomic_projection: z.unknown().optional(),
         atomic_projection_error: z.string().optional(),
       }),
@@ -216,6 +219,7 @@ export function parseNativeFunction(text, entry, expectedInput) {
       language: doc.language,
       facts: readGraph(fn),
       calls: readCallFacet(fn),
+      switches: readSwitchFacet(fn),
       projection: readProjectionFacet(fn),
     };
   } catch (error) {

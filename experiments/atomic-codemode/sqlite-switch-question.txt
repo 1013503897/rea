@@ -1,0 +1,31 @@
+Investigate the format-owning sqlite3VdbeExec implementation in {{artifact_path}},
+starting from its callable name and these observed formats:
+- cannot open savepoint - SQL statements in progress
+- cannot release savepoint - SQL statements in progress
+
+Establish the implementation from references before deep analysis; a name may
+identify several entries. Reuse one retained VM capture and selected structured
+facts. Find its recovered indirect dispatch and distinguish the original byte
+selector from the width/identity of the retained normalized selector SSA value
+and from the machine's computed jump address.
+
+For case values 0x0, 0x2a, 0x34, 0x39 and 0xb5, report the original table-row
+identity, native case-to-edge identity/destination, and original recovered target.
+Check whether 0x34 and 0x39 share a target and edge. Do not infer labels from edge
+ordinals or optimized block origins. Query only the selected cases; do not fetch
+the complete case inventory, C report or graph.
+
+Use focused instructions to establish the machine dispatch: input width,
+unsigned range guard, table base, entry width/signedness and relative target
+calculation. Read the selected table bytes in a batch and derive the selected
+machine targets from those bytes, comparing with the retained native facts.
+Determine what the selected byte 0xb6 would do at that local guard, whether it
+has a captured explicit table case, and whether the native model's default
+out-edge is the same as the machine out-of-range guard destination. Keep those
+defaults, representations and identities separate.
+
+Return a focused answer with real Evidence IDs, target digest and necessary
+coverage. Native full-graph/table recovery does not establish complete machine
+flow, aliases, nontermination or feasible runtime inputs. Do not invent source
+member/opcode names, arbitrary loaded contents, a SQL trigger or runtime binding.
+Complete retained Evidence has paged source/decoded-graph access.

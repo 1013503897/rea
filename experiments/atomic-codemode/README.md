@@ -291,5 +291,7 @@ repeat, answer both local guards correctly without a whole-report fetch. Code
 Mode uses fewer MCP requests, but whole-task costs are mixed and a large capture
 time variation remains unexplained. Both clients already provide JavaScript
 orchestration. Source fidelity is not machine equivalence, provider parity or a
-general speedup. Case labels on the 149-way recovered dispatch remain a fact-export
-question; they cannot be inferred from edge ordinals.
+general speedup. The [native switch experiment](switch-study.md) now exports and independently checks
+182 labels over those 149 targets, exposes selected case-to-edge relations and
+keeps them readable when a 2 MiB native output budget omits the full graph.
+New real-model case/default verification is pending.

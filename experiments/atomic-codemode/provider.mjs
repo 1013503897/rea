@@ -381,11 +381,11 @@ export class KunaFactOwner {
     }));
   }
   async relations(input) {
-    if (["controllers", "operands"].includes(input.kind))
+    if (["controllers", "operands", "cases"].includes(input.kind))
       this.#requireNativeIR(input.snapshot);
     return this.#query(input, (model) => ({
-      ...model.edges(input),
       coverage: model.coverage,
+      ...model.edges(input),
     }));
   }
   async slice(input) {
@@ -427,6 +427,10 @@ export class KunaFactOwner {
   async calls(input) {
     this.#requireNativeIR(input.snapshot);
     return this.#query(input, (model) => model.calls(input));
+  }
+  async switches(input) {
+    this.#requireNativeIR(input.snapshot);
+    return this.#query(input, (model) => model.switches(input));
   }
   async blocks(input) {
     this.#requireNativeIR(input.snapshot);

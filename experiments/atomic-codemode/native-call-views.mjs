@@ -1,5 +1,5 @@
 import { callCoverage } from "./native-calls.mjs";
-import { requireFact } from "./native-contract.mjs";
+import { requireFact, requireSameNativeValue } from "./native-contract.mjs";
 import { uniqueNative, readNativeIdentities } from "./native-reads.mjs";
 import { freezeFacts } from "./fact-reads.mjs";
 
@@ -82,10 +82,9 @@ export function validateCallGraph(callIndex, graphIndex) {
     );
   }
   for (const value of values.values())
-    requireFact(
-      Object.entries(value).every(
-        ([key, v]) => graphIndex.values.get(value.id)?.[key] === v,
-      ),
+    requireSameNativeValue(
+      value,
+      graphIndex.values.get(value.id),
       "Native call/graph value mismatch",
     );
   for (const op of operations.values())

@@ -167,10 +167,10 @@ index 00000000..48631d39
 +}
 diff --git a/decompiler/crates/kuna-cli/src/atomic_json.rs b/decompiler/crates/kuna-cli/src/atomic_json.rs
 new file mode 100644
-index 00000000..7077bc56
+index 00000000..6005472b
 --- /dev/null
 +++ b/decompiler/crates/kuna-cli/src/atomic_json.rs
-@@ -0,0 +1,359 @@
+@@ -0,0 +1,456 @@
 +//! Opt-in atomic documents share the ordinary record producer and JSON writer.
 +//! A graph that cannot fit must not discard otherwise readable reconstructed C.
 +
@@ -291,6 +291,25 @@ index 00000000..7077bc56
 +    text.push('\n');
 +    Some(text)
 +}
++// Reclaim a saved independent facet when other omissions have made room.
++// Only bounded encoded strings coexist here, never cloned graph/facet trees.
++fn bounded_reclaiming(
++    document: &mut Json,
++    budget: usize,
++    name: &str,
++    saved: &mut Vec<RemovedFacet>,
++) -> Option<String> {
++    let base = bounded(document, budget)?;
++    if saved.is_empty() {
++        return Some(base);
++    }
++    restore_facet(document, std::mem::take(saved));
++    if let Some(complete) = bounded(document, budget) {
++        return Some(complete);
++    }
++    *saved = take_facet(document, name, budget + 1, Omission::Capacity);
++    Some(base)
++}
 +pub(crate) fn render(mut document: Json, limit: usize) -> Result<String, String> {
 +    let budget = limit
 +        .checked_sub(1)
@@ -307,7 +326,7 @@ index 00000000..7077bc56
 +        return Ok(text);
 +    }
 +    let originals = compress_graphs(&mut document, budget);
-+    let alternatives = if originals.is_empty() {
++    let mut alternatives = if originals.is_empty() {
 +        Vec::new()
 +    } else {
 +        if let Some(text) = bounded(&document, budget) {
@@ -315,14 +334,33 @@ index 00000000..7077bc56
 +        }
 +        exchange_graphs(&mut document, originals)
 +    };
-+    let calls = take_facet(&mut document, "atomic_calls", limit, Omission::Capacity);
-+    if !calls.is_empty() {
++    // New switch rows must not displace previously available graph/call facts.
++    // Retry without that independent facet before weakening existing coverage.
++    let mut switches = take_facet(&mut document, "atomic_switches", limit, Omission::Capacity);
++    if !switches.is_empty() {
 +        if let Some(text) = bounded(&document, budget) {
 +            return Ok(text);
 +        }
 +        if !alternatives.is_empty() {
-+            drop(exchange_graphs(&mut document, alternatives));
++            let originals = exchange_graphs(&mut document, alternatives);
 +            if let Some(text) = bounded(&document, budget) {
++                return Ok(text);
++            }
++            alternatives = exchange_graphs(&mut document, originals);
++        }
++    }
++    let calls = take_facet(&mut document, "atomic_calls", limit, Omission::Capacity);
++    if !calls.is_empty() {
++        if let Some(text) =
++            bounded_reclaiming(&mut document, budget, "atomic_switches", &mut switches)
++        {
++            return Ok(text);
++        }
++        if !alternatives.is_empty() {
++            drop(exchange_graphs(&mut document, alternatives));
++            if let Some(text) =
++                bounded_reclaiming(&mut document, budget, "atomic_switches", &mut switches)
++            {
 +                return Ok(text);
 +            }
 +        }
@@ -330,8 +368,15 @@ index 00000000..7077bc56
 +    restore_facet(&mut document, calls);
 +    take_facet(&mut document, "atomic_facts", limit, Omission::Capacity);
 +    restore_facet(&mut document, projection);
++    restore_facet(&mut document, std::mem::take(&mut switches));
 +    if let Some(text) = bounded(&document, budget) {
 +        return Ok(text);
++    }
++    switches = take_facet(&mut document, "atomic_switches", limit, Omission::Capacity);
++    if !switches.is_empty() {
++        if let Some(text) = bounded(&document, budget) {
++            return Ok(text);
++        }
 +    }
 +    // Independent calls retain priority when the combined fallback is too big.
 +    let projection = take_facet(
@@ -340,12 +385,14 @@ index 00000000..7077bc56
 +        limit,
 +        Omission::Capacity,
 +    );
-+    if let Some(text) = bounded(&document, budget) {
++    if let Some(text) = bounded_reclaiming(&mut document, budget, "atomic_switches", &mut switches)
++    {
 +        return Ok(text);
 +    }
 +    restore_facet(&mut document, projection);
 +    take_facet(&mut document, "atomic_calls", limit, Omission::Capacity);
-+    if let Some(text) = bounded(&document, budget) {
++    if let Some(text) = bounded_reclaiming(&mut document, budget, "atomic_switches", &mut switches)
++    {
 +        return Ok(text);
 +    }
 +    take_facet(
@@ -354,9 +401,59 @@ index 00000000..7077bc56
 +        limit,
 +        Omission::Capacity,
 +    );
-+    bounded(&document, budget).ok_or_else(|| {
++    bounded_reclaiming(&mut document, budget, "atomic_switches", &mut switches).ok_or_else(|| {
 +        format!("atomic JSON exceeds {limit} byte capacity even without recovered facets")
 +    })
++}
++
++#[cfg(test)]
++mod switch_facet_tests {
++    use super::*;
++    fn document(graph: usize, calls: usize, projection: usize, switches: usize) -> Json {
++        Json::Object(vec![(
++            "functions".into(),
++            Json::Array(vec![Json::Object(vec![
++                ("code".into(), Json::Str("retained C".into())),
++                ("atomic_facts".into(), Json::Str("g".repeat(graph))),
++                ("atomic_calls".into(), Json::Str("c".repeat(calls))),
++                (
++                    "atomic_projection".into(),
++                    Json::Str("p".repeat(projection)),
++                ),
++                ("atomic_switches".into(), Json::Str("s".repeat(switches))),
++            ])]),
++        )])
++    }
++    #[test]
++    fn oversized_switches_do_not_displace_existing_graph_and_calls() {
++        let text = render(document(600, 20, 10, 5000), 1500).unwrap();
++        let d: serde_json::Value = serde_json::from_str(&text).unwrap();
++        let f = &d["functions"][0];
++        assert_eq!(f["code"], "retained C");
++        assert_eq!(f["atomic_facts"].as_str().unwrap().len(), 600);
++        assert_eq!(f["atomic_calls"].as_str().unwrap().len(), 20);
++        assert!(f.get("atomic_switches").is_none());
++        assert!(f["atomic_switches_error"].is_string());
++    }
++    #[test]
++    fn reclaim_switches_after_a_large_projection_is_omitted() {
++        let text = render(document(5000, 100, 3000, 100), 2000).unwrap();
++        let d: serde_json::Value = serde_json::from_str(&text).unwrap();
++        let f = &d["functions"][0];
++        assert_eq!(f["atomic_calls"].as_str().unwrap().len(), 100);
++        assert_eq!(f["atomic_switches"].as_str().unwrap().len(), 100);
++        assert!(f.get("atomic_projection").is_none());
++        assert!(f.get("atomic_switches_error").is_none());
++    }
++    #[test]
++    fn independent_switch_rows_survive_when_all_other_facets_overflow() {
++        let text = render(document(5000, 5000, 5000, 1200), 2000).unwrap();
++        let d: serde_json::Value = serde_json::from_str(&text).unwrap();
++        let f = &d["functions"][0];
++        assert_eq!(f["code"], "retained C");
++        assert_eq!(f["atomic_switches"].as_str().unwrap().len(), 1200);
++        assert!(f.get("atomic_switches_error").is_none());
++    }
 +}
 +
 +#[cfg(test)]
@@ -668,7 +765,7 @@ index ad249b04..62074996 100644
          failure = Some(format!("--assert directive rejected in {}", args.binary));
      }
 diff --git a/decompiler/crates/kuna-cli/src/decompile_all.rs b/decompiler/crates/kuna-cli/src/decompile_all.rs
-index 698c7243..330c0f3f 100644
+index 698c7243..21147ba5 100644
 --- a/decompiler/crates/kuna-cli/src/decompile_all.rs
 +++ b/decompiler/crates/kuna-cli/src/decompile_all.rs
 @@ -744,6 +744,7 @@ fn run_jobs_worker(args: &Args) -> Result<(), String> {
@@ -724,19 +821,20 @@ index 698c7243..330c0f3f 100644
  /// [`render_result_json`] plus the inventory `total` a NARROWED whole-binary run
  /// answers with.
  ///
-@@ -2152,6 +2168,11 @@ fn result_json(
+@@ -2152,6 +2168,12 @@ fn result_json(
                      // Always present, `[]` unless the option is on.
                      ("types".into(), types),
                  ];
 +                if let Some(detail) = f.detail.as_ref() {
 +                    append_atomic_facet(&mut record, "atomic_facts", detail.atomic_facts.as_ref());
 +                    append_atomic_facet(&mut record, "atomic_calls", detail.atomic_calls.as_ref());
++                    append_atomic_facet(&mut record, "atomic_switches", detail.atomic_switches.as_ref());
 +                    append_atomic_facet(&mut record, "atomic_projection", detail.atomic_projection.as_ref());
 +                }
                  if !f.stack_objects.is_empty() {
                      record.push(("stack_objects".into(), Json::Array(
                          f.stack_objects.iter().map(stack_object_json).collect(),
-@@ -3519,3 +3540,16 @@ mod triage_tests {
+@@ -3519,3 +3541,16 @@ mod triage_tests {
      }
  
  }
@@ -1053,20 +1151,21 @@ index e40b18c9..b8cae233 100644
      };
  
 diff --git a/decompiler/crates/kuna-console/src/inspect.rs b/decompiler/crates/kuna-console/src/inspect.rs
-index 74024b10..72e4ec24 100644
+index 74024b10..a41465a6 100644
 --- a/decompiler/crates/kuna-console/src/inspect.rs
 +++ b/decompiler/crates/kuna-console/src/inspect.rs
-@@ -24,6 +24,9 @@ pub const FUNCTION_ROW_CAP: usize = 4096;
+@@ -24,6 +24,10 @@ pub const FUNCTION_ROW_CAP: usize = 4096;
  pub struct FuncDetail {
      pub tokens: Vec<CodeToken>,
      pub tokens_error: Option<String>,
 +    pub atomic_facts: Option<Result<kuna_decomp::atomic_facts::FunctionFacts, String>>,
 +    pub atomic_calls: Option<Result<kuna_decomp::atomic_calls::CallFacts, String>>,
++    pub atomic_switches: Option<Result<kuna_decomp::atomic_switches::SwitchFacts, String>>,
 +    pub atomic_projection: Option<Result<kuna_decomp::atomic_projection::Projection, String>>,
  }
  
  impl FuncDetail {
-@@ -40,13 +43,13 @@ impl FuncDetail {
+@@ -40,13 +44,13 @@ impl FuncDetail {
      ) -> Self {
          let mut tokens = kuna_srcmap::resolve(fd, var_refs, raw, untrimmed, variables);
          if let Err(error) = kuna_srcmap::verify(&tokens, code) {
@@ -1083,7 +1182,7 @@ index 74024b10..72e4ec24 100644
  }
  
 diff --git a/decompiler/crates/kuna-console/src/project.rs b/decompiler/crates/kuna-console/src/project.rs
-index bc401db2..1b53ccf1 100644
+index bc401db2..7b7c7c24 100644
 --- a/decompiler/crates/kuna-console/src/project.rs
 +++ b/decompiler/crates/kuna-console/src/project.rs
 @@ -245,6 +245,8 @@ pub struct DecompileOptions {
@@ -1119,7 +1218,7 @@ index bc401db2..1b53ccf1 100644
          want_pointer_arguments,
          ..
      } = *opts;
-@@ -838,11 +843,21 @@ pub fn decompile_pulled(
+@@ -838,11 +843,23 @@ pub fn decompile_pulled(
                          }
                      }
                      let var_refs = provenance.apply_to_variables_with_refs(&fd, &mut variables);
@@ -1134,6 +1233,8 @@ index bc401db2..1b53ccf1 100644
 +                        let membership = kuna_decomp::atomic_membership::inspect(&fd);
 +                        detail.atomic_calls = Some(membership.as_ref().map_err(Clone::clone)
 +                            .and_then(|m| kuna_decomp::atomic_calls::collect_all(&fd, m)));
++                        detail.atomic_switches = Some(membership.as_ref().map_err(Clone::clone)
++                            .and_then(|m| kuna_decomp::atomic_switches::collect(&fd, m)));
 +                        detail.atomic_facts = Some(membership.as_ref().map_err(Clone::clone)
 +                            .and_then(|m| kuna_decomp::atomic_facts::collect(prog.arch(), &fd, m)));
 +                        detail.atomic_projection = Some(membership.as_ref().map_err(Clone::clone)
@@ -1159,6 +1260,59 @@ index 40b093b6..8f03b654 100644
  toml = { version = "1.1", default-features = false, features = ["parse", "serde", "std"] }
  
  [build-dependencies]
+diff --git a/decompiler/crates/kuna-decomp/src/p2_lift/jumptable.rs b/decompiler/crates/kuna-decomp/src/p2_lift/jumptable.rs
+index b2677f6c..5e913130 100644
+--- a/decompiler/crates/kuna-decomp/src/p2_lift/jumptable.rs
++++ b/decompiler/crates/kuna-decomp/src/p2_lift/jumptable.rs
+@@ -5481,6 +5481,22 @@ impl JumpTable {
+         self.label[index as usize]
+     }
+ 
++    /// Borrow observed rows for read-only analysis without indexing absent labels.
++    /// Row order, labels and recovered out-edge positions are separate identities.
++    pub fn case_rows(&self) -> KunaResult<impl ExactSizeIterator<Item = (usize, &Address, Option<uintb>)>> {
++        if self.label.len() > self.addresstable.len() {
++            return Err(KunaError::lowlevel("jump-table labels exceed address rows"));
++        }
++        Ok(self.addresstable.iter().enumerate().map(|(index, address)| {
++            (index, address, self.label.get(index).copied())
++        }))
++    }
++
++    /// Borrow the native row-to-out-edge mapping; never infer it from addresses.
++    pub fn case_edge_rows(&self) -> impl ExactSizeIterator<Item = (int4, int4)> + '_ {
++        self.block2addr.iter().map(|pair| (pair.address_index, pair.block_position))
++    }
++
+     /// Force a given basic-block to be a switch destination
+     /// (C++ `JumpTable::addBlockToSwitch`, `jumptable.cc:2663`).
+     pub fn add_block_to_switch(&mut self, fd: &Funcdata, bl: BlockId, lab: uintb) -> KunaResult<()> {
+diff --git a/decompiler/crates/kuna-decomp/src/p2_lift/jumptable/tests.rs b/decompiler/crates/kuna-decomp/src/p2_lift/jumptable/tests.rs
+index 8aad0172..2f69df2d 100644
+--- a/decompiler/crates/kuna-decomp/src/p2_lift/jumptable/tests.rs
++++ b/decompiler/crates/kuna-decomp/src/p2_lift/jumptable/tests.rs
+@@ -725,3 +725,21 @@ fn guard_range_retry_keeps_both_wrapped_bounds() {
+     model.calc_range(&fd, input, &mut range);
+     assert_eq!((range.get_min(), range.get_end(), range.get_size()), (58, 62, 4));
+ }
++
++#[test]
++fn atomic_case_rows_keep_ordinals_labels_and_edges_separate() {
++    let manage = build_manager();
++    let ram = Rc::clone(manage.get_space_by_name("ram").unwrap());
++    let mut table = JumpTable::new(Address::new(Rc::clone(&ram), 0x1000));
++    table.kuna_push_entry(Address::new(Rc::clone(&ram), 0x3000), 2, 0x77);
++    table.kuna_push_entry(Address::new(Rc::clone(&ram), 0x4000), 0, NO_LABEL);
++    table.kuna_finalize(0);
++    let rows: Vec<_> = table.case_rows().unwrap()
++        .map(|(index, address, label)| (index, address.get_offset(), label)).collect();
++    assert_eq!(rows, vec![(0, 0x3000, Some(0x77)), (1, 0x4000, Some(NO_LABEL))]);
++    assert_eq!(table.case_edge_rows().collect::<Vec<_>>(), vec![(1, 0), (0, 2)]);
++    table.label.pop();
++    assert_eq!(table.case_rows().unwrap().nth(1).unwrap().2, None);
++    table.label.extend([1, 2]);
++    assert!(table.case_rows().is_err());
++}
 diff --git a/decompiler/crates/kuna-decomp/src/substrate/atomic_calls.rs b/decompiler/crates/kuna-decomp/src/substrate/atomic_calls.rs
 new file mode 100644
 index 00000000..2b7ced64
@@ -1545,21 +1699,23 @@ index 00000000..6b9afe69
 +}
 diff --git a/decompiler/crates/kuna-decomp/src/substrate/atomic_membership.rs b/decompiler/crates/kuna-decomp/src/substrate/atomic_membership.rs
 new file mode 100644
-index 00000000..6628ddd7
+index 00000000..be11e472
 --- /dev/null
 +++ b/decompiler/crates/kuna-decomp/src/substrate/atomic_membership.rs
-@@ -0,0 +1,64 @@
+@@ -0,0 +1,76 @@
 +//! One validated membership scan for independent recovered fact facets.
 +use crate::{context::OpId, funcdata::Funcdata};
 +use kuna_num::opcodes::OpCode;
 +use std::collections::HashSet;
 +
 +pub const MAX_CALLS: usize = 12_000;
++const MAX_SWITCHES: usize = 12_000;
 +// Bound the optional membership index separately from call discovery. Crossing
 +// this resource budget disables projections, without discarding known calls.
 +const MAX_INDEXED_OPERATIONS: usize = 65_536;
 +pub struct Membership {
 +    pub calls: Vec<OpId>,
++    pub switches: Option<Vec<OpId>>,
 +    pub members: Option<HashSet<OpId>>,
 +    pub blocks_examined: i32,
 +    pub operations_examined: usize,
@@ -1570,6 +1726,7 @@ index 00000000..6628ddd7
 +    }
 +    let mut result = Membership {
 +        calls: Vec::new(),
++        switches: Some(Vec::new()),
 +        members: Some(HashSet::new()),
 +        blocks_examined: fd.bblocks_get_size(),
 +        operations_examined: 0,
@@ -1605,6 +1762,15 @@ index 00000000..6628ddd7
 +                    return Err("atomic call capacity exceeded".into());
 +                }
 +                result.calls.push(key);
++            }
++            if op.code() == OpCode::CPUI_BRANCHIND {
++                if let Some(switches) = result.switches.as_mut() {
++                    if switches.len() == MAX_SWITCHES {
++                        result.switches = None;
++                    } else {
++                        switches.push(key);
++                    }
++                }
 +            }
 +        }
 +        if examined != expected {
@@ -1861,6 +2027,210 @@ index 00000000..097b153a
 +        },
 +    })
 +}
+diff --git a/decompiler/crates/kuna-decomp/src/substrate/atomic_switches.rs b/decompiler/crates/kuna-decomp/src/substrate/atomic_switches.rs
+new file mode 100644
+index 00000000..e8992d5d
+--- /dev/null
++++ b/decompiler/crates/kuna-decomp/src/substrate/atomic_switches.rs
+@@ -0,0 +1,198 @@
++//! Read-only native jump-table facts; row ordinals are not case values.
++use crate::{
++    atomic_membership::Membership,
++    atomic_values::{self, operation_id, ValueFact},
++    funcdata::Funcdata,
++    jumptable::NO_LABEL,
++};
++use kuna_base::address::Address;
++use serde::Serialize;
++use std::collections::{BTreeMap, BTreeSet};
++
++const MAX_ROWS: usize = 100_000;
++const MAX_MAPPINGS: usize = 100_000;
++#[derive(Debug, Clone, Serialize)]
++pub struct SwitchFacts {
++    pub schema_version: u32,
++    pub items: Vec<SwitchFact>,
++    pub coverage: Coverage,
++}
++#[derive(Debug, Clone, Serialize)]
++pub struct Coverage {
++    pub scope: &'static str,
++    pub blocks_examined: i32,
++    pub operations_examined: usize,
++    pub machine_semantic_equivalence: &'static str,
++}
++#[derive(Debug, Clone, Serialize)]
++pub struct SwitchFact {
++    pub id: String,
++    pub origin_address: String,
++    pub block: i32,
++    pub selector: Option<ValueFact>,
++    pub table: Option<Table>,
++}
++#[derive(Debug, Clone, Serialize)]
++pub struct Table {
++    pub partial: bool,
++    pub labelled: bool,
++    pub consumed_mask: String,
++    pub signed_render_hint: bool,
++    pub default_raw_index: i32,
++    pub default_edge: Option<Edge>,
++    pub default_is_folded: bool,
++    pub rows: Vec<Row>,
++}
++#[derive(Debug, Clone, Serialize)]
++pub struct Edge {
++    pub id: String,
++    pub index: i32,
++    pub target: i32,
++}
++#[derive(Debug, Clone, Serialize)]
++pub struct Row {
++    pub index: usize,
++    pub label: Option<Label>,
++    pub recovered_target: Option<Location>,
++    pub edges: Vec<Edge>,
++}
++#[derive(Debug, Clone, Serialize)]
++pub struct Label {
++    pub status: &'static str,
++    pub raw_bits: String,
++}
++#[derive(Debug, Clone, Serialize)]
++pub struct Location {
++    pub space: String,
++    pub offset: String,
++}
++fn location(
++    address: &Address,
++    text: &mut atomic_values::TextBudget,
++) -> Result<Option<Location>, String> {
++    let Some(space) = address.get_space() else {
++        return Ok(None);
++    };
++    text.charge(space.get_name().len())?;
++    Ok(Some(Location {
++        space: space.get_name().to_string(),
++        offset: format!("0x{:x}", address.get_offset()),
++    }))
++}
++fn edge(fd: &Funcdata, parent: crate::context::BlockId, index: i32) -> Result<Edge, String> {
++    let block = fd.bblocks_ref().block(parent);
++    if index < 0 || index >= block.size_out() {
++        return Err("native switch out-edge index is outside its block".into());
++    }
++    Ok(Edge {
++        id: format!("{}:{index}", block.get_index()),
++        index,
++        target: fd.bblocks_ref().block(block.get_out(index)).get_index(),
++    })
++}
++pub fn collect(fd: &Funcdata, membership: &Membership) -> Result<SwitchFacts, String> {
++    let switches = membership
++        .switches
++        .as_ref()
++        .ok_or("atomic switch capacity exceeded")?;
++    let mut items = Vec::with_capacity(switches.len());
++    let mut row_count = 0usize;
++    let mut mapping_count = 0usize;
++    let mut text = atomic_values::TextBudget::new(2 * 1024 * 1024);
++    for &key in switches {
++        let op = fd.obank().get(key).ok_or("stale switch operation")?;
++        let parent = op.get_parent().ok_or("native switch has no block")?;
++        let mut values = BTreeSet::new();
++        if let Some(value) = op.get_in(0) {
++            values.insert(value);
++        }
++        let selector = atomic_values::collect(fd, values, &mut text)?.pop();
++        if let Some(space) = selector.as_ref().and_then(|value| value.space.as_ref()) {
++            text.charge(space.len())?;
++        }
++        let table = if let Some(table) = fd.find_jump_table(key) {
++            if table.get_indirect_op() != Some(key) {
++                return Err("native jump-table operation identity is unresolved".into());
++            }
++            let observed = table.case_rows().map_err(|e| e.to_string())?;
++            row_count = row_count
++                .checked_add(observed.len())
++                .ok_or("atomic case count overflow")?;
++            let mappings = table.case_edge_rows();
++            mapping_count = mapping_count
++                .checked_add(mappings.len())
++                .ok_or("atomic case edge count overflow")?;
++            if row_count > MAX_ROWS || mapping_count > MAX_MAPPINGS {
++                return Err("atomic switch row/mapping capacity exceeded".into());
++            }
++            let mut by_row: BTreeMap<usize, Vec<Edge>> = BTreeMap::new();
++            let mut seen = BTreeSet::new();
++            for (row, position) in mappings {
++                if row < 0 || row as usize >= observed.len() {
++                    return Err("native switch mapping names an absent address row".into());
++                }
++                if !seen.insert((row, position)) {
++                    return Err("duplicate native switch row/out-edge mapping".into());
++                }
++                by_row
++                    .entry(row as usize)
++                    .or_default()
++                    .push(edge(fd, parent, position)?);
++            }
++            let rows = observed
++                .map(|(index, address, label)| {
++                    Ok(Row {
++                        index,
++                        label: label.map(|bits| Label {
++                            status: if bits == NO_LABEL {
++                                "no-label"
++                            } else {
++                                "value"
++                            },
++                            raw_bits: format!("0x{bits:x}"),
++                        }),
++                        recovered_target: location(address, &mut text)?,
++                        edges: by_row.remove(&index).unwrap_or_default(),
++                    })
++                })
++                .collect::<Result<Vec<_>, String>>()?;
++            let raw_default = table.get_default_block();
++            if raw_default < -1 {
++                return Err("invalid native default out-edge index".into());
++            }
++            Some(Table {
++                partial: table.is_partial(),
++                labelled: table.is_labelled(),
++                consumed_mask: format!("0x{:x}", table.get_switch_var_consume()),
++                signed_render_hint: table.kuna_has_signed_labels(),
++                default_raw_index: raw_default,
++                default_edge: if raw_default == -1 {
++                    None
++                } else {
++                    Some(edge(fd, parent, raw_default)?)
++                },
++                default_is_folded: table.has_folded_default(),
++                rows,
++            })
++        } else {
++            None
++        };
++        items.push(SwitchFact {
++            id: operation_id(fd, key)?,
++            origin_address: format!("0x{:x}", op.get_addr().get_offset()),
++            block: fd.bblocks_ref().block(parent).get_index(),
++            selector,
++            table,
++        });
++    }
++    Ok(SwitchFacts {
++        schema_version: 1,
++        items,
++        coverage: Coverage {
++            scope: "all recovered block-member BRANCHIND operations and native jump-table rows",
++            blocks_examined: membership.blocks_examined,
++            operations_examined: membership.operations_examined,
++            machine_semantic_equivalence: "unknown",
++        },
++    })
++}
 diff --git a/decompiler/crates/kuna-decomp/src/substrate/atomic_values.rs b/decompiler/crates/kuna-decomp/src/substrate/atomic_values.rs
 new file mode 100644
 index 00000000..6d23954c
@@ -1961,10 +2331,10 @@ index 39927ceb..844950a6 100644
      let num_input = fd.obank().get(op).ok_or_else(|| "render_op: stale op".to_string())?.num_input();
      let in_at = |i: int4| -> Option<VarnodeId> { fd.obank().get(op).and_then(|o| o.get_in(i)) };
 diff --git a/decompiler/crates/kuna-decomp/src/substrate/mod.rs b/decompiler/crates/kuna-decomp/src/substrate/mod.rs
-index 00528cb5..b019a174 100644
+index 00528cb5..d3f422ee 100644
 --- a/decompiler/crates/kuna-decomp/src/substrate/mod.rs
 +++ b/decompiler/crates/kuna-decomp/src/substrate/mod.rs
-@@ -11,6 +11,12 @@ pub mod funcdata_block;
+@@ -11,6 +11,13 @@ pub mod funcdata_block;
  pub mod funcdata_encode;
  pub mod funcdata_op;
  pub mod funcdata_printraw;
@@ -1974,19 +2344,39 @@ index 00528cb5..b019a174 100644
 +pub mod atomic_operations;
 +pub mod atomic_projection;
 +pub mod atomic_values;
++pub mod atomic_switches;
  pub mod funcdata_varnode;
  pub mod dtype;
  pub mod context;
 diff --git a/docs/spec/00-overview.md b/docs/spec/00-overview.md
-index ce499c4f..b3b53dcf 100644
+index ce499c4f..9d927aa5 100644
 --- a/docs/spec/00-overview.md
 +++ b/docs/spec/00-overview.md
-@@ -3431,3 +3431,79 @@ Reserving it creates no analysis varnode and changes no physical mapping or
+@@ -3431,3 +3431,98 @@ Reserving it creates no analysis varnode and changes no physical mapping or
  emitted C. Ghidra receives temporary storage for the logical local, rather than
  a persistable ordinary stack-variable location; ordinary symbol storage and
  register-plus-stack parameter JOINs keep their existing encoding.
 +
 +## Experimental read-only atomic facts
++
++The same opt-in capture also exports an independent version-1 `atomic_switches`
++facet. One membership scan supplies recovered BRANCHIND identities. Native
++jump-table rows retain their original index, optional label/status, original
++target address and native row-to-out-edge mapping. Indexes are never treated as
++case values or mapped by comparing optimized block start addresses. Missing
++tables/labels/mappings, the reserved no-label marker and partial tables remain
++explicit. A native model default out-edge is separate from any machine
++out-of-range guard destination. Selector values and consumed-bit masks do not establish runtime
++feasibility or machine semantic equivalence; the native signed-label flag is a
++render hint, not a general signedness proof.
++
++Construction admits 12,000 switches, 100,000 rows and row/edge mappings, and a
++2 MiB shared selector/type/address-space text budget. Mapping is indexed once
++instead of scanning every edge for every case. New switch rows cannot displace
++otherwise fitting existing graph/call facts: the bounded document writer retries
++without this facet first, retains explicit capacity errors, and can still keep
++the independent rows if other facets overflow. Ordinary non-opt-in analysis and
++executable bytes are unchanged.
 +
 +The opt-in `decompile --json --atomic-facts` surface captures the same live
 +function after C rendering (`decompiler/crates/kuna-decomp/src/substrate/atomic_facts.rs`).

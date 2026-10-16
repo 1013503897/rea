@@ -23,6 +23,12 @@ export const value = z.strictObject({
   definition: operationId.nullable(),
   type_name: z.string(),
 });
+export const requireSameNativeValue = (value, reference, message) =>
+  requireFact(
+    reference &&
+      Object.entries(value).every(([key, v]) => reference[key] === v),
+    message,
+  );
 export const rowParser = (schema, arrays, fields = {}) => {
   const metadata = schema.omit(
     Object.fromEntries(

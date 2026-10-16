@@ -29,6 +29,17 @@ test("relation identity and operand-only selectors agree in runtime and advertis
     [{ kind: "operands", seeds: ["0x1:0"], input_indices: [0, 155] }, true],
     [{ kind: "operands", seeds: ["0x1:0"], input_indices: [] }, true],
     [{ kind: "uses", seeds: ["0x1:0"] }, true],
+    [
+      {
+        kind: "cases",
+        seeds: ["0x1:0"],
+        case_values: ["0xffffffffffffffff"],
+        case_indices: [0, 155],
+      },
+      true,
+    ],
+    [{ kind: "cases", seeds: [0] }, false],
+    [{ kind: "cases", seeds: ["0x1:0"], case_values: ["0X1"] }, false],
     [{ kind: "incoming", seeds: [0] }, true],
     [{ kind: "incoming", seeds: ["0"] }, false],
     [{ kind: "operands", seeds: [0] }, false],

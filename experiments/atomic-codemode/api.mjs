@@ -52,6 +52,14 @@ const operationSeeds = z.array(z.string()).min(1).max(128);
 const relationInput = z.discriminatedUnion("kind", [
   z.strictObject({
     snapshot,
+    kind: z.literal("cases"),
+    seeds: operationSeeds,
+    case_values: z.array(hex).max(128).optional(),
+    case_indices: z.array(z.number().int().nonnegative()).max(128).optional(),
+    ...page,
+  }),
+  z.strictObject({
+    snapshot,
     kind: z.literal("operands"),
     seeds: operationSeeds,
     input_indices: z.array(z.number().int().nonnegative()).max(128).optional(),
@@ -71,6 +79,18 @@ const relationInput = z.discriminatedUnion("kind", [
   }),
 ]);
 export const methods = {
+  switches: definition(
+    "Inspect recovered indirect branches and their independent native jump-table metadata, without returning all case rows. Selector is the current recovered BRANCHIND input, which may be normalized rather than the machine jump address. Native consumed mask and signed rendering hint are not complete runtime/signedness proofs. Null tables/defaults stay unknown. The native model default out-edge is separate from any machine out-of-range guard destination. Use relations kind:cases for selected raw table rows, labels and their native mapping to recovered edges; row/edge ordinals are not case values. Available even when the full graph is unavailable if this independent facet was captured.",
+    {
+      snapshot,
+      ids: z.array(z.string()).max(128).optional(),
+      origin_addresses: z.array(hex).max(128).optional(),
+      fields: z.array(z.enum(["selector", "table"])).optional(),
+      ...page,
+    },
+    "switches",
+    'await rea.switches({snapshot:s,origin_addresses:["0x1000"]})',
+  ),
   functions: definition(
     "Search retained native callable entries by literal name/alias, exact name, or entry addresses. Names can match several entries, including PLT/import stubs and implementations; preserve all matches and select by address. A name does not establish runtime symbol binding.",
     {
@@ -158,7 +178,7 @@ export const methods = {
   ),
   relations: {
     description:
-      "Read native operands or definitions/uses for operation IDs, incoming/outgoing CFG edges or derived controllers for block IDs. operands pages every selected input slot, including constants, function inputs and null slots; input_indices optionally selects slots in caller order. Identity is snapshot + operation + input_index; value_id/definition and exact phi predecessor/edge bindings remain separate. Out-of-range slots of retained operations are absent; unretained_seeds remain unknown. A bounded call-rooted projection supports operands/definitions/uses but no CFG; uses cover retained selected operations only. Diagnostic SSA lacks native operands and has partial CFG/printed occurrences. controllers requires a complete recovered graph and concerns finite paths to recovered exits, not runtime feasibility.",
+      "Read native operands, definitions/uses or case rows for operation IDs; incoming/outgoing CFG edges or derived controllers for block IDs. cases pages one relation per case/out-edge, with a stable case_id; an unmapped case has one explicit unknown-edge row. total counts relations, not table rows. cases filters optional case_values (native labels tagged value) and case_indices (original row ordinals); both filters intersect and paging spans deduplicated seeds in caller order. Rows preserve missing/no-label status, original recovered target, and separate recovered edges. Partial/unavailable tables and unmapped rows are explicit; no runtime feasibility claim. operands pages every selected input slot, including constants, function inputs and null slots; input_indices optionally selects slots in caller order. Identity is snapshot + operation + input_index; value_id/definition and exact phi predecessor/edge bindings remain separate. Out-of-range slots of retained operations are absent; unretained_seeds remain unknown. A bounded call-rooted projection supports operands/definitions/uses but no CFG; uses cover retained selected operations only. Diagnostic SSA lacks native operands and has partial CFG/printed occurrences. controllers requires a complete recovered graph and concerns finite paths to recovered exits, not runtime feasibility.",
     input: relationInput,
     method: "relations",
     example:

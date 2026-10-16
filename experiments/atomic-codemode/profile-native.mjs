@@ -11,6 +11,7 @@ import { PrivateRuntimeRoot } from "../../dist/process/PrivateRuntimeRoot.js";
 import { spawnOwnedProviderProcess } from "../../dist/process/ProviderProcess.js";
 import { requireResult } from "./fact-error.mjs";
 import { parseNativeIR } from "./native-ir.mjs";
+import { NATIVE_OUTPUT_BYTES } from "./limits.mjs";
 import {
   createVerifierRun,
   completeVerifierRun,
@@ -19,11 +20,21 @@ import {
 
 const { values: options, positionals } = parseArgs({
   allowPositionals: true,
-  options: { "without-timing": { type: "boolean", default: false } },
+  options: {
+    "without-timing": { type: "boolean", default: false },
+    "output-bytes": { type: "string", default: String(NATIVE_OUTPUT_BYTES) },
+  },
 });
 const [engine, binary, entry, output, goldenPath] = positionals;
 const timingEnabled = !options["without-timing"];
 assert.ok(engine && binary && entry && output);
+const outputBytes = Number(options["output-bytes"]);
+assert.ok(
+  Number.isSafeInteger(outputBytes) &&
+    outputBytes > 0 &&
+    outputBytes <= NATIVE_OUTPUT_BYTES,
+  "Choose a positive native output budget within the supervisor's 8 MiB capture capacity",
+);
 const sha = (s) => createHash("sha256").update(s).digest("hex");
 const expectedPhases = [
   "decompile_drive",
@@ -79,11 +90,11 @@ try {
           "--json",
           "--atomic-facts",
           "--atomic-output-bytes",
-          "8388608",
+          String(outputBytes),
           "--max-fn-memory",
           "1024",
         ],
-        outputBytes: 8 * 1024 * 1024,
+        outputBytes: NATIVE_OUTPUT_BYTES,
         timeoutMs: 120000,
         signal: new AbortController().signal,
       }),
@@ -193,6 +204,8 @@ await writeFile(
       target: target && { path: target.path, sha256: target.sha256 },
       entry,
       timing_enabled: timingEnabled,
+      output_budget_bytes: outputBytes,
+      supervisor_capture_budget_bytes: NATIVE_OUTPUT_BYTES,
       runs,
       failures,
       lifecycle,

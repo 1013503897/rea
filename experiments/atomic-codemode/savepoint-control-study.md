@@ -165,3 +165,5 @@ variation also needs a bounded, matched diagnostic before further speed claims.
 The [subsequent four-case public MCP diagnostic](overlap-study.md) confirms
 provider admission is serialized and does not reproduce the long capture;
 the original cause remains unknown rather than being declared fixed.
+The [native switch extension](switch-study.md) now exports the case labels and
+checks all 182 original targets independently; its new model question is separate.

@@ -41,6 +41,10 @@ keys the view; successful close clears it. All adapters share these owners.
 
 ## Real verification
 
+These graph-only engine/patch measurements use commit `e2205313a` and its
+version of `kuna-native-ir.patch`. The subsequent [switch extension](switch-study.md)
+has its own pinned engine/patch and retains the same logical graph fields.
+
 Kuna upstream: `fe01d6294eb0d1053ce343c8943646df88e143fc`.
 Final preserved engine:
 `677b9795d49a65e459054ecbd3c0df37d603b541d72df9f74b46778947ed3936`.

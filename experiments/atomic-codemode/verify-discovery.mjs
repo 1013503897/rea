@@ -38,6 +38,7 @@ for (const direct of [false, true]) {
     const catalog = await client.listTools();
     const prefix = direct ? "facts_" : "rea.";
     const ids = [
+      "switches",
       "snapshot",
       "operations",
       "relations",
@@ -52,7 +53,7 @@ for (const direct of [false, true]) {
       ids,
     );
     assert.deepEqual(selected.unmatched_queries, []);
-    assert.equal(selected.coverage.declared_methods, 14);
+    assert.equal(selected.coverage.declared_methods, 15);
     const ajv = new Ajv2020({ strict: false });
     for (const tool of catalog.tools) ajv.compile(tool.inputSchema);
     for (const method of selected.methods) {
@@ -63,7 +64,27 @@ for (const direct of [false, true]) {
     }
     for (const [name, good, bad] of [
       ["snapshot", { entry: "0xea6d0" }, { snapshot: "snap_other" }],
+      [
+        "switches",
+        {
+          snapshot: "snap_other",
+          origin_addresses: ["0xea801"],
+          fields: ["selector", "table"],
+        },
+        { snapshot: "snap_other", fields: ["rows"] },
+      ],
       ["values", { snapshot: "snap_other", ids: ["v1"] }, { entry: "0xea6d0" }],
+      [
+        "relations",
+        {
+          snapshot: "snap_other",
+          kind: "cases",
+          seeds: ["0xea801:fe"],
+          case_values: ["0xb5"],
+          case_indices: [181],
+        },
+        { snapshot: "snap_other", kind: "cases", seeds: [8] },
+      ],
       [
         "relations",
         {
@@ -105,7 +126,7 @@ for (const direct of [false, true]) {
     );
     assert.deepEqual(missing.unmatched_queries, ["unknown"]);
     const all = await call("");
-    assert.equal(all.methods.length, 14);
+    assert.equal(all.methods.length, 15);
     for (const method of all.methods) ajv.compile(method.input_schema);
     const index = await call("", "index");
     assert.equal(index.coverage.view, "index");

@@ -673,5 +673,10 @@ lossless encoding probe also puts the earlier full 17.8 MB diagnostic record
 inside the unchanged 8 MiB transport. The [subsequent codec study](native-graph-transport-study.md)
 now implements and verifies this through both public experimental MCP adapters,
 including complete decoded Evidence and shared text-budget ownership. Actual
-model behavior remains to be tested. Model comparisons share the same
-computation/fact owners, avoiding a capability difference between adapters.
+guard/control model behavior is now checked in two real-model pairs. Model
+comparisons share the same computation/fact owners, avoiding a capability
+difference between adapters. The [switch extension](switch-study.md) adds an
+independent native table facet with exact labels and row/edge mapping, selected
+queries and a verified 2 MiB fallback that retains cases without a full graph.
+Its final engine is `a9ca8a8ac224936afb08a9d4be9c1225feb69473ad9f35764e8d1c4f04875b5b`;
+the fixed case/default model question is separate from the earlier guard pairs.

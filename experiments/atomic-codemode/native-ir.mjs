@@ -1,6 +1,12 @@
 // The native-format boundary owns validation and indexes; consumers never parse
 // diagnostic statements to recover value identity, operand indexes or CFG edges.
 import { FactFailure } from "./fact-error.mjs";
+import {
+  indexSwitchFacet,
+  validateSwitchGraph,
+  validateSwitchValues,
+  createSwitchViews,
+} from "./native-switch-views.mjs";
 import { parseNativeFunction } from "./native-ir-contract.mjs";
 import { controlDependencies } from "./control-dependence.mjs";
 import { freezeFacts as freeze } from "./fact-reads.mjs";
@@ -185,6 +191,8 @@ const captureFacets = ({
   graphError,
   operationError,
   callError,
+  switches,
+  switchError,
 }) =>
   freeze({
     code: { availability: "available" },
@@ -213,6 +221,9 @@ const captureFacets = ({
     calls: calls
       ? { availability: "available", ...calls.summary }
       : { availability: "unavailable", error: callError },
+    switches: switches
+      ? { availability: "available", ...switches.summary }
+      : { availability: "unavailable", error: switchError },
     values: graph
       ? {
           availability: "available",
@@ -270,6 +281,7 @@ export function parseNativeIR(text, entry, expectedInput) {
         // Without a full graph, the independent call owner validates the projection.
         if (calls.view) validateCallGraph(calls.index, index);
         return {
+          index,
           view: createProjectionViews(
             facts,
             capture.code,
@@ -279,6 +291,16 @@ export function parseNativeIR(text, entry, expectedInput) {
         };
       });
   const unavailableCalls = unavailable("calls", calls.error);
+  const switches = loadFacet(capture.switches, (facts) => {
+    const index = indexSwitchFacet(facts);
+    if (graph.view) validateSwitchGraph(index, graph.index);
+    else {
+      validateSwitchValues(index, calls.index?.values);
+      validateSwitchValues(index, projection.index?.values);
+    }
+    return { view: createSwitchViews(facts, index) };
+  });
+  const unavailableSwitches = unavailable("switches", switches.error);
   const operationError = operationFailure(projection.error, graph.error);
   const unavailableOperations = unavailable("operations", operationError);
   const fallback = {
@@ -307,8 +329,13 @@ export function parseNativeIR(text, entry, expectedInput) {
   };
   return Object.freeze({
     ...(graph.view ?? projection.view ?? fallback),
+    edges: (input) =>
+      input.kind === "cases"
+        ? (switches.view?.cases ?? unavailableSwitches)(input)
+        : (graph.view ?? projection.view ?? fallback).edges(input),
     language: capture.language,
     calls: calls.view?.calls ?? unavailableCalls,
+    switches: switches.view?.switches ?? unavailableSwitches,
     values:
       graph.view?.values ??
       projection.view?.values ??
@@ -321,6 +348,8 @@ export function parseNativeIR(text, entry, expectedInput) {
       graphError: graph.error,
       operationError,
       callError: calls.error,
+      switches: switches.view,
+      switchError: switches.error,
     }),
   });
 }
