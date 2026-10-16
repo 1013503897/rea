@@ -63,6 +63,21 @@ for (const direct of [false, true]) {
     for (const [name, good, bad] of [
       ["snapshot", { entry: "0xea6d0" }, { snapshot: "snap_other" }],
       ["values", { snapshot: "snap_other", ids: ["v1"] }, { entry: "0xea6d0" }],
+      [
+        "relations",
+        {
+          snapshot: "snap_other",
+          kind: "operands",
+          seeds: ["0x1:0"],
+          input_indices: [0, 155],
+        },
+        {
+          snapshot: "snap_other",
+          kind: "uses",
+          seeds: ["0x1:0"],
+          input_indices: [0],
+        },
+      ],
     ]) {
       const method = selected.methods.find((m) => m.method === name);
       const validators = [ajv.compile(method.input_schema)];

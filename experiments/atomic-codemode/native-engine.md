@@ -573,3 +573,48 @@ omitted-default check remains recorded. Six contracts occupy 10,835 Code Mode /
 10,360 direct bytes, versus 21,746 / 20,699 for all fourteen. Bytes do not prove
 token or time savings. The same PHI question/oracle are retained for the next
 actual model pair.
+
+## Wide native operand relations
+
+A retained-source replay exposes a whole-row cost: VM PHI
+`0xea998:14649` has 156 inputs and 156 definition edges. Its normalized old
+operation is 44,447 JSON bytes, and a default one-node slice returns 44,980 data
+bytes. Real QuickJS returns `output_budget` while preserving the source ID.
+This replays real producer facts through the shared parser/executor, without
+a fresh native analysis or model call (`wide-phi-before.json`). Explicitly
+requesting only `inputs` already fits; the gap is default size and lack of
+independently selected/paged operands, not inability to obtain the data at all.
+
+`relations kind:operands` now owns slot-level paging and optional input-index
+selection. Snapshot + operation + input_index identifies the relationship;
+value identity, native definition and exact phi edge are separate fields. It
+retains constants, function inputs and nulls that definition edges cannot cover.
+Requested out-of-range slots of retained seeds are absent, while unretained
+seeds stay explicit/unknown. Seeds and selectors deduplicate in caller order;
+total counts filtered rows before paging. Full graph and projection share this
+owner; diagnostic SSA rejects the unsupported relation with source context.
+
+Paging counts existing relation groups before materializing selected rows,
+avoiding a complete flattened relation copy. Native operation defaults are
+compact summaries with exact input/definition/constant counts; detailed fields
+remain selectable. Repeated value/block identity lookups deduplicate at their
+shared read boundary. A discriminated contract replaces the prior runtime-only
+relation refinement, so advertised schemas also enforce seed types and prohibit
+input_indices on other relationship kinds. No native rebuild, higher native
+capacity, new method or additional authority is involved.
+
+The shared suite passes 57 tests; changed JS lint has zero warnings and formatting
+passes. Both real SDK catalogs and all reference schemas compile; selected
+operand inputs and invalid selector applicability agree with runtime validation.
+That discovery run takes 7.443 family wall / 4.928 CPU seconds, 141.8 MiB peak
+including charged file cache. The real Code Mode VM verifier passes ten calls
+in 54.327 / 47.069 seconds, 597.6 MiB peak. Its default slice fits, selected
+slots preserve exact native facts, and explicit all-input reads still work.
+Both runs verify cleanup and OOM 0. This first public run precedes the final
+identity-deduplication adjustment; subsequent direct/model reads cover it.
+Scripted bytes and costs are not model-token savings or an adapter speed claim.
+The subsequent direct verifier passes all ten calls, including duplicate-value
+deduplication, in 39.385 wall / 39.163 CPU seconds, 591.3 MiB peak, with cleanup
+verified and OOM 0. The different scripted read paths/host state do not isolate
+adapter costs. The [wide-operand oracle](operands-oracle.md) fixes the next seeded
+real-model task before launch; it is not a before/after of the PHI-format task.

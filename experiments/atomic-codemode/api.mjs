@@ -36,6 +36,9 @@ const fields = z
       "inputs",
       "output",
       "is_dead",
+      "input_count",
+      "definition_count",
+      "constant_count",
     ]),
   )
   .optional();
@@ -45,6 +48,28 @@ const definition = (description, input, method, example) => ({
   method,
   example,
 });
+const operationSeeds = z.array(z.string()).min(1).max(128);
+const relationInput = z.discriminatedUnion("kind", [
+  z.strictObject({
+    snapshot,
+    kind: z.literal("operands"),
+    seeds: operationSeeds,
+    input_indices: z.array(z.number().int().nonnegative()).max(128).optional(),
+    ...page,
+  }),
+  z.strictObject({
+    snapshot,
+    kind: z.enum(["definitions", "uses"]),
+    seeds: operationSeeds,
+    ...page,
+  }),
+  z.strictObject({
+    snapshot,
+    kind: z.enum(["incoming", "outgoing", "controllers"]),
+    seeds: z.array(z.number().int().nonnegative()).min(1).max(128),
+    ...page,
+  }),
+]);
 export const methods = {
   functions: definition(
     "Search retained native callable entries by literal name/alias, exact name, or entry addresses. Names can match several entries, including PLT/import stubs and implementations; preserve all matches and select by address. A name does not establish runtime symbol binding.",
@@ -117,7 +142,7 @@ export const methods = {
     'await rea.instructions({windows:[{address:"0x1000",count:8}],fields:["bytes","text"]})',
   ),
   operations: definition(
-    "Select SSA operations by IDs, source instruction origins, block IDs, constant literal or kind. Filters intersect; identities and native is_dead are retained. Availability may be a complete recovered graph or a bounded call-rooted projection; inspect coverage before inferring absence. A literal match is not object identity. origin_addresses selects optimized recovered IR origins; use instructions for actual machine control transfers.",
+    "Select SSA operations by IDs, source instruction origins, block IDs, constant literal or kind. Native default rows are compact summaries: opcode/kind/output and input/definition/constant counts; request detailed fields explicitly or page input slots via relations kind:operands. Filters intersect; identities and native is_dead are retained. Availability may be a complete recovered graph or a bounded call-rooted projection; inspect coverage before inferring absence. A literal match is not object identity. origin_addresses selects optimized recovered IR origins; use instructions for actual machine control transfers.",
     {
       snapshot,
       ids: z.array(z.string()).max(128).optional(),
@@ -131,26 +156,14 @@ export const methods = {
     "operations",
     'await rea.operations({snapshot:s,constant:"0x2000",fields:["statement"]})',
   ),
-  relations: definition(
-    "Read definitions/uses for operation IDs, incoming/outgoing CFG edges or derived controllers for block IDs. Native facts include exact operand/phi bindings. A bounded call-rooted projection supports selected definitions/uses but no CFG; uses cover retained selected operations only. Diagnostic SSA has partial CFG and printed occurrences only. controllers requires an available complete native recovered graph and concerns finite paths to recovered exits, not runtime feasibility.",
-    {
-      snapshot,
-      kind: z.enum([
-        "definitions",
-        "uses",
-        "incoming",
-        "outgoing",
-        "controllers",
-      ]),
-      seeds: z
-        .array(z.union([z.string(), z.number().int().nonnegative()]))
-        .min(1)
-        .max(128),
-      ...page,
-    },
-    "relations",
-    'await rea.relations({snapshot:s,kind:"uses",seeds:[op.id]})',
-  ),
+  relations: {
+    description:
+      "Read native operands or definitions/uses for operation IDs, incoming/outgoing CFG edges or derived controllers for block IDs. operands pages every selected input slot, including constants, function inputs and null slots; input_indices optionally selects slots in caller order. Identity is snapshot + operation + input_index; value_id/definition and exact phi predecessor/edge bindings remain separate. Out-of-range slots of retained operations are absent; unretained_seeds remain unknown. A bounded call-rooted projection supports operands/definitions/uses but no CFG; uses cover retained selected operations only. Diagnostic SSA lacks native operands and has partial CFG/printed occurrences. controllers requires a complete recovered graph and concerns finite paths to recovered exits, not runtime feasibility.",
+    input: relationInput,
+    method: "relations",
+    example:
+      'await rea.relations({snapshot:s,kind:"operands",seeds:[op.id],input_indices:[0,2]})',
+  },
   values: definition(
     "Read identified native SSA values in a batch; scope may be a full graph, bounded call-rooted definition projection, or call-boundary values only; is_input filters retained operand/output values, not an original source signature. Offset is an address-space offset, not a computed arbitrary-width value. Width, constants, function inputs, annotation status and defining operation are separate facts. Requires the pinned native exporter.",
     {
@@ -217,7 +230,7 @@ export const methods = {
     "await rea.blocks({snapshot:s,ids:[op.block]})",
   ),
   slice: definition(
-    "Compose a bounded backward definition traversal from explicit operation IDs. Available over either the complete recovered graph or a bounded call-rooted projection. Missing defining bodies retain frontier reasons; complete use sets and CFG are unavailable for a projection. Default load/phi cutoffs keep boundaries visible; choose stop_kinds:[] to traverse beyond them. Complete reachability and memory aliases remain unknown.",
+    "Compose a bounded backward definition traversal from explicit operation IDs. Native default operation rows are compact summaries; request detailed fields or use paged operand relations for wide nodes. Available over a complete recovered graph or bounded call-rooted projection. Missing defining bodies retain frontier reasons; complete use sets and CFG are unavailable for a projection. Default load/phi cutoffs keep boundaries visible; choose stop_kinds:[] to traverse beyond them. Complete reachability and memory aliases remain unknown.",
     {
       snapshot,
       seeds: z.array(z.string()).min(1).max(64),
@@ -290,20 +303,6 @@ methods.references.input = methods.references.input.superRefine(
       });
   },
 );
-methods.relations.input = methods.relations.input.superRefine(
-  (value, context) => {
-    const type = ["incoming", "outgoing", "controllers"].includes(value.kind)
-      ? "number"
-      : "string";
-    if (value.seeds.some((seed) => typeof seed !== type))
-      context.addIssue({
-        code: "custom",
-        path: ["seeds"],
-        message: `${value.kind} requires ${type} seeds`,
-      });
-  },
-);
-
 export class AtomicSession {
   #owner;
   #tail = Promise.resolve();

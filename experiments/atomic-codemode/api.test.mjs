@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import Ajv2020 from "ajv/dist/2020.js";
-import { AtomicSession, reference } from "./api.mjs";
+import { AtomicSession, methods, reference } from "./api.mjs";
 
 const factory = () => {
   let sequence = 0;
@@ -21,6 +21,25 @@ const factory = () => {
   });
   return { create, calls };
 };
+test("relation identity and operand-only selectors agree in runtime and advertised schemas", () => {
+  const validate = new Ajv2020({ strict: false }).compile(
+    reference("relations").methods[0].input_schema,
+  );
+  for (const [request, valid] of [
+    [{ kind: "operands", seeds: ["0x1:0"], input_indices: [0, 155] }, true],
+    [{ kind: "operands", seeds: ["0x1:0"], input_indices: [] }, true],
+    [{ kind: "uses", seeds: ["0x1:0"] }, true],
+    [{ kind: "incoming", seeds: [0] }, true],
+    [{ kind: "incoming", seeds: ["0"] }, false],
+    [{ kind: "operands", seeds: [0] }, false],
+    [{ kind: "uses", seeds: ["0x1:0"], input_indices: [0] }, false],
+    [{ kind: "operands", seeds: ["0x1:0"], input_indices: [-1] }, false],
+  ]) {
+    const input = { snapshot: "snap_test", ...request };
+    assert.equal(methods.relations.input.safeParse(input).success, valid);
+    assert.equal(validate(input), valid, JSON.stringify(validate.errors));
+  }
+});
 test("named contracts reject extra keys and stale leases before provider admission", async () => {
   const provider = factory();
   const session = new AtomicSession(provider.create);

@@ -7,6 +7,14 @@ import {
   nativePage as page,
   readNativeIdentities as readIdentities,
 } from "./native-reads.mjs";
+export const DEFAULT_NATIVE_OPERATION_FIELDS = Object.freeze([
+  "kind",
+  "opcode",
+  "output",
+  "input_count",
+  "definition_count",
+  "constant_count",
+]);
 export const coverageIssues = (issues) => ({
   issues: issues.slice(0, 8).map((message) => message.slice(0, 160)),
   issue_count: issues.length,
@@ -134,6 +142,9 @@ export function indexOperationFacts(rows, valueRows, omittedIDs) {
         source_line: null,
         definitions,
         constants: literals,
+        input_count: op.inputs.length,
+        definition_count: definitions.length,
+        constant_count: literals.length,
       }),
     );
   }
@@ -151,10 +162,10 @@ export function createOperationViews(
     operation: (id) => normalized.get(id) ?? null,
     findConstant: (value) => [...new Set(constants.get(value) ?? [])],
     uses: (id) => users.get(id) ?? [],
-    select: (input) =>
+    select: (input = {}) =>
       selectOperations(normalized, constants, {
-        fields: ["kind", "statement", "definitions", "constants"],
         ...input,
+        fields: input.fields ?? DEFAULT_NATIVE_OPERATION_FIELDS,
       }),
     values: (input) => ({
       ...readIdentities(
@@ -165,27 +176,73 @@ export function createOperationViews(
       ),
       coverage,
     }),
-    definitionEdges: (input) => ({
-      ...page(
-        input.seeds.flatMap((seed) =>
-          input.kind === "definitions"
-            ? (normalized.get(seed)?.definitions ?? [])
-            : (users.get(seed) ?? []),
-        ),
-        input,
-      ),
-      unretained_seeds: input.seeds.filter((id) => !normalized.has(id)),
-      relation_coverage: {
-        scope:
-          input.kind === "uses"
-            ? (coverage.uses_scope ??
-              "complete-for-retained-recovered-operations")
-            : "definitions of retained operands; missing defining bodies remain unknown",
-      },
-    }),
+    operationRelations: (input) =>
+      readOperationRelations(indexes, coverage, input),
     slice: (input) => sliceValues(model, values, input, frontierReasons),
   };
   return Object.freeze(model);
+}
+
+function readOperationRelations(indexes, coverage, input) {
+  const { normalized, values, users } = indexes;
+  const seeds = [...new Set(input.seeds)];
+  const operands = input.kind === "operands";
+  const indices = input.input_indices && [...new Set(input.input_indices)];
+  const groups = seeds.map((seed) => {
+    const op = normalized.get(seed);
+    const rows = operands
+      ? indices
+        ? indices.flatMap((index) => op?.inputs[index] ?? [])
+        : (op?.inputs ?? [])
+      : input.kind === "definitions"
+        ? (op?.definitions ?? [])
+        : (users.get(seed) ?? []);
+    return { seed, rows };
+  });
+  const offset = input.offset ?? 0,
+    limit = input.limit ?? 20;
+  let total = 0;
+  const items = [];
+  // Count groups without flattening every relation or copying unselected rows.
+  for (const { seed, rows } of groups) {
+    const start = Math.max(0, offset - total);
+    const end = Math.min(rows.length, offset + limit - total);
+    for (let i = start; i < end; i++) {
+      const row = rows[i];
+      items.push(
+        operands
+          ? {
+              operation: seed,
+              ...row,
+              definition: values.get(row.value_id)?.definition ?? null,
+            }
+          : row,
+      );
+    }
+    total += rows.length;
+  }
+  return {
+    items,
+    total,
+    next_offset: offset + limit < total ? offset + limit : null,
+    unretained_seeds: seeds.filter((id) => !normalized.has(id)),
+    relation_coverage: {
+      scope: operands
+        ? "all selected native input slots of retained operations; null values remain explicit"
+        : input.kind === "uses"
+          ? (coverage.uses_scope ??
+            "complete-for-retained-recovered-operations")
+          : "definitions of retained operands; missing defining bodies remain unknown",
+      ...(operands
+        ? {
+            slot_presence:
+              "out-of-range slots of retained seeds are absent; unretained seeds remain unknown",
+            order:
+              "distinct caller seed order, then distinct requested input-index order or native slot order",
+          }
+        : {}),
+    },
+  };
 }
 
 function selectOperations(normalized, constants, input = {}) {

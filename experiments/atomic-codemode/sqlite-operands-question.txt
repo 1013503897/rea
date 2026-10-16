@@ -1,0 +1,16 @@
+Use one retained static capture of sqlite3VdbeExec at 0xea6d0 in {{artifact_path}}.
+Investigate recovered operation 0xea998:14649 as a wide SSA merge. Report its
+opcode, output value, block and total input count. Retrieve only input indices
+0, 1, 77, 105 and 155, retaining each value ID, native predecessor and exact
+predecessor-edge identity. Read the distinct selected values' address spaces,
+offsets, widths and defining operation identities; inspect those immediate
+defining operations' opcode and output. Explain which selected slots share a
+value, without discarding their distinct edge identities.
+
+Check requested slot 156 and operation 0xffff:0 separately: distinguish an absent
+slot of a retained operation from unknown membership of an unretained operation.
+Use selected/batch/paged facts and reuse the same capture. Do not return or page
+through the whole wide input list or reconstructed C. State the available
+operation scope and remaining definition-frontier, CFG, complete-use, alias and
+runtime-feasibility limits. Keep the answer focused with actual Evidence IDs and
+target digest; optimized PHI predecessors and origins are not machine transfers.

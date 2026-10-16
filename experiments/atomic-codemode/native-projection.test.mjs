@@ -131,6 +131,76 @@ function fixture() {
   };
 }
 
+test("operand relations preserve every slot, page across seeds and select exact caller indices", () => {
+  const source = fixture();
+  source.functions[0].atomic_projection.operations[1].inputs.push(
+    input(2, "v5", 2, "2:0"),
+    input(3, "v7", 3, "3:0"),
+    input(4, null, 4, "4:0"),
+  );
+  const model = parseNativeIR(JSON.stringify(source), "0x1000");
+  const read = (extra = {}) =>
+    model.edges({
+      kind: "operands",
+      seeds: ["0x1080:2"],
+      offset: 0,
+      limit: 2,
+      ...extra,
+    });
+  const first = read();
+  assert.equal(first.total, 5);
+  assert.equal(first.next_offset, 2);
+  assert.deepEqual(
+    first.items.map((r) => r.input_index),
+    [0, 1],
+  );
+  assert.deepEqual(
+    read({ offset: 2, limit: 10 }).items.map((r) => r.definition),
+    [null, null, null],
+  );
+  const selected = read({ input_indices: [4, 2, 4, 500], limit: 10 });
+  assert.equal(selected.total, 2);
+  assert.equal(selected.items[0].value_id, null);
+  assert.deepEqual(
+    selected.items.map((r) => [r.input_index, r.phi_predecessor_edge]),
+    [
+      [4, "4:0"],
+      [2, "2:0"],
+    ],
+  );
+  assert.equal(read({ input_indices: [] }).total, 0);
+  const batch = read({
+    seeds: ["0x1080:2", "0x1050:3", "0x1050:3", "0x9000:0"],
+    offset: 4,
+    limit: 2,
+  });
+  assert.equal(batch.total, 7);
+  assert.equal(batch.next_offset, 6);
+  assert.deepEqual(
+    batch.items.map((r) => [r.operation, r.input_index]),
+    [
+      ["0x1080:2", 4],
+      ["0x1050:3", 0],
+    ],
+  );
+  assert.deepEqual(batch.unretained_seeds, ["0x9000:0"]);
+  assert.equal(
+    read({ seeds: ["0x1100:1"], input_indices: [3] }).items[0].definition,
+    "0x9000:0",
+  );
+  const summary = model.select({ ids: ["0x1080:2"] }).items[0];
+  assert.equal(summary.input_count, 5);
+  assert.equal(summary.definition_count, 2);
+  assert.equal(summary.constant_count, 1);
+  assert.equal(Object.hasOwn(summary, "inputs"), false);
+  const repeatedValues = model.values({ ids: ["v3", "v3", "vbad", "vbad"] });
+  assert.deepEqual(
+    repeatedValues.items.map((v) => v.id),
+    ["v3"],
+  );
+  assert.deepEqual(repeatedValues.missing, ["vbad"]);
+});
+
 test("partial definition facts compose through phi operands without implying a CFG or full uses", () => {
   const model = parseNativeIR(JSON.stringify(fixture()), "0x1000");
   assert.equal(model.facets.recovered_ir.availability, "unavailable");

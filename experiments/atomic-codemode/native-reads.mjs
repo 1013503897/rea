@@ -17,10 +17,12 @@ export const uniqueNative = (rows) => {
 export const readNativeIdentities = (index, input, filter = () => true) => ({
   ...nativePage(
     (input.ids
-      ? input.ids.flatMap((id) => index.get(id) ?? [])
+      ? [...new Set(input.ids)].flatMap((id) => index.get(id) ?? [])
       : [...index.values()]
     ).filter(filter),
     input,
   ),
-  missing: input.ids?.filter((id) => !index.has(id)) ?? [],
+  missing: input.ids
+    ? [...new Set(input.ids)].filter((id) => !index.has(id))
+    : [],
 });

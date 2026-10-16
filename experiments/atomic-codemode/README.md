@@ -222,4 +222,24 @@ schemas come from named contracts, use input semantics (defaulted fields stay
 optional), and are cached immutably by Zod schema identity for the process.
 Validation stays in the API registry; documentation has its own module. Both
 actual MCP catalogs and all fourteen reference schemas validate. The unchanged
-PHI question/oracle will be rerun after this discovery correction.
+PHI question/oracle were rerun: both answers pass again, but direct has a native
+timeout followed by a successful retry. Complete costs and the unknown timeout
+cause remain in [trials.md](trials.md); this does not isolate an adapter speedup.
+
+The next observed atom boundary is a wide PHI. One real VM operation has 156
+inputs; its old default single-node slice is about 44 KB and exceeds the guest's
+32 KiB result budget. Native operation/slice defaults now return opcode, output
+and exact input/definition/constant counts. Explicit detailed fields still work.
+`relations({kind:"operands",seeds:[id],input_indices:[0,105,155]})` reads selected
+slots; omitting the selector pages all slots. Each slot retains value/definition
+and phi predecessor/edge identity, including null values and definition-free
+constants/inputs. Counts concern recovered facts, not source function arity.
+
+Full and projected native operations use the same owner. Relationship paging
+counts existing groups before materializing only the requested page; identity
+reads deduplicate requested IDs in caller order. Diagnostic SSA explicitly lacks
+native operand relations. The discriminated relation schema advertises the same
+seed types and selector applicability enforced at runtime. The fourteen-method
+API and both adapters remain shared; no new engine or output-budget increase is
+needed. The [seeded wide-operand task/oracle](operands-oracle.md) is separate from
+the earlier PHI-format question and is pinned before model trials.

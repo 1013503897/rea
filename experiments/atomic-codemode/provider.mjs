@@ -8,6 +8,7 @@ import { KunaTargetCommands } from "../../dist/kuna/KunaTargetCommands.js";
 import { referenceReader } from "./reference-reads.mjs";
 import { PrivateRuntimeRoot } from "../../dist/process/PrivateRuntimeRoot.js";
 import { parseNativeIR } from "./native-ir.mjs";
+import { DEFAULT_NATIVE_OPERATION_FIELDS } from "./native-operation-views.mjs";
 import { FactFailure, requireResult } from "./fact-error.mjs";
 import { windowReaders } from "./window-readers.mjs";
 import { NATIVE_OUTPUT_BYTES } from "./limits.mjs";
@@ -375,7 +376,8 @@ export class KunaFactOwner {
     }));
   }
   async relations(input) {
-    if (input.kind === "controllers") this.#requireNativeIR(input.snapshot);
+    if (["controllers", "operands"].includes(input.kind))
+      this.#requireNativeIR(input.snapshot);
     return this.#query(input, (model) => ({
       ...model.edges(input),
       coverage: model.coverage,
@@ -393,13 +395,12 @@ export class KunaFactOwner {
       return {
         ...result,
         operations: result.operations.map((row) =>
-          projectFact(row, input.fields, [
-            "id",
-            "origin_address",
-            "block",
-            "source_line",
-            "is_dead",
-          ]),
+          projectFact(
+            row,
+            input.fields ??
+              (this.#nativeIR ? DEFAULT_NATIVE_OPERATION_FIELDS : undefined),
+            ["id", "origin_address", "block", "source_line", "is_dead"],
+          ),
         ),
       };
     });

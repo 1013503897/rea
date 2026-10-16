@@ -78,8 +78,8 @@ export function createProjectionViews(facts, code, indexes, unavailableGraph) {
     incoming: unavailableGraph,
     blocks: unavailableGraph,
     edges: (input) =>
-      ["definitions", "uses"].includes(input.kind)
-        ? core.definitionEdges(input)
+      ["definitions", "uses", "operands"].includes(input.kind)
+        ? core.operationRelations(input)
         : unavailableGraph(),
   });
 }

@@ -145,8 +145,8 @@ function createViews(facts, code, indexes) {
     incoming: (id) => incoming.get(id) ?? [],
     blocks: (input) => readIdentities(blocks, input),
     edges: (input) => {
-      if (["definitions", "uses"].includes(input.kind))
-        return core.definitionEdges(input);
+      if (["definitions", "uses", "operands"].includes(input.kind))
+        return core.operationRelations(input);
       if (input.kind === "controllers") {
         const controls = controlDependencies(facts.blocks, {
           dependents: new Set(input.seeds),

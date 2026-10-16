@@ -126,6 +126,19 @@ test("native identity, implicit CFG and operand/phi bindings do not depend on di
   assert.equal(model.operation("0x3:0").origin_address, "0x3");
   assert.equal(Object.hasOwn(model.operation("0x3:0"), "address"), false);
   assert.equal(model.block(1).origin_start, "0x1001");
+  const operand = model.edges({
+    kind: "operands",
+    seeds: ["0x3:0"],
+    input_indices: [1],
+  }).items[0];
+  assert.deepEqual(operand, {
+    operation: "0x3:0",
+    input_index: 1,
+    value_id: "v2",
+    definition: "0x2:0",
+    phi_predecessor: 2,
+    phi_predecessor_edge: "2:0",
+  });
   assert.equal(Object.hasOwn(model.block(1), "start"), false);
   assert.equal(model.select({ origin_addresses: ["0x3"] }).total, 1);
   assert.deepEqual(model.findConstant("0xffffffffffffffff"), [
