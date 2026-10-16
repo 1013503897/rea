@@ -91,7 +91,7 @@ test("phi/load cutoffs preserve boundary rows and do not invent memory or predec
 
 test("cloned blocks share starts; operation identity includes sequence, and facts stay immutable", () => {
   const snapshot = parseKunaSsaDump(dump.replaceAll("0x120", "0x110"));
-  assert.equal(snapshot.block(1).start, snapshot.block(2).start);
+  assert.equal(snapshot.block(1).origin_start, snapshot.block(2).origin_start);
   assert.notEqual(snapshot.block(1).id, snapshot.block(2).id);
   assert.throws(() => {
     snapshot.operation("0x100:1").kind = "store";

@@ -150,3 +150,40 @@ already substantially supported. This is a reason to test task-specific value
 tracing and small-function counterexamples, rather than to claim that more
 granular tool catalogs are inherently efficient. Private artifacts are named
 `zlib-native-codemode-v3*` beside the earlier trials.
+
+The value-origin task uses the same patched engine in both lanes, with fresh
+provider/session caches and the pinned `f2f029c5d` runtime. It asks about the
+accumulator at the already identified instruction origin `0xd9c9`; this is a
+seeded follow-up investigation, not a repeated string-discovery task. The
+traditional client retains its nine selected tools. Both traces use the real
+Kuna engine, complete without API errors, preserve the target/runtime digests
+and verify profile/payload cleanup with no OOM kills.
+
+| Measurement | Native IR + Code Mode | Traditional |
+| --- | ---: | ---: |
+| Outer MCP attempts | 8 | 5 |
+| Cumulative model input tokens | 284,638 | 390,557 |
+| Included cached input tokens | 220,672 | 326,016 |
+| Uncached input tokens | 63,966 | 64,541 |
+| Output / included reasoning tokens | 2,601 / 309 | 2,614 / 531 |
+| Model runner wall seconds | 72.403 | 91.832 |
+| Bounded family elapsed seconds | 72.841 | 92.254 |
+| Bounded family CPU seconds | 11.896 | 20.866 |
+| Kernel process-family memory peak MiB | 461.6 | 846.0 |
+
+Both answers recover the three accumulator alternatives, byte loads, shifts,
+additions, local bit-count conditions and unknown state. The native answer,
+however, says that the branch at `0xd97e` directly reaches `0xd9c9`. This describes
+the optimized recovered CFG, but the actual bytes `0f87e9080000` encode
+`JA 0xe26d`; `0xe270` then encodes `JMP 0xd9c9`. The traditional answer identifies
+that machine predecessor and intervening copy/jump. This was checked separately
+with the shipped machine bytes, rather than accepting either model's answer as
+the oracle.
+
+The native trace's lower cumulative input and wall time therefore do **not** yet
+establish an equal-correctness completed-task win. Uncached input is also almost
+equal; cached cumulative input alone is not an economic-cost measurement. The
+representation ambiguity needs a structural fix: distinguish IR origin fields
+from physical instruction facts and expose selected instruction windows, then
+rerun the unchanged question. Private artifacts are `zlib-value-codemode-v1*`
+and `zlib-value-traditional-v1*`.

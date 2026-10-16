@@ -49,7 +49,7 @@ for (const [i, expectedLine] of [164, 551, 653].entries()) {
   const failed = await mappedCode(native, original);
   assert.equal(failed.status, "unknown");
   const sites = answer.direct_uses.map((id) => ({
-    from: answer.operations.find((op) => op.id === id).address,
+    from: answer.operations.find((op) => op.id === id).origin_address,
   }));
   const mapped = await mappedCode(native, {
     functions: original.functions,

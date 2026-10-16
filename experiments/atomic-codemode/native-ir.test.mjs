@@ -119,6 +119,11 @@ function diamond() {
 
 test("native identity, implicit CFG and operand/phi bindings do not depend on display text", () => {
   const model = parseNativeIR(JSON.stringify(diamond()), "0x1000");
+  assert.equal(model.operation("0x3:0").origin_address, "0x3");
+  assert.equal(Object.hasOwn(model.operation("0x3:0"), "address"), false);
+  assert.equal(model.block(1).origin_start, "0x1001");
+  assert.equal(Object.hasOwn(model.block(1), "start"), false);
+  assert.equal(model.select({ origin_addresses: ["0x3"] }).total, 1);
   assert.deepEqual(model.findConstant("0xffffffffffffffff"), [
     "0x1:0",
     "0x2:0",

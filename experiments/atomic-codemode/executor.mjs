@@ -129,7 +129,10 @@ const installBridge = (
           lease,
         );
         for (const row of [response.data, ...(response.data?.results ?? [])]) {
-          const id = row?.source?.evidence_id ?? row?.evidence_id;
+          const id =
+            row?.source?.evidence_id ??
+            row?.evidence_id ??
+            row?.error?.details?.evidence_id;
           if (id) state.evidence.add(id);
         }
         if (response.error?.details?.evidence_id)

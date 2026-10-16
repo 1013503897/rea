@@ -8,27 +8,14 @@ import { KunaTargetCommands } from "../../dist/kuna/KunaTargetCommands.js";
 import { parseKunaStringInventory } from "../../dist/kuna/KunaStringInventory.js";
 import { parseKunaIncomingReferenceFacts } from "../../dist/kuna/KunaReferenceFiles.js";
 import { PrivateRuntimeRoot } from "../../dist/process/PrivateRuntimeRoot.js";
-import { projectAnalysisError } from "../../dist/domain/analysisErrorProjection.js";
 import { parseNativeIR } from "./native-ir.mjs";
-import { FactFailure } from "./fact-error.mjs";
+import { FactFailure, requireResult } from "./fact-error.mjs";
+import { parseInstructions } from "./instruction-facts.mjs";
 import {
   parseKunaSsaDump,
   backwardSlice,
 } from "../atomic-re-tools/kuna-ssa.mjs";
 
-const requireResult = (result, code = "provider_failure") => {
-  if (!result.ok) {
-    const failure = result.error?._tag
-      ? projectAnalysisError(result.error)
-      : result.error;
-    throw new FactFailure(
-      failure?.code ?? code,
-      String(failure?.message ?? failure?.reason ?? failure),
-      { failure },
-    );
-  }
-  return result.value;
-};
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const sourceSummary = ({ evidence_id, sha256, bytes, elapsed_ms }) => ({
   evidence_id,
@@ -297,7 +284,7 @@ export class KunaFactOwner {
         evidence_id: capture.source.evidence_id,
       });
     const parsed = await this.#load(id);
-    if (parsed.block(0).start !== input.entry)
+    if (parsed.block(0).origin_start !== input.entry)
       throw new FactFailure(
         "subject_mismatch",
         "Native SSA entry does not match the requested function entry",
@@ -308,6 +295,55 @@ export class KunaFactOwner {
       entry: input.entry,
       coverage: parsed.coverage,
     };
+  }
+  async instructions(input, signal) {
+    const results = [];
+    for (const request of input.windows) {
+      let capture;
+      try {
+        capture = await this.#native(
+          `instructions:${request.address}:${request.count}`,
+          (path) => [
+            "disassemble",
+            path,
+            request.address,
+            "--addr",
+            "--as",
+            "code",
+            "--count",
+            String(request.count),
+            "--json",
+          ],
+          signal,
+        );
+        const parsed = parseInstructions(
+          await this.#sourceText(capture.source.evidence_id),
+          capture.input,
+          request,
+          input.fields,
+        );
+        results.push({
+          ok: true,
+          address: request.address,
+          source: sourceSummary(capture.source),
+          ...parsed,
+        });
+      } catch (error) {
+        results.push({
+          ok: false,
+          address: request.address,
+          error: {
+            code: error.code ?? "provider_failure",
+            message: error.message,
+            details: {
+              ...error.details,
+              ...(capture ? { evidence_id: capture.source.evidence_id } : {}),
+            },
+          },
+        });
+      }
+    }
+    return { results };
   }
   async #load(id) {
     const descriptor = this.#snapshots.get(id);

@@ -42,7 +42,7 @@ const page = (rows, { offset = 0, limit = 20, fields } = {}) => ({
     .map((row) =>
       fields
         ? Object.fromEntries(
-            [...new Set(["id", "address", "block", ...fields])]
+            [...new Set(["id", "origin_address", "block", ...fields])]
               .filter((key) => Object.hasOwn(row, key))
               .map((key) => [key, row[key]]),
           )
@@ -146,7 +146,11 @@ function validateValues(facts, operations, values) {
 function indexNative(facts) {
   const operations = unique(facts.operations),
     values = unique(facts.values),
-    blocks = unique(facts.blocks);
+    blocks = unique(
+      facts.blocks.map(({ start, ...block }) =>
+        freeze({ ...block, origin_start: start }),
+      ),
+    );
   validateBlocks(operations, values, blocks);
   validateOperations(operations, values, blocks);
   validateValues(facts, operations, values);
@@ -181,10 +185,12 @@ function indexNative(facts) {
         index(constants, value.offset, op.id);
       }
     }
+    const { address: origin_address, ...payload } = op;
     normalized.set(
       op.id,
       freeze({
-        ...op,
+        ...payload,
+        origin_address,
         kind: kind(op.opcode),
         source_line: null,
         definitions,
@@ -224,6 +230,8 @@ function createViews(facts, code, indexes) {
     operations: normalized.size,
     blocks: blocks.size,
     control_flow: "complete-for-recovered-graph",
+    representation:
+      "optimized recovered IR; origins do not establish machine branch targets or block extents",
     runtime_successors: "unknown",
     memory_alias_dependencies: "unknown",
     issues: facts.coverage.issues,
@@ -274,7 +282,7 @@ function createViews(facts, code, indexes) {
 
 function selectOperations(normalized, constants, input = {}) {
   const ids = input.ids && new Set(input.ids),
-    addresses = input.addresses && new Set(input.addresses),
+    addresses = input.origin_addresses && new Set(input.origin_addresses),
     blockIds = input.block_ids && new Set(input.block_ids);
   const candidates = ids
     ? [...ids].flatMap((id) => normalized.get(id) ?? [])
@@ -286,7 +294,7 @@ function selectOperations(normalized, constants, input = {}) {
   return page(
     [...candidates].filter(
       (op) =>
-        (!addresses || addresses.has(op.address)) &&
+        (!addresses || addresses.has(op.origin_address)) &&
         (!blockIds || blockIds.has(op.block)) &&
         (!input.constant ||
           op.constants.some((literal) => literal.value === input.constant)) &&

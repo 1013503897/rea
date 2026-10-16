@@ -67,8 +67,16 @@ Runtime successors, memory aliases and machine-semantic equivalence remain
 unknown. Other providers are not yet wired to this experimental service.
 
 The initial [actual model comparison](trials.md) favors the focused traditional
-workflow. Code Mode reduces atomic round trips but has not yet established a
-whole-task advantage. The revised native relations need real-model evaluation.
+workflow. The seeded value-origin task has lower cumulative input and wall time
+through Code Mode, but also exposes an IR-to-machine-path error. An equal-quality
+whole-task advantage remains unproven; the representation fix needs a new trial.
+
+`instructions` reads selected machine byte/decode windows through the same
+owner. Recovered operations use `origin_address` and blocks `origin_start`;
+these locations cannot be substituted for machine branch destinations. The
+value-origin trial demonstrates why this boundary matters. The experiment
+currently has eleven fact methods, still behind the same four-tool Code Mode
+catalog.
 
 Completion requires actual model Code Mode use, independently checked task
 answers, shared atomic/direct/Code Mode semantics, needed relation coverage,

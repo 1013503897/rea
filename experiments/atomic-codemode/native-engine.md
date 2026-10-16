@@ -76,3 +76,26 @@ Upstream `check-spec` passes. The full upstream corpus, stages and workspace gat
 have not run; this patch is not declared upstream-ready. SQLite, more complex
 model tasks, paired warm runs and the revised actual model comparison remain
 required work.
+
+The value-origin model comparison exposed a representation boundary: optimized
+recovered blocks can absorb a machine predecessor, so an IR edge is not an actual
+branch instruction target. The experimental API now names operation locations
+`origin_address`, their selector `origin_addresses`, and block locations
+`origin_start`; printed CFG targets use `target_origin`. These replace the old
+ambiguous fields without aliases. Historical captures retain their pinned old
+contracts. Raw upstream JSON is preserved unchanged in Evidence.
+
+The added `instructions` method batches selected machine-address windows, using
+Kuna's existing [disassemble CLI](https://github.com/Noelo-Lab/kuna/blob/fe01d6294eb0d1053ce343c8943646df88e143fc/decompiler/crates/kuna-cli/src/disassemble.rs),
+with exact bytes, decoded text, extent, coverage and per-window errors. Kuna
+already has focused agent-oriented read surfaces; its port ancestry does not
+establish which primitives are missing. No assembly decoding or branch-target
+parser is duplicated in the MCP adapter.
+
+Windows are capped at 4,096 decoded rows and 16 windows per call, sharing the
+8 MiB capture and 64 MiB retained-source budgets. A real maximum-row CLI test
+returns 4,096 rows in an 842,106-byte source, taking 1.227 family wall seconds,
+1.042 CPU seconds and 112.0 MiB kernel memory peak. Both real stock and patched
+MCP tests preserve good windows alongside an unmapped-address failure and report
+the actual `JA 0xe26d` / `JMP 0xd9c9` bytes. Targeted tests now total 33; the
+representation fix still requires a fresh real-model task trial.

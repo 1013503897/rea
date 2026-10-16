@@ -80,10 +80,10 @@ const values=await read(rea.values({snapshot:s,ids:phi.items.flatMap(o=>o.inputs
 return {blocks,controls,guards,phi,values};`,
     });
     assert.equal(native.value.controls.total, 2);
-    assert.deepEqual(native.value.guards.items.map((op) => op.address).sort(), [
-      "0xd9ec",
-      "0xda32",
-    ]);
+    assert.deepEqual(
+      native.value.guards.items.map((op) => op.origin_address).sort(),
+      ["0xd9ec", "0xda32"],
+    );
     assert.ok(
       native.value.phi.items.every((op) =>
         op.inputs.every(
@@ -97,6 +97,14 @@ return {blocks,controls,guards,phi,values};`,
     );
     assert.ok(native.value.values.items.length > 0);
   }
+  const machine = await call("execute_javascript", {
+    code: 'const r=await rea.instructions({windows:[{address:"0xd97e",count:1},{address:"0xe26d",count:2},{address:"0xdeadbeef",count:1}]});if(!r.ok)throw new Error(JSON.stringify(r));return r.data;',
+  });
+  assert.equal(machine.value.results[0].items[0].bytes, "0f87e9080000");
+  assert.match(machine.value.results[0].items[0].text, /e26d/u);
+  assert.equal(machine.value.results[1].items[1].address, "0xe270");
+  assert.match(machine.value.results[1].items[1].text, /d9c9/u);
+  assert.equal(machine.value.results[2].ok, false);
   await call("close_binary");
 } catch (error) {
   failure = error.stack ?? String(error);

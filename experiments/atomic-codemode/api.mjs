@@ -59,12 +59,32 @@ export const methods = {
     "snapshot",
     'await rea.snapshot({entry:"0x1000"})',
   ),
+  instructions: definition(
+    "Batch selected machine instruction windows. Read exact bytes and native disassembly to verify actual control transfers; optimized recovered CFG edges can bypass machine blocks. Address+size with the artifact context identifies the byte range. A caller-selected decode start does not prove execution/alignment.",
+    {
+      windows: z
+        .array(
+          z.strictObject({
+            address: hex,
+            count: z.number().int().min(1).max(4096).default(16),
+          }),
+        )
+        .min(1)
+        .max(16),
+      fields: z
+        .array(z.enum(["bytes", "text", "mnemonic", "operands"]))
+        .min(1)
+        .optional(),
+    },
+    "instructions",
+    'await rea.instructions({windows:[{address:"0x1000",count:8}],fields:["bytes","text"]})',
+  ),
   operations: definition(
-    "Select SSA operations by IDs, instruction origins, block IDs, constant literal or kind. Filters intersect; identities and source lines are always retained. A literal match is not object identity.",
+    "Select SSA operations by IDs, source instruction origins, block IDs, constant literal or kind. Filters intersect; identities and source lines are always retained. A literal match is not object identity. origin_addresses selects optimized recovered IR origins; use instructions for actual machine control transfers.",
     {
       snapshot,
       ids: z.array(z.string()).max(128).optional(),
-      addresses: z.array(hex).max(128).optional(),
+      origin_addresses: z.array(hex).max(128).optional(),
       block_ids: z.array(z.number().int().nonnegative()).max(128).optional(),
       constant: hex.optional(),
       kind: kinds.optional(),
@@ -120,12 +140,14 @@ export const methods = {
     "await rea.values({snapshot:s,ids:op.inputs.map(i=>i.value_id).filter(Boolean)})",
   ),
   blocks: definition(
-    "Read native recovered blocks by stable snapshot-local ID, with ordered predecessors, successor edges and member operation IDs. Requires native IR. A recovered CFG does not establish all runtime successors.",
+    "Read native recovered blocks by stable snapshot-local ID, with ordered predecessors, successor edges and member operation IDs. origin_start describes optimized IR provenance, not a machine block extent. Requires native IR. Runtime successors remain unknown.",
     {
       snapshot,
       ids: z.array(z.number().int().nonnegative()).max(128).optional(),
       fields: z
-        .array(z.enum(["start", "operations", "predecessors", "successors"]))
+        .array(
+          z.enum(["origin_start", "operations", "predecessors", "successors"]),
+        )
         .min(1)
         .optional(),
       ...page,
@@ -169,6 +191,8 @@ export const methods = {
 
 // Compact return contracts let code compose before first observing a response.
 const returns = {
+  instructions:
+    "data:{results:[{ok,address,source:{evidence_id,sha256},items:[{address,size,status,bytes?,text?,mnemonic?,operands?}],resume_address,coverage}|{ok:false,address,error}]}; decoded rows describe selected machine bytes, not optimized IR branches. Partial batches retain successful windows.",
   strings:
     "data:{source:{evidence_id,sha256},items:[{address,value,string:{encoding,byte_length}}],total,next_offset,coverage}",
   references:
@@ -176,13 +200,13 @@ const returns = {
   snapshot:
     "data:{snapshot:string,entry,source:{evidence_id,sha256},coverage:{operations,blocks,control_flow,unrepresented_outgoing_blocks,issues}}",
   operations:
-    "data:{items:[{id,address,block,source_line,kind,statement,definitions,constants,inputs?,output?,opcode?}],total,next_offset,evidence_id,coverage}. Native inputs:[{input_index,value_id,phi_predecessor}], output:value_id|null; definitions:[{definition,use,input_index,value_id,phi_predecessor}]. Diagnostic definitions use printed occurrence instead. fields projects columns; identity remains.",
+    "data:{items:[{id,origin_address,block,source_line,kind,statement,definitions,constants,inputs?,output?,opcode?}],total,next_offset,evidence_id,coverage}. Native inputs:[{input_index,value_id,phi_predecessor,phi_predecessor_edge}], output:value_id|null; definitions:[{definition,use,input_index,value_id,phi_predecessor,phi_predecessor_edge}]. Diagnostic definitions use printed occurrence instead. fields projects columns; identity remains.",
   relations:
     "data:{items:definition/use edges OR CFG edges{from,to,operation,polarity?,condition_value?,condition_test?} OR controllers{controller,dependent,edge},total,next_offset,evidence_id,coverage,relation_coverage?}. definitions/uses seeds are operation-ID strings; incoming/outgoing/controllers seeds are numeric block IDs. Native def/use edges include input_index,value_id,phi_predecessor; diagnostic edges include occurrence only.",
   values:
     "data:{items:[{id,space,offset,size_bytes,is_constant,is_input,is_annotation,definition,type_name}],total,next_offset,evidence_id,coverage}; definitions are operation IDs, offsets are exact hex strings.",
   blocks:
-    "data:{items:[{id,start,operations,predecessors,successors:[{target,index,polarity,condition_value,condition_test}]}],total,next_offset,evidence_id,coverage}; IDs are local to this snapshot.",
+    "data:{items:[{id,origin_start,operations,predecessors,successors:[{target,index,polarity,condition_value,condition_test}]}],total,next_offset,evidence_id,coverage}; IDs are local to this snapshot.",
   slice:
     "data:{operations:[operation rows as above],coverage:{status,boundaries:[{id,reason}],missing,source_issues,runtime_reachability,memory_alias_dependencies},evidence_id}",
   code: "data:{evidence_id,start_line,text,total_lines,next_offset,coverage}; text is reconstructed C. Use a large limit to inspect/filter the full text within code without returning it all.",

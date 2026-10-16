@@ -86,7 +86,7 @@ const parseOperation = (match, blockId, sourceLine) => {
   }));
   const row = {
     id,
-    address: id.split(":")[0],
+    origin_address: id.split(":")[0],
     block: blockId,
     kind,
     statement,
@@ -110,7 +110,7 @@ const controlEdges = (row) => {
       edges.push({
         from: row.block,
         to: ordinal(target),
-        target_address: address(targetAddress),
+        target_origin: address(targetAddress),
         kind: "conditional",
         polarity,
         predicate: branch[3],
@@ -122,7 +122,7 @@ const controlEdges = (row) => {
     edges.push({
       from: row.block,
       to: ordinal(jump[1]),
-      target_address: address(jump[2]),
+      target_origin: address(jump[2]),
       kind: "direct",
       operation: row.id,
       source_line: row.source_line,
@@ -163,7 +163,7 @@ export const parseKunaSsaDump = (text) => {
       // Stop is the last instruction's address, NOT an exclusive byte bound.
       block = {
         id,
-        start: address(header[2]),
+        origin_start: address(header[2]),
         stop_instruction: address(header[3]),
         operations: [],
         source_line: i + 1,
@@ -177,7 +177,7 @@ export const parseKunaSsaDump = (text) => {
       edges.push({
         from: block.id,
         to: ordinal(fallthrough[2]),
-        target_address: address(fallthrough[3]),
+        target_origin: address(fallthrough[3]),
         kind: "printed-implied-goto",
         operation: null,
         source_line: i + 1,
@@ -204,8 +204,8 @@ export const parseKunaSsaDump = (text) => {
   validateDefinitions(operations, issues);
   for (const edge of edges) {
     assert.equal(
-      blocks.get(edge.to)?.start,
-      edge.target_address,
+      blocks.get(edge.to)?.origin_start,
+      edge.target_origin,
       "Branch target identity mismatch",
     );
     indexInto(incoming, edge.to, edge);
@@ -224,6 +224,8 @@ export const parseKunaSsaDump = (text) => {
     identity: { kind: "native-ssa-snapshot", sha256: digest },
     coverage: {
       scope: "printed-SSA",
+      representation:
+        "optimized recovered IR; origins are not machine branch targets or block extents",
       operations: operations.size,
       blocks: blocks.size,
       explicit_control_edges: edges.length,
@@ -252,7 +254,7 @@ const queryViews = ({
   incoming: (id) => incoming.get(id) ?? [],
   select: ({
     ids,
-    addresses,
+    origin_addresses,
     block_ids,
     constant,
     kind,
@@ -262,7 +264,9 @@ const queryViews = ({
   } = {}) => {
     const selectedIds = ids === undefined ? null : new Set(ids);
     const locations =
-      addresses === undefined ? null : new Set(addresses.map(address));
+      origin_addresses === undefined
+        ? null
+        : new Set(origin_addresses.map(address));
     const selectedBlocks = block_ids === undefined ? null : new Set(block_ids);
     const literalIds =
       constant === undefined
@@ -271,7 +275,7 @@ const queryViews = ({
     const rows = [...operations.values()].filter(
       (row) =>
         (!selectedIds || selectedIds.has(row.id)) &&
-        (!locations || locations.has(row.address)) &&
+        (!locations || locations.has(row.origin_address)) &&
         (!selectedBlocks || selectedBlocks.has(row.block)) &&
         (!literalIds || literalIds.has(row.id)) &&
         (kind === undefined || row.kind === kind),
@@ -299,7 +303,15 @@ const page = (rows, offset, limit, fields) => ({
       fields === undefined
         ? row
         : Object.fromEntries(
-            [...new Set(["id", "address", "block", "source_line", ...fields])]
+            [
+              ...new Set([
+                "id",
+                "origin_address",
+                "block",
+                "source_line",
+                ...fields,
+              ]),
+            ]
               .filter((key) => Object.hasOwn(row, key))
               .map((key) => [key, row[key]]),
           ),
