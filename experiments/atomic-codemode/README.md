@@ -176,5 +176,8 @@ validated immutable calls used by selected reads, including dead operations;
 target knowledge is independent of opcode. Empty available facets report zeros,
 while unavailable facets omit counts. This small aggregate addresses an observed
 cost in the real boundary pair: paging the entire call set just to count it.
-The unchanged question/oracle will be rerun through both adapters; no speed or
-token improvement is assumed from this smaller data path alone.
+Both subsequent real-model answers satisfy the unchanged question/oracle without
+that paging. In the new sample direct is faster and lower on cumulative/uncached
+input than Code Mode, reversing the preceding latency ordering. Whole-task
+effects remain mixed; see [the complete results](trials.md). This aggregate is a
+shared fact-layer improvement, available to either adapter.

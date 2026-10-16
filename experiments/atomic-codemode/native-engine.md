@@ -416,3 +416,12 @@ comparison with previous verifier timings. An owner replay of the prior
 digest-verified VM source yields the expected 395/21 distribution; it is not
 relabeled as a fresh provider or model run. The identical boundary question and
 oracle are retained for subsequent real-model comparison.
+
+That comparison now passes in both modes. Both consume the compact counts and
+read just the two selected calls, reusing one VM analysis. All native VM function
+records match the preceding pair and all retained sources/digests verify. Direct
+has lower observed task costs than Code Mode in this sample; the before/after
+results remain mixed. [trials.md](trials.md) records cumulative/cached/uncached
+tokens, model responses, elapsed time, CPU and process-family memory, including
+the slower Code Mode result. No native engine or analysis-speed improvement is
+claimed for this shared owner metadata change.

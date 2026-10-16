@@ -697,3 +697,70 @@ discovery and extra reads. Builds, scripted verification, development/parent
 conversation, resolved server model build, remote CPU/memory and monetary cost
 remain unmeasured by this pair. Lease/native analysis is cold; subsequent reads
 are warm within the same lease, not a cross-session result-cache benchmark.
+
+## Shared compact counts: same question, new pair
+
+Revision `da6f5470b` adds snapshot call-count metadata through the shared owner.
+The question, acceptance oracle, artifact, preserved engine, fourteen methods,
+model/effort request, common guidance and resource policy remain the same as the
+preceding pair. Code Mode runs first, direct second; both use fresh leases/native
+caches. No runtime source or HEAD changes occur during either pair. These are
+single stochastic runs, with uncontrolled OS and remote prompt caches.
+
+| Measurement                            | Code Mode boundary v2 | Atomic direct boundary v2 |
+| -------------------------------------- | --------------------: | ------------------------: |
+| MCP requests / transport failures      |                 7 / 0 |                    14 / 0 |
+| Observed model responses               |                    12 |                        12 |
+| Client exec / wait calls               |                 8 / 3 |                     9 / 2 |
+| Model wall seconds                     |               149.559 |                   137.633 |
+| Family wall seconds                    |               150.643 |                   138.180 |
+| Family CPU seconds                     |                46.984 |                    45.417 |
+| Family memory peak MiB                 |                 849.8 |                     838.2 |
+| Cumulative input tokens                |               268,377 |                   235,640 |
+| Cached input tokens                    |               235,136 |                   215,552 |
+| Uncached input tokens                  |                33,241 |                    20,088 |
+| Output tokens, including reasoning     |                 3,726 |                     3,541 |
+| Reasoning tokens, included in output   |                   919 |                       620 |
+| Largest observed response input tokens |                31,307 |                    27,410 |
+
+Both answers pass the unchanged full oracle, including selected machine checks,
+annotation/target separation, input identity, partial value scope and unreadable
+definition/use/runtime limits. Each uses the shared aggregate and makes only one
+call read for the two selected origins: neither pages the full 416-call set.
+Each still makes exactly one VM decompilation. All four cited sources per answer
+exist; all seven retained sources per lane verify their digests and target/engine
+contexts. The complete native VM function records equal each other and the v1
+captures, so the metadata change preserves the observed native facts. Independent
+machine-pair/indirect-origin checks retain the same 395/21 coverage and single
+omitted stack-check call. Runtime/target/engine fingerprints, per-response usage,
+process/profile cleanup and OOM-zero receipts verify.
+
+Compared with its own v1 sample, direct uses about 29.1% less cumulative input,
+27.1% less uncached input and 6.3% less model wall time; its CPU is slightly
+higher. Code Mode uses about 16.6% less cumulative input, but 19.7% more uncached
+input and 17.0% more model wall time. Its model-response count stays twelve.
+The summary eliminates the observed paging work in both lanes, but these runs
+do not establish a general latency or uncached-token improvement. Across the two
+new cells, cumulative input is 23.0% lower than v1, while summed model wall time
+is 4.6% higher. These are observations, not isolated causal effects.
+
+Within v2, direct is lower on every reported token category, elapsed time, CPU,
+peak response input and family memory, despite twice the MCP requests and the
+same number of model responses. This reverses the preceding sample's latency
+ordering. A useful shared aggregate can change the adapter comparison; keeping
+the underlying direct tools needlessly granular would bias it. Neither RPC count
+nor smaller cumulative input alone establishes whole-task efficiency. The client
+has JavaScript dispatch in both modes; no new traditional-provider cell or
+general complex-software superiority claim follows.
+
+Ledger: `.cache/atomic-codemode/ledger-boundary-counts-round-da6f547.json`;
+full-answer/source review: `boundary-counts-answer-review-v2.json` beside it.
+Pair totals are 504,017 input (450,688 cached, 53,329 uncached), 7,267 output
+(1,539 included reasoning) and 287.192 model wall seconds. The four boundary
+launches together cost 1,158,257 input (1,049,600 cached, 108,657 uncached),
+14,382 output (2,848 included reasoning) and 561.848 model wall seconds.
+Failed/partial earlier experiments remain recorded above. Builds, public
+scripted checks, development conversation, server model build, remote compute
+and money remain outside these model-pair totals. The unresolved capability is
+selected definition bodies/relationships after full-graph failure, not call
+counting or selected argument identity.
