@@ -1,0 +1,10 @@
+Analyze {{artifact_path}} statically. Find where these two diagnostics are
+selected: "cannot open savepoint - SQL statements in progress" and
+"cannot release savepoint - SQL statements in progress".
+Explain the local conditions that distinguish them, how their message selection
+and error handling join, and how a missing named savepoint differs. Give the
+supporting function/instruction addresses and relevant structure offsets.
+Keep the investigation focused on these diagnostics rather than the whole VM.
+Use real Evidence references and distinguish local static conditions from
+demonstrated runtime feasibility. If an analysis facet is unavailable, state
+what remains supported and what remains unknown; do not invent missing facts.
