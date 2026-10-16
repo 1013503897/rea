@@ -73,9 +73,8 @@ Targeted JS checks cover malformed/foreign identities, dangling relations, phi
 order, exact hex offsets, immutable facts, loop/exit coverage, resource failure,
 and all 64 four-node DAGs against an independent path-enumeration oracle.
 Upstream `check-spec` passes. The full upstream corpus, stages and workspace gates
-have not run; this patch is not declared upstream-ready. SQLite, more complex
-model tasks, paired warm runs and the revised actual model comparison remain
-required work.
+have not run; this patch is not declared upstream-ready. The model comparisons
+and subsequent boundary findings below do not establish wider provider parity.
 
 The value-origin model comparison exposed a representation boundary: optimized
 recovered blocks can absorb a machine predecessor, so an IR edge is not an actual
@@ -97,5 +96,32 @@ Windows are capped at 4,096 decoded rows and 16 windows per call, sharing the
 returns 4,096 rows in an 842,106-byte source, taking 1.227 family wall seconds,
 1.042 CPU seconds and 112.0 MiB kernel memory peak. Both real stock and patched
 MCP tests preserve good windows alongside an unmapped-address failure and report
-the actual `JA 0xe26d` / `JMP 0xd9c9` bytes. Targeted tests now total 33; the
-representation fix still requires a fresh real-model task trial.
+the actual `JA 0xe26d` / `JMP 0xd9c9` bytes. The representation revision had 33
+targeted tests; its subsequent real-model trial is recorded below.
+
+That fresh trial now verifies the missing machine path correctly; see
+[actual task costs](trials.md). The SQLite task then exposes a separate missing
+primitive: name/alias lookup across distinct callable entries. `functions` now
+reuses the production inventory parser, preserving every matching entry, import
+stub ambiguity, original aliases, clipped extents and unknown runtime binding.
+The inventory is read/validated once per lease, and query/field/page selection
+returns only the requested view. Batch xref and instruction reads share one
+partial-outcome owner, retaining good observations and source IDs on failures.
+
+A real `sqlite3VdbeExec` capture at `0xea6d0` also exceeds the graph export's
+operation capacity while producing 126,519 characters of valid C. The old adapter
+incorrectly rejects the entire capture. The revised owner validates the function
+envelope and input identity independently, then models graph availability as a
+facet result. Code and its language remain available under the same handle;
+graph counts stay unknown and graph reads return their reason and Evidence ID.
+The real MCP regression reads 3,654 code lines after the graph failure and verifies
+that `sqlite3Fts3ErrMsg` has distinct entries `0x268f0` and `0x5efc0`. Native graph
+capacity remains a real limitation, not a resolved scalability claim.
+
+`verify-cache.mjs` measures a real cold/warm pair within one open lease. Cold zlib
+snapshot reading takes 6,934.4 ms / 6.928 family CPU seconds; warm reading takes
+67.7 ms / 0.068 CPU seconds and preserves the exact snapshot/Evidence ID. The
+cumulative kernel memory peak is 275.1 MiB for both phases; the warm number is an
+upper bound on its isolated phase peak. This is an API-only measurement, with no
+model token result or cross-session cache claim. Targeted tests now total 38,
+including late cancellation retaining partial facts and their provenance.

@@ -187,3 +187,56 @@ representation ambiguity needs a structural fix: distinguish IR origin fields
 from physical instruction facts and expose selected instruction windows, then
 rerun the unchanged question. Private artifacts are `zlib-value-codemode-v1*`
 and `zlib-value-traditional-v1*`.
+
+After separating IR origins and adding instruction windows, the unchanged value
+question was rerun at `4f13bd673`. The Code Mode answer now reads actual machine
+bytes and correctly distinguishes recovered predecessor 38 from the intervening
+`0xe26d` / `0xe270` machine path. Both answers recover the same local value
+equations, byte-order conditions and unknown invariants. These remain individual
+stochastic samples, not a general speedup guarantee.
+
+| Measurement | Code Mode value v2 | Traditional value v2 |
+| --- | ---: | ---: |
+| MCP attempts / failures | 7 / 0 | 6 / 1 |
+| Cumulative input tokens | 296,888 | 573,881 |
+| Included cached input | 252,160 | 512,128 |
+| Uncached input | 44,728 | 61,753 |
+| Output / included reasoning | 3,176 / 594 | 2,830 / 547 |
+| Model wall seconds | 96.662 | 124.754 |
+| Family wall seconds | 97.654 | 125.410 |
+| Family CPU seconds | 19.495 | 44.143 |
+| Kernel family peak MiB | 534.4 | 797.4 |
+
+The traditional failure is the client policy rejection of `binary_session`.
+Its cost remains included. Both runtime/target digests stay unchanged, cleanup
+is verified and OOM kills are zero. This is evidence of a useful seeded
+value-tracing case for the revised interface, with the selected-tool and
+single-sample qualifications retained.
+
+The initial SQLite diagnostic comparison, also at `4f13bd673`, exposes a further
+capability/comparison gap:
+
+| Measurement | Code Mode SQLite v1 | Traditional SQLite v1 |
+| --- | ---: | ---: |
+| MCP attempts / failures | 14 / 0 | 17 / 8 |
+| Cumulative input tokens | 601,445 | 934,237 |
+| Included cached input | 535,296 | 831,744 |
+| Uncached input | 66,149 | 102,493 |
+| Output / included reasoning | 4,790 / 1,668 | 3,878 / 1,121 |
+| Model wall seconds | 143.469 | 231.469 |
+| Family CPU seconds | 18.996 | 154.132 |
+| Kernel family peak MiB | 586.6 | 1,200.2 |
+
+Both answers find the two malformed-message conditions and distinguish the
+depth-error, other-status and success paths. The traditional answer additionally
+resolves the named formatter implementation at `0x5efc0`, tracing free,
+`sqlite3_vmprintf` and pointer storage; Code Mode stops at its PLT stub and
+correctly leaves delivery/allocation unknown. These are unequal-depth answers,
+so the cost difference is not an equal-completion win.
+
+The selected traditional catalog also omitted `list_procedures`, despite errors
+advertising it as the discovery route. The trace retains interior-entry failures,
+failed resource discovery, a client approval-policy rejection and ambiguous name
+lookups. This selection confound must be corrected in the next focused baseline;
+the failed attempts and their costs are not discarded. Both runs still preserve
+target/runtime identity, clean up their profiles/payloads and have zero OOM kills.

@@ -41,6 +41,22 @@ const definition = (description, input, method, example) => ({
   example,
 });
 export const methods = {
+  functions: definition(
+    "Search retained native callable entries by literal name/alias, exact name, or entry addresses. Names can match several entries, including PLT/import stubs and implementations; preserve all matches and select by address. A name does not establish runtime symbol binding.",
+    {
+      query: z.string().default(""),
+      exact: z.boolean().default(false),
+      case_sensitive: z.boolean().default(true),
+      addresses: z.array(hex).max(128).optional(),
+      fields: z
+        .array(z.enum(["name", "aliases", "size"]))
+        .min(1)
+        .optional(),
+      ...page,
+    },
+    "functions",
+    'await rea.functions({query:"format_error",exact:true})',
+  ),
   strings: definition(
     "Search retained string inventory by literal text. Paging does not establish artifact completeness.",
     { query: z.string(), ...page },
@@ -54,7 +70,7 @@ export const methods = {
     'await rea.references({addresses:["0x2000"]})',
   ),
   snapshot: definition(
-    "Analyze an explicit function entry once; retain native C and SSA, return its handle and coverage. Reuses the same source within this target lease.",
+    "Analyze an explicit function entry once; return a retained capture handle, facets and coverage. Reuses the source within this target lease. A valid code facet remains available when recovered IR exceeds capacity or is malformed; inspect facets before graph reads.",
     { entry: hex },
     "snapshot",
     'await rea.snapshot({entry:"0x1000"})',
@@ -163,12 +179,13 @@ export const methods = {
       max_operations: z.number().int().min(1).max(256).default(48),
       stop_at: z.array(z.string()).max(128).default([]),
       stop_kinds: z.array(kinds).default(["phi", "load"]),
+      fields,
     },
     "slice",
     "await rea.slice({snapshot:s,seeds:branchIds,max_operations:48})",
   ),
   code: definition(
-    "Read native reconstructed C retained with this exact SSA source; offset is zero-based. A large limit can read the complete function inside Code Mode: filter locally before returning text. The bridge byte budget, not an arbitrary line count, bounds the result. No additional decompilation.",
+    "Read reconstructed code from the same retained function capture, even when its graph facet is unavailable. offset is zero-based. A large limit reads the complete code inside Code Mode for local filtering. The bridge byte budget bounds the result. No additional decompilation.",
     {
       snapshot,
       offset: page.offset,
@@ -191,6 +208,8 @@ export const methods = {
 
 // Compact return contracts let code compose before first observing a response.
 const returns = {
+  functions:
+    "data:{source:{evidence_id,sha256},items:[{address,name,aliases,size}],total,next_offset,coverage}; size is an upper bound, or zero if unmeasured. Multiple matching addresses are retained, never selected by catalog order or display name alone.",
   instructions:
     "data:{results:[{ok,address,source:{evidence_id,sha256},items:[{address,size,status,bytes?,text?,mnemonic?,operands?}],resume_address,coverage}|{ok:false,address,error}]}; decoded rows describe selected machine bytes, not optimized IR branches. Partial batches retain successful windows.",
   strings:
@@ -198,7 +217,7 @@ const returns = {
   references:
     "data:{results:[{ok,address,source:{evidence_id},items:[{from,to,kind,fromFunction:{address,name}|null,toFunction:{address,name}|null,instruction}],total,next_offset,coverage}|{ok:false,address,error}]}",
   snapshot:
-    "data:{snapshot:string,entry,source:{evidence_id,sha256},coverage:{operations,blocks,control_flow,unrepresented_outgoing_blocks,issues}}",
+    "data:{snapshot:string,entry,source:{evidence_id,sha256},facets:{code:{availability},recovered_ir:{availability,error?}},coverage}. An unavailable graph has unknown/null counts, never a fabricated empty graph; code remains readable through the same handle.",
   operations:
     "data:{items:[{id,origin_address,block,source_line,kind,statement,definitions,constants,inputs?,output?,opcode?}],total,next_offset,evidence_id,coverage}. Native inputs:[{input_index,value_id,phi_predecessor,phi_predecessor_edge}], output:value_id|null; definitions:[{definition,use,input_index,value_id,phi_predecessor,phi_predecessor_edge}]. Diagnostic definitions use printed occurrence instead. fields projects columns; identity remains.",
   relations:
@@ -209,7 +228,7 @@ const returns = {
     "data:{items:[{id,origin_start,operations,predecessors,successors:[{target,index,polarity,condition_value,condition_test}]}],total,next_offset,evidence_id,coverage}; IDs are local to this snapshot.",
   slice:
     "data:{operations:[operation rows as above],coverage:{status,boundaries:[{id,reason}],missing,source_issues,runtime_reachability,memory_alias_dependencies},evidence_id}",
-  code: "data:{evidence_id,start_line,text,total_lines,next_offset,coverage}; text is reconstructed C. Use a large limit to inspect/filter the full text within code without returning it all.",
+  code: "data:{evidence_id,start_line,language:string|null,text,total_lines,next_offset,coverage}; language is native-reported or unknown. Read/filter full reconstructed text within Code Mode without returning it all.",
   evidence:
     "data:{source:{evidence_id,sha256,bytes,arguments},text,total_code_units,next_offset}; source has complete native output, including code before the SSA graph.",
 };
@@ -295,6 +314,12 @@ export class AtomicSession {
         const contract = methods[name];
         const parsed = contract.input.parse(input);
         const data = await this.#owner[contract.method](parsed, signal);
+        if (signal.aborted)
+          throw new FactFailure(
+            "cancelled",
+            "Request was cancelled after observations were collected",
+            { partial_observation: data },
+          );
         return { ok: true, context: this.context, data };
       } catch (error) {
         return {

@@ -68,15 +68,22 @@ unknown. Other providers are not yet wired to this experimental service.
 
 The initial [actual model comparison](trials.md) favors the focused traditional
 workflow. The seeded value-origin task has lower cumulative input and wall time
-through Code Mode, but also exposes an IR-to-machine-path error. An equal-quality
-whole-task advantage remains unproven; the representation fix needs a new trial.
+through Code Mode, but initially exposes an IR-to-machine-path error. The revised
+trial correctly explains that machine path with lower observed task costs;
+broader claims still require more than this single seeded task.
 
 `instructions` reads selected machine byte/decode windows through the same
 owner. Recovered operations use `origin_address` and blocks `origin_start`;
 these locations cannot be substituted for machine branch destinations. The
 value-origin trial demonstrates why this boundary matters. The experiment
-currently has eleven fact methods, still behind the same four-tool Code Mode
+currently has twelve fact methods, still behind the same four-tool Code Mode
 catalog.
+
+`functions` provides selected name/alias/entry reads. Native snapshots report
+code and recovered-IR facets separately, preserving readable code when graph
+extraction is unavailable. Real capacity and cold/warm MCP checks are documented
+in [native-engine.md](native-engine.md). Whole-model costs and unequal-depth
+comparisons remain separate in the trial report.
 
 Completion requires actual model Code Mode use, independently checked task
 answers, shared atomic/direct/Code Mode semantics, needed relation coverage,

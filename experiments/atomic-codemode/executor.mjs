@@ -102,6 +102,20 @@ export const executeJavaScript = async (
   };
 };
 
+const retainEvidence = (response, evidence) => {
+  const observation =
+    response.data ?? response.error?.details?.partial_observation;
+  for (const row of [observation, ...(observation?.results ?? [])]) {
+    const id =
+      row?.source?.evidence_id ??
+      row?.evidence_id ??
+      row?.error?.details?.evidence_id;
+    if (id) evidence.add(id);
+  }
+  if (response.error?.details?.evidence_id)
+    evidence.add(response.error.details.evidence_id);
+};
+
 const installBridge = (
   vm,
   session,
@@ -128,15 +142,7 @@ const installBridge = (
           combined,
           lease,
         );
-        for (const row of [response.data, ...(response.data?.results ?? [])]) {
-          const id =
-            row?.source?.evidence_id ??
-            row?.evidence_id ??
-            row?.error?.details?.evidence_id;
-          if (id) state.evidence.add(id);
-        }
-        if (response.error?.details?.evidence_id)
-          state.evidence.add(response.error.details.evidence_id);
+        retainEvidence(response, state.evidence);
         calls[index].status = response.ok ? "ok" : "error";
         if (!response.ok) calls[index].error = response.error;
         calls[index].elapsed_ms = performance.now() - before;

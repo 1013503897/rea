@@ -340,8 +340,70 @@ function sliceValues(model, values, input) {
   };
 }
 
-export function parseNativeIR(text, entry) {
-  const { code, facts } = parseNativeFunction(text, entry);
-  freeze(facts);
-  return createViews(facts, code, indexNative(facts));
+const projectedFailure = (error) => ({
+  code: error.code ?? "invalid_provider_output",
+  message: error.message,
+  details: error.details ?? {},
+});
+
+export function parseNativeIR(text, entry, expectedInput) {
+  const capture = parseNativeFunction(text, entry, expectedInput);
+  let graph = capture.facts;
+  if (graph.ok) {
+    try {
+      freeze(graph.value);
+      const model = createViews(
+        graph.value,
+        capture.code,
+        indexNative(graph.value),
+      );
+      return Object.freeze({
+        ...model,
+        language: capture.language,
+        facets: freeze({
+          code: { availability: "available" },
+          recovered_ir: { availability: "available" },
+        }),
+      });
+    } catch (error) {
+      graph = { ok: false, error };
+    }
+  }
+  const error = projectedFailure(graph.error);
+  const unavailable = () => {
+    throw new FactFailure(error.code, error.message, {
+      ...error.details,
+      facet: "recovered_ir",
+    });
+  };
+  return Object.freeze({
+    code: capture.code,
+    language: capture.language,
+    facets: freeze({
+      code: { availability: "available" },
+      recovered_ir: { availability: "unavailable", error },
+    }),
+    coverage: freeze({
+      scope: "native reconstructed code; recovered IR facet unavailable",
+      operations: null,
+      blocks: null,
+      control_flow: "unknown",
+      machine_semantic_equivalence: "unknown",
+      issues: [error.message],
+    }),
+    ...Object.fromEntries(
+      [
+        "operation",
+        "block",
+        "findConstant",
+        "uses",
+        "incoming",
+        "select",
+        "values",
+        "blocks",
+        "edges",
+        "slice",
+      ].map((name) => [name, unavailable]),
+    ),
+  });
 }

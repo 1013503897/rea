@@ -41,6 +41,35 @@ test("named contracts reject extra keys and stale leases before provider admissi
   assert.deepEqual(provider.calls, ["close"]);
   await session.close();
 });
+
+test("cancellation after a completed read retains observations under a cancelled outcome", async () => {
+  const controller = new AbortController();
+  const session = new AtomicSession(async () => ({
+    context: { lease: "late-cancel" },
+    close: async () => {},
+    strings: async () => {
+      controller.abort();
+      return {
+        source: { evidence_id: "ev_observed" },
+        items: [{ value: "retained" }],
+      };
+    },
+  }));
+  await session.open("target");
+  const result = await session.call(
+    "strings",
+    { query: "x" },
+    controller.signal,
+  );
+  assert.equal(result.ok, false);
+  assert.equal(result.error.code, "cancelled");
+  assert.equal(
+    result.error.details.partial_observation.items[0].value,
+    "retained",
+  );
+  assert.equal(result.context.lease, "late-cancel");
+  await session.close();
+});
 test("close drains admitted reads and a failed cleanup retains ownership for retry", async () => {
   let release;
   let reads = 0;

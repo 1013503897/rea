@@ -48,6 +48,26 @@ test("guest CPU budget is independent from the native-analysis wall deadline", a
   assert.ok(performance.now() - before < 2000);
 });
 
+test("cancelled reads keep partial-observation Evidence in the execution receipt", async () => {
+  const result = await executeJavaScript(
+    {
+      context: { lease: "partial" },
+      call: async () => ({
+        ok: false,
+        error: {
+          code: "cancelled",
+          details: {
+            partial_observation: { source: { evidence_id: "ev_partial" } },
+          },
+        },
+      }),
+    },
+    "return await rea.strings({query:'x'})",
+  );
+  assert.deepEqual(result.evidence_ids, ["ev_partial"]);
+  assert.equal(result.value.error.code, "cancelled");
+});
+
 test("failed compositions keep completed facts and their provenance after draining", async () => {
   const owner = {
     context: { lease: "retained" },

@@ -43,6 +43,10 @@ const op = (block, opcode, inputs, output = null) => ({
 
 function diamond() {
   return {
+    binary: "/private/input",
+    count: 1,
+    language: "c",
+    error: null,
     functions: [
       {
         address_hex: "0x1000",
@@ -180,7 +184,10 @@ test("malformed identities, dangling relationships, foreign entry and phi reorde
   ]) {
     const doc = diamond();
     mutate(doc.functions[0].atomic_facts);
-    assert.throws(() => parseNativeIR(JSON.stringify(doc), "0x1000"));
+    const model = parseNativeIR(JSON.stringify(doc), "0x1000");
+    assert.equal(model.facets.recovered_ir.availability, "unavailable");
+    assert.equal(model.code, "reconstructed C");
+    assert.throws(() => model.select({}));
   }
   assert.throws(
     () => parseNativeIR(JSON.stringify(diamond()), "0x2000"),
@@ -203,6 +210,28 @@ test("typed slices retain symbolic input frontiers and precise definition bindin
   assert.equal(result.coverage.runtime_reachability, "unknown");
 });
 
+test("native facet failure preserves C without fabricating an empty graph; source identity still gates both", () => {
+  const doc = diamond();
+  delete doc.functions[0].atomic_facts;
+  doc.functions[0].atomic_facts_error = "atomic operation capacity exceeded";
+  const model = parseNativeIR(JSON.stringify(doc), "0x1000", "/private/input");
+  assert.equal(model.code, "reconstructed C");
+  assert.equal(model.language, "c");
+  assert.equal(model.coverage.operations, null);
+  assert.equal(model.facets.code.availability, "available");
+  assert.equal(model.facets.recovered_ir.availability, "unavailable");
+  assert.throws(
+    () => model.select({}),
+    (error) =>
+      error.code === "capability_unavailable" &&
+      error.details.native_error === doc.functions[0].atomic_facts_error,
+  );
+  assert.throws(
+    () => parseNativeIR(JSON.stringify(doc), "0x1000", "/other/input"),
+    (error) => error.code === "subject_mismatch",
+  );
+});
+
 test("oversized or malformed native arrays fail before diagnostic expansion", () => {
   const capacity = diamond();
   capacity.functions[0].atomic_facts.operations = Array.from(
@@ -210,7 +239,7 @@ test("oversized or malformed native arrays fail before diagnostic expansion", ()
     () => ({}),
   );
   assert.throws(
-    () => parseNativeIR(JSON.stringify(capacity), "0x1000"),
+    () => parseNativeIR(JSON.stringify(capacity), "0x1000").select({}),
     /capacity/u,
   );
   const malformed = diamond();
@@ -219,7 +248,7 @@ test("oversized or malformed native arrays fail before diagnostic expansion", ()
     () => ({}),
   );
   assert.throws(
-    () => parseNativeIR(JSON.stringify(malformed), "0x1000"),
+    () => parseNativeIR(JSON.stringify(malformed), "0x1000").select({}),
     (error) =>
       error.code === "invalid_provider_output" &&
       error.details.issues.length <= 8 &&

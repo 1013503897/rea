@@ -10,7 +10,8 @@ import {
   assertVerifierCleanupComplete,
 } from "../../scripts/lib/verifier-run.mjs";
 
-const [binary, output] = process.argv.slice(2);
+const [binary, output, scenario = "zlib"] = process.argv.slice(2);
+assert.ok(["zlib", "sqlite-partial"].includes(scenario));
 const verifier = createVerifierRun();
 const client = new Client({ name: "rea-codemode-verifier", version: "0.1.0" });
 const transport = new StdioClientTransport({
@@ -48,9 +49,47 @@ try {
   const ajv = new Ajv2020({ strict: false });
   for (const tool of catalog.tools) ajv.compile(tool.inputSchema);
   const opened = await call("open_binary", { path: binary });
-  await call("reference", { query: "relations" });
-  const result = await call("execute_javascript", {
-    code: `
+  if (scenario === "sqlite-partial") {
+    assert.equal(opened.context.analysis_model, "experimental-native-ir-v1");
+    const result = await call("execute_javascript", {
+      code: `
+const read=async(p)=>{const r=await p;if(!r.ok)throw new Error(JSON.stringify(r));return r.data;};
+const names=await read(rea.functions({query:"sqlite3Fts3ErrMsg",exact:true}));
+const entries=await read(rea.functions({query:"sqlite3VdbeExec",exact:true}));
+const entry=entries.items.find(fn=>fn.address==="0xea6d0");if(!entry)throw new Error("fixture entry missing");
+const snap=await read(rea.snapshot({entry:entry.address}));
+const code=await read(rea.code({snapshot:snap.snapshot,limit:4}));
+const graph=await rea.operations({snapshot:snap.snapshot,limit:1});
+const evidence=await read(rea.evidence({evidence_id:snap.source.evidence_id,limit:512}));
+return {names,snap,code,graph,evidence_source:evidence.source};`,
+    });
+    assert.deepEqual(result.value.names.items.map((fn) => fn.address).sort(), [
+      "0x268f0",
+      "0x5efc0",
+    ]);
+    assert.equal(result.value.snap.facets.code.availability, "available");
+    assert.equal(
+      result.value.snap.facets.recovered_ir.availability,
+      "unavailable",
+    );
+    assert.equal(result.value.snap.coverage.operations, null);
+    assert.ok(
+      result.value.code.text.length > 0 && result.value.code.total_lines > 1000,
+    );
+    assert.equal(result.value.graph.ok, false);
+    assert.equal(result.value.graph.error.code, "capability_unavailable");
+    assert.equal(
+      result.value.graph.error.details.evidence_id,
+      result.value.snap.source.evidence_id,
+    );
+    assert.equal(
+      result.value.evidence_source.sha256,
+      result.value.snap.source.sha256,
+    );
+  } else {
+    await call("reference", { query: "relations" });
+    const result = await call("execute_javascript", {
+      code: `
 const found=await rea.strings({query:"incorrect header check",limit:1});
 if(!found.ok) throw new Error(JSON.stringify(found));
 const literal=found.data.items[0].address;
@@ -62,15 +101,16 @@ const seed=await rea.operations({snapshot:s,constant:literal});
 const uses=await rea.relations({snapshot:s,kind:"uses",seeds:seed.data.items.map(x=>x.id)});
 const consumers=await rea.operations({snapshot:s,ids:uses.data.items.map(x=>x.use)});
 const incoming=await rea.relations({snapshot:s,kind:"incoming",seeds:consumers.data.items.map(x=>x.block)});
-const slice=await rea.slice({snapshot:s,seeds:incoming.data.items.map(x=>x.operation).filter(Boolean)});
-return {literal,entry,snapshot:s,consumer_blocks:[...new Set(consumers.data.items.map(x=>x.block))],selected:slice.data.operations.length,guards:slice.data.operations.map(x=>x.statement),coverage:slice.data.coverage,evidence_id:slice.data.evidence_id};`,
-  });
-  assert.equal(result.value.selected, 19);
-  assert.equal(result.value.coverage.status, "partial");
-  assert.ok(result.value.guards.some((s) => s.includes("/ #0x1f")));
-  if (opened.context.analysis_model === "experimental-native-ir-v1") {
-    const native = await call("execute_javascript", {
-      code: `const s=${JSON.stringify(result.value.snapshot)};
+const slice=await rea.slice({snapshot:s,seeds:incoming.data.items.map(x=>x.operation).filter(Boolean),fields:["statement"]});
+return {literal,entry,snapshot:s,consumer_blocks:[...new Set(consumers.data.items.map(x=>x.block))],selected:slice.data.operations.length,projected:slice.data.operations.every(op=>!("inputs" in op)&&typeof op.origin_address==="string"),guards:slice.data.operations.map(x=>x.statement),coverage:slice.data.coverage,evidence_id:slice.data.evidence_id};`,
+    });
+    assert.equal(result.value.selected, 19);
+    assert.equal(result.value.projected, true);
+    assert.equal(result.value.coverage.status, "partial");
+    assert.ok(result.value.guards.some((s) => s.includes("/ #0x1f")));
+    if (opened.context.analysis_model === "experimental-native-ir-v1") {
+      const native = await call("execute_javascript", {
+        code: `const s=${JSON.stringify(result.value.snapshot)};
 const read=async(p)=>{const r=await p;if(!r.ok)throw new Error(JSON.stringify(r));return r.data;};
 const blocks=await read(rea.blocks({snapshot:s,ids:${JSON.stringify(result.value.consumer_blocks)}}));
 const controls=await read(rea.relations({snapshot:s,kind:"controllers",seeds:blocks.items.map(b=>b.id)}));
@@ -78,33 +118,34 @@ const guards=await read(rea.operations({snapshot:s,block_ids:controls.items.map(
 const phi=await read(rea.operations({snapshot:s,kind:"phi",fields:["inputs","output"],limit:2}));
 const values=await read(rea.values({snapshot:s,ids:phi.items.flatMap(o=>o.inputs.map(i=>i.value_id)).filter(Boolean)}));
 return {blocks,controls,guards,phi,values};`,
-    });
-    assert.equal(native.value.controls.total, 2);
-    assert.deepEqual(
-      native.value.guards.items.map((op) => op.origin_address).sort(),
-      ["0xd9ec", "0xda32"],
-    );
-    assert.ok(
-      native.value.phi.items.every((op) =>
-        op.inputs.every(
-          (input) => typeof input.phi_predecessor_edge === "string",
+      });
+      assert.equal(native.value.controls.total, 2);
+      assert.deepEqual(
+        native.value.guards.items.map((op) => op.origin_address).sort(),
+        ["0xd9ec", "0xda32"],
+      );
+      assert.ok(
+        native.value.phi.items.every((op) =>
+          op.inputs.every(
+            (input) => typeof input.phi_predecessor_edge === "string",
+          ),
         ),
-      ),
-    );
-    assert.equal(
-      native.value.blocks.coverage.control_flow,
-      "complete-for-recovered-graph",
-    );
-    assert.ok(native.value.values.items.length > 0);
+      );
+      assert.equal(
+        native.value.blocks.coverage.control_flow,
+        "complete-for-recovered-graph",
+      );
+      assert.ok(native.value.values.items.length > 0);
+    }
+    const machine = await call("execute_javascript", {
+      code: 'const r=await rea.instructions({windows:[{address:"0xd97e",count:1},{address:"0xe26d",count:2},{address:"0xdeadbeef",count:1}]});if(!r.ok)throw new Error(JSON.stringify(r));return r.data;',
+    });
+    assert.equal(machine.value.results[0].items[0].bytes, "0f87e9080000");
+    assert.match(machine.value.results[0].items[0].text, /e26d/u);
+    assert.equal(machine.value.results[1].items[1].address, "0xe270");
+    assert.match(machine.value.results[1].items[1].text, /d9c9/u);
+    assert.equal(machine.value.results[2].ok, false);
   }
-  const machine = await call("execute_javascript", {
-    code: 'const r=await rea.instructions({windows:[{address:"0xd97e",count:1},{address:"0xe26d",count:2},{address:"0xdeadbeef",count:1}]});if(!r.ok)throw new Error(JSON.stringify(r));return r.data;',
-  });
-  assert.equal(machine.value.results[0].items[0].bytes, "0f87e9080000");
-  assert.match(machine.value.results[0].items[0].text, /e26d/u);
-  assert.equal(machine.value.results[1].items[1].address, "0xe270");
-  assert.match(machine.value.results[1].items[1].text, /d9c9/u);
-  assert.equal(machine.value.results[2].ok, false);
   await call("close_binary");
 } catch (error) {
   failure = error.stack ?? String(error);

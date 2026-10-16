@@ -12,18 +12,18 @@ import { parseNativeIR } from "./native-ir.mjs";
 import { FactFailure, requireResult } from "./fact-error.mjs";
 import { parseInstructions } from "./instruction-facts.mjs";
 import {
+  sourceSummary,
+  pageFacts,
+  projectFact,
+  readFactBatch,
+} from "./fact-reads.mjs";
+import { parseFunctionFacts, selectFunctionFacts } from "./function-facts.mjs";
+import {
   parseKunaSsaDump,
   backwardSlice,
 } from "../atomic-re-tools/kuna-ssa.mjs";
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
-const sourceSummary = ({ evidence_id, sha256, bytes, elapsed_ms }) => ({
-  evidence_id,
-  sha256,
-  bytes,
-  elapsed_ms,
-});
-
 export class KunaFactOwner {
   #lifetime = new AbortController();
   #sources = new Map();
@@ -36,6 +36,7 @@ export class KunaFactOwner {
   #installation;
   #retainedBytes = 0;
   #strings;
+  #functions;
   #captureDirectory;
   #nativeIR = false;
   context;
@@ -136,16 +137,18 @@ export class KunaFactOwner {
       );
     const file = join(this.#root.path, id);
     await writeFile(file, snapshot.stdout.text, { flag: "wx" });
-    const source = {
+    const source = Object.freeze({
       evidence_id: id,
       sha256: sha256(snapshot.stdout.text),
       bytes: Buffer.byteLength(snapshot.stdout.text),
-      arguments: actualArguments,
-      display_arguments: actualArguments.map((s) =>
-        s === snapshot.input ? this.#target.path : s,
+      arguments: Object.freeze(actualArguments),
+      display_arguments: Object.freeze(
+        actualArguments.map((s) =>
+          s === snapshot.input ? this.#target.path : s,
+        ),
       ),
       elapsed_ms: performance.now() - start,
-    };
+    });
     this.#sources.set(id, { source, file });
     this.#retainedBytes += bytes;
     if (this.#captureDirectory) {
@@ -218,15 +221,30 @@ export class KunaFactOwner {
       },
     };
   }
+  async functions(input, signal) {
+    const capture = await this.#native(
+      "functions",
+      (path) => ["functions", path, "--json"],
+      signal,
+    );
+    this.#functions ??= parseFunctionFacts(
+      await this.#sourceText(capture.source.evidence_id),
+    );
+    return {
+      source: sourceSummary(capture.source),
+      ...selectFunctionFacts(this.#functions, input),
+    };
+  }
   async references(input, signal) {
-    const results = [];
-    for (const address of input.addresses) {
-      try {
-        const capture = await this.#native(
+    return readFactBatch(
+      input.addresses.map((address) => ({ address })),
+      ({ address }) =>
+        this.#native(
           `xref:${address}`,
           (path) => ["xrefs", path, "--to", address, "--json"],
           signal,
-        );
+        ),
+      async (capture, { address }) => {
         const parsed = requireResult(
           parseKunaIncomingReferenceFacts(
             await this.#sourceText(capture.source.evidence_id),
@@ -235,33 +253,15 @@ export class KunaFactOwner {
           ),
           "invalid_provider_output",
         );
-        results.push({
-          ok: true,
-          address,
-          source: sourceSummary(capture.source),
-          items: parsed.facts.slice(input.offset, input.offset + input.limit),
-          total: parsed.facts.length,
-          next_offset:
-            input.offset + input.limit < parsed.facts.length
-              ? input.offset + input.limit
-              : null,
+        return {
+          ...pageFacts(parsed.facts, input),
           coverage: {
             scope: "exact target address; not an object extent",
             discovery: "unknown",
           },
-        });
-      } catch (error) {
-        results.push({
-          ok: false,
-          address,
-          error: {
-            code: error.code ?? "provider_failure",
-            message: error.message,
-          },
-        });
-      }
-    }
-    return { results };
+        };
+      },
+    );
   }
   async snapshot(input, signal) {
     const capture = await this.#native(
@@ -281,10 +281,11 @@ export class KunaFactOwner {
     if (!this.#snapshots.has(id))
       this.#snapshots.set(id, {
         entry: input.entry,
+        input: capture.input,
         evidence_id: capture.source.evidence_id,
       });
     const parsed = await this.#load(id);
-    if (parsed.block(0).origin_start !== input.entry)
+    if (!this.#nativeIR && parsed.block(0).origin_start !== input.entry)
       throw new FactFailure(
         "subject_mismatch",
         "Native SSA entry does not match the requested function entry",
@@ -294,14 +295,17 @@ export class KunaFactOwner {
       source: sourceSummary(capture.source),
       entry: input.entry,
       coverage: parsed.coverage,
+      facets: parsed.facets ?? {
+        code: { availability: "available" },
+        recovered_ir: { availability: "available", coverage: "partial" },
+      },
     };
   }
   async instructions(input, signal) {
-    const results = [];
-    for (const request of input.windows) {
-      let capture;
-      try {
-        capture = await this.#native(
+    return readFactBatch(
+      input.windows,
+      (request) =>
+        this.#native(
           `instructions:${request.address}:${request.count}`,
           (path) => [
             "disassemble",
@@ -315,35 +319,15 @@ export class KunaFactOwner {
             "--json",
           ],
           signal,
-        );
-        const parsed = parseInstructions(
+        ),
+      async (capture, request) =>
+        parseInstructions(
           await this.#sourceText(capture.source.evidence_id),
           capture.input,
           request,
           input.fields,
-        );
-        results.push({
-          ok: true,
-          address: request.address,
-          source: sourceSummary(capture.source),
-          ...parsed,
-        });
-      } catch (error) {
-        results.push({
-          ok: false,
-          address: request.address,
-          error: {
-            code: error.code ?? "provider_failure",
-            message: error.message,
-            details: {
-              ...error.details,
-              ...(capture ? { evidence_id: capture.source.evidence_id } : {}),
-            },
-          },
-        });
-      }
-    }
-    return { results };
+        ),
+    );
   }
   async #load(id) {
     const descriptor = this.#snapshots.get(id);
@@ -364,7 +348,7 @@ export class KunaFactOwner {
       let parsed;
       try {
         parsed = this.#nativeIR
-          ? parseNativeIR(text, descriptor.entry)
+          ? parseNativeIR(text, descriptor.entry, descriptor.input)
           : parseKunaSsaDump(text);
       } catch (error) {
         throw new FactFailure(
@@ -383,61 +367,77 @@ export class KunaFactOwner {
     }
     return this.#loaded.get(id);
   }
-  async operations(input) {
+  async #query(input, read) {
     const model = await this.#load(input.snapshot);
-    return {
+    const evidence_id = this.#snapshots.get(input.snapshot).evidence_id;
+    try {
+      return { ...read(model), evidence_id };
+    } catch (error) {
+      throw new FactFailure(error.code ?? "analysis_failed", error.message, {
+        ...error.details,
+        evidence_id,
+        source_retained: true,
+      });
+    }
+  }
+  async operations(input) {
+    return this.#query(input, (model) => ({
       ...model.select(input),
-      evidence_id: this.#snapshots.get(input.snapshot).evidence_id,
       coverage: model.coverage,
-    };
+    }));
   }
   async relations(input) {
-    const model = await this.#load(input.snapshot);
-    if (input.kind === "controllers" && !this.#nativeIR)
-      this.#requireNativeIR();
-    return {
+    if (input.kind === "controllers") this.#requireNativeIR(input.snapshot);
+    return this.#query(input, (model) => ({
       ...model.edges(input),
-      evidence_id: this.#snapshots.get(input.snapshot).evidence_id,
       coverage: model.coverage,
-    };
+    }));
   }
   async slice(input) {
-    const model = await this.#load(input.snapshot);
-    return {
-      ...(model.slice
+    return this.#query(input, (model) => {
+      const result = model.slice
         ? model.slice(input)
         : backwardSlice(model, input.seeds, {
             maxOperations: input.max_operations,
             stopAt: input.stop_at,
             stopKinds: input.stop_kinds,
-          })),
-      evidence_id: this.#snapshots.get(input.snapshot).evidence_id,
-    };
+          });
+      return {
+        ...result,
+        operations: result.operations.map((row) =>
+          projectFact(row, input.fields, [
+            "id",
+            "origin_address",
+            "block",
+            "source_line",
+          ]),
+        ),
+      };
+    });
   }
-  #requireNativeIR() {
+  #requireNativeIR(snapshot) {
     if (!this.#nativeIR)
       throw new FactFailure(
         "capability_unavailable",
         "This relation requires the pinned experimental native IR engine; the diagnostic SSA format does not contain it",
+        this.#snapshots.has(snapshot)
+          ? { evidence_id: this.#snapshots.get(snapshot).evidence_id }
+          : {},
       );
   }
   async values(input) {
-    this.#requireNativeIR();
-    const model = await this.#load(input.snapshot);
-    return {
+    this.#requireNativeIR(input.snapshot);
+    return this.#query(input, (model) => ({
       ...model.values(input),
-      evidence_id: this.#snapshots.get(input.snapshot).evidence_id,
       coverage: model.coverage,
-    };
+    }));
   }
   async blocks(input) {
-    this.#requireNativeIR();
-    const model = await this.#load(input.snapshot);
-    return {
+    this.#requireNativeIR(input.snapshot);
+    return this.#query(input, (model) => ({
       ...model.blocks(input),
-      evidence_id: this.#snapshots.get(input.snapshot).evidence_id,
       coverage: model.coverage,
-    };
+    }));
   }
   async code(input) {
     const descriptor = this.#snapshots.get(input.snapshot);
@@ -446,16 +446,18 @@ export class KunaFactOwner {
         "unknown_snapshot",
         "Snapshot is not owned by the current lease",
       );
-    const code = this.#nativeIR
-      ? (await this.#load(input.snapshot)).code
-      : (await this.#sourceText(descriptor.evidence_id)).split(
-          "\n0\nBasic Block",
-          1,
-        )[0];
+    const model = this.#nativeIR ? await this.#load(input.snapshot) : null;
+    const code =
+      model?.code ??
+      (await this.#sourceText(descriptor.evidence_id)).split(
+        "\n0\nBasic Block",
+        1,
+      )[0];
     const lines = code.split("\n");
     return {
       evidence_id: descriptor.evidence_id,
       start_line: input.offset + 1,
+      language: model?.language ?? null,
       text: lines.slice(input.offset, input.offset + input.limit).join("\n"),
       total_lines: lines.length,
       next_offset:
@@ -463,21 +465,15 @@ export class KunaFactOwner {
           ? input.offset + input.limit
           : null,
       coverage: {
-        authority: "reconstructed C, not original source",
+        authority: "native reconstructed code",
         scope: "selected display lines",
       },
     };
   }
   async evidence(input) {
-    const record = this.#sources.get(input.evidence_id);
-    if (!record)
-      throw new FactFailure(
-        "unknown_evidence",
-        "Evidence is not retained by the current lease",
-      );
     const text = await this.#sourceText(input.evidence_id);
     return {
-      source: record.source,
+      source: this.#sources.get(input.evidence_id).source,
       text: text.slice(input.offset, input.offset + input.limit),
       total_code_units: text.length,
       next_offset:
@@ -494,6 +490,8 @@ export class KunaFactOwner {
     this.#sources.clear();
     this.#work.clear();
     this.#snapshots.clear();
+    this.#strings = undefined;
+    this.#functions = undefined;
   }
   cancel() {
     this.#lifetime.abort();
