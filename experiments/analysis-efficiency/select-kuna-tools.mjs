@@ -29,16 +29,32 @@ const client = new Client({
 const transport = new StdioClientTransport({
   command: process.execPath,
   args: [resolve("scripts/rea.mjs"), "mcp"],
-  env: { ...process.env },
+  env: {
+    ...process.env,
+    // This pass needs tool identities, not large result schemas. Keep any
+    // explicit caller profile; the measured runner already selects off.
+    REA_MCP_OUTPUT_SCHEMA_PROFILE:
+      process.env.REA_MCP_OUTPUT_SCHEMA_PROFILE ?? "off",
+  },
   stderr: "pipe",
 });
 let names;
 try {
   await client.connect(transport);
-  const { tools } = await client.listTools();
-  names = tools
-    .filter((tool) => desired.has(tool.name))
-    .map((tool) => tool.name);
+  names = [];
+  const cursors = new Set();
+  let cursor;
+  do {
+    assert.ok(!cursors.has(cursor), "Catalog pagination did not advance");
+    cursors.add(cursor);
+    const page = await client.listTools(cursor === undefined ? {} : { cursor });
+    names.push(
+      ...page.tools
+        .filter((tool) => desired.has(tool.name))
+        .map((tool) => tool.name),
+    );
+    cursor = page.nextCursor;
+  } while (cursor !== undefined);
   assert.equal(
     new Set(names).size,
     names.length,
