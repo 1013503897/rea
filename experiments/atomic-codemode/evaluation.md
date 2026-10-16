@@ -1,5 +1,11 @@
 # Task coverage before cost comparison
 
+The callable projection now also has a completed [PHI-format model pair](trials.md).
+Both answers reconstruct all four alternatives with exact retained identities,
+independent machine/string checks and partial-scope limits. An observed reference
+lookup mismatch adds work in the direct lane; its costs remain recorded and that
+discovery boundary needs correction before another same-question comparison.
+
 Code Mode can only compose facts the underlying API actually supplies. A task
 cost is comparable after reviewing the completed answer and its evidence. A
 successful tool call, fewer response bytes or more graph records is insufficient.

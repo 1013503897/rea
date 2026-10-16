@@ -207,3 +207,10 @@ Native operation reads retain `is_dead` and literal operand/value identities.
 Coverage returns compact counts and bounded issue text, with complete native
 details retained in Evidence. [The new question/oracle](projection-oracle.md)
 are fixed before real-model trials of the PHI format alternatives.
+
+Both first PHI-format model answers pass the full oracle using one VM analysis
+and a six-operation selected trace, with the global graph/use limits intact.
+The trace reveals two format sources at each shared call, verified against byte
+and machine evidence. [Costs and source review](trials.md) also record a direct
+documentation-lookup miss; named discovery needs fixing before rerunning the
+same task. No general adapter speedup follows from that first pair.

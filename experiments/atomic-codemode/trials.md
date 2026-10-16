@@ -764,3 +764,60 @@ scripted checks, development conversation, server model build, remote compute
 and money remain outside these model-pair totals. The unresolved capability is
 selected definition bodies/relationships after full-graph failure, not call
 counting or selected argument identity.
+
+## PHI format alternatives: first real-model pair
+
+Both runs use `8114bd675`, the pre-pinned projection question/oracle, the same
+preserved `a0685486...` engine and fourteen fact methods. Direct runs first.
+Both request `gpt-6.1-sol/high`, identical common guidance and resource limits,
+fresh target leases/native caches, and an isolated workspace without repository
+or oracle. Runtime, target and engine fingerprints remain unchanged; per-response
+usage matches the runner; process/profile cleanup and OOM-zero receipts verify.
+
+| Measurement                            | Atomic direct projection v1 | Code Mode projection v1 |
+| -------------------------------------- | --------------------------: | ----------------------: |
+| MCP requests / transport failures      |                      13 / 0 |                  11 / 0 |
+| Observed model responses               |                          15 |                      13 |
+| Client exec / wait calls               |                      11 / 3 |                  10 / 2 |
+| Model wall seconds                     |                     136.952 |                 135.203 |
+| Family wall seconds                    |                     137.840 |                 135.656 |
+| Family CPU seconds                     |                      45.359 |                  45.801 |
+| Family memory peak MiB                 |                       888.8 |                   852.8 |
+| Cumulative input tokens                |                     406,155 |                 365,228 |
+| Cached input tokens                    |                     337,792 |                 322,304 |
+| Uncached input tokens                  |                      68,363 |                  42,924 |
+| Output tokens, including reasoning     |                       3,856 |                   3,912 |
+| Reasoning tokens, included in output   |                         725 |                     556 |
+| Largest observed response input tokens |                      38,008 |                  38,436 |
+
+Both complete answers pass the unchanged oracle: correct entry/digest, both
+call/RSI/PHI links, all four operand/value/predecessor-edge/producer links, exact
+format addresses and strings, selected LEA/CALL bytes and both alternate jump
+destinations. They distinguish a closed six-operation selected trace from the
+capture-wide 326-definition frontier and preserve CFG/complete-use/alias/runtime
+and original-signature uncertainty. Neither reads the entire reconstructed C.
+
+Each performs one VM decompilation and reuses its source. Both capture ten native
+sources and cite nine; every source hash, subject and preserved-engine identity
+verifies. The complete native function records equal each other. Machine-window
+bytes match independent file reads under the verified ELF mapping; GNU decoding
+independently verifies the selected origins/transfers and the four format strings
+match read-only loaded bytes. These are selected static facts, not runtime proof.
+
+The tools provide enough facts for this local complex-function task. An actual
+discovery mismatch also appears: direct queries `reference` with a list of
+advertised `facts_*` names, receives zero matches, then requests the entire
+21,332-byte reference. Code Mode requests that complete reference directly.
+The direct miss is not a transport failure or false analysis fact, but it adds
+work and makes an isolated adapter-efficiency interpretation inappropriate.
+Code Mode's lower cumulative/uncached input and nearly equal elapsed time in
+this sample must retain that limitation and uncontrolled cache/stochastic costs.
+Fix named discovery for both presentations before another same-question pair.
+
+Ledger: `.cache/atomic-codemode/ledger-projection-round-8114bd6.json`; full-answer
+and retained-source review: `projection-answer-review-v1.json` beside it. The
+pair costs 771,383 input tokens (660,096 cached, 111,287 uncached), 7,768 output
+(1,281 included reasoning) and 272.155 model wall seconds. Native builds,
+scripted checks, development conversation, resolved server model build, remote
+compute and money remain outside these model-pair totals. There is no new
+traditional-provider cell, universal RE basis or broad superiority claim.
