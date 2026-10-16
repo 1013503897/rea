@@ -253,3 +253,13 @@ discovery lookups prevent fewer MCP requests from becoming fewer model responses
 These [mixed costs](trials.md#selected-wide-phi-input-relationships) validate the
 fact boundary while leaving broad efficiency unproven. The current shared JS
 suite passes 57 tests; the Python cost-ledger suite passes three.
+
+Discovery now also offers `reference({view:"index"})`: the complete fourteen
+method names and descriptions, without schemas or return contracts. Follow with
+`view:"contracts"` and exact names for only the needed inputs. The default
+contract view and named/topic lookup stay compatible. Both views use the same
+registry and presentation map; index access never constructs unrequested schemas.
+The index describes declared methods, while `snapshot` remains the live coverage
+authority. This addresses observed blind discovery without inventing aliases or
+changing analysis facts; its whole-task effect must be measured on the unchanged
+wide-operand question.

@@ -4,6 +4,7 @@ import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { z } from "zod";
 import { AtomicSession, methods, reference } from "./api.mjs";
 import { executeJavaScript } from "./executor.mjs";
+import { referenceInput } from "./reference.mjs";
 import { TARGET_CONTENT_RESULT_META } from "../../dist/server/toolResultEncoding.js";
 import { appendFile } from "node:fs/promises";
 
@@ -73,11 +74,12 @@ const createServer = () => {
   );
   register(
     "reference",
-    "Look up analysis contracts by exact displayed method names or canonical method IDs, separated by spaces or commas, or search one analyst concept. Request only needed methods; empty query returns all contracts.",
-    z.strictObject({ query: z.string().default("") }),
+    "Discover fact methods with view:index and an empty query: returns names and descriptions without schemas. Then request only needed full contracts with view:contracts and exact displayed names or canonical IDs separated by spaces/commas. One topic query searches descriptions; empty query with view:contracts returns all contracts. These are static declared methods, not live provider availability.",
+    referenceInput,
     (input) =>
       reference(input.query, {
         names: apiNames,
+        view: input.view,
         includeExamples: !direct,
         language: direct ? DIRECT_REFERENCE_LANGUAGE : undefined,
       }),

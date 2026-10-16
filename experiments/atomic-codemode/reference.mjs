@@ -2,6 +2,11 @@
 import { z } from "zod";
 import { FactFailure } from "./fact-error.mjs";
 import { freezeFacts } from "./fact-reads.mjs";
+const referenceViews = ["index", "contracts"];
+export const referenceInput = z.strictObject({
+  query: z.string().default(""),
+  view: z.enum(referenceViews).default("contracts"),
+});
 
 // Compact return contracts let code compose before first observing a response.
 const returns = {
@@ -89,26 +94,45 @@ function selectReference(methods, query, lookup) {
 }
 export const createReference =
   (methods) =>
-  (query = "", { names = {}, language, includeExamples = true } = {}) => {
+  (
+    query = "",
+    { names = {}, language, includeExamples = true, view = "contracts" } = {},
+  ) => {
+    if (!referenceViews.includes(view))
+      throw new FactFailure("invalid_input", "Unknown reference view");
     const { lookup, labels } = referenceNames(methods, names),
       selected = selectReference(methods, query, lookup);
+    const catalog = selected.keys.map((method) => ({
+      method,
+      name: labels[method],
+      description: methods[method].description,
+    }));
+    const coverage = {
+      declared_methods: Object.keys(methods).length,
+      matched_methods: selected.keys.length,
+      selection: selected.selection,
+      view,
+    };
+    if (view === "index")
+      return {
+        methods: catalog,
+        coverage,
+        unmatched_queries: selected.unmatched,
+        notes: [
+          "Static declared methods, not live provider availability. Request exact displayed names with view:contracts for schemas; inspect snapshot facets for runtime coverage.",
+        ],
+      };
     return {
       language:
         language ??
         "JavaScript async function body; return a JSON value. All rea methods return {ok,context,data} or {ok:false,error}.",
-      methods: selected.keys.map((method) => ({
-        method,
-        name: labels[method],
-        description: methods[method].description,
-        input_schema: schemaFor(methods[method].input),
-        returns: returns[method],
-        ...(includeExamples ? { example: methods[method].example } : {}),
+      methods: catalog.map((entry) => ({
+        ...entry,
+        input_schema: schemaFor(methods[entry.method].input),
+        returns: returns[entry.method],
+        ...(includeExamples ? { example: methods[entry.method].example } : {}),
       })),
-      coverage: {
-        declared_methods: Object.keys(methods).length,
-        matched_methods: selected.keys.length,
-        selection: selected.selection,
-      },
+      coverage,
       unmatched_queries: selected.unmatched,
       limits: {
         execution_heap_mib: 64,

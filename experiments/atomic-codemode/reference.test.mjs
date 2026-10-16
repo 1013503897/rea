@@ -2,6 +2,53 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import Ajv2020 from "ajv/dist/2020.js";
 import { methods, reference } from "./api.mjs";
+import { createReference } from "./reference.mjs";
+
+test("reference index discovers named methods without constructing unrequested schemas", () => {
+  const registry = {
+    sample: {
+      description: "Declared capability; live coverage is unknown.",
+      get input() {
+        throw new Error("Schema was not requested");
+      },
+    },
+  };
+  const lookup = createReference(registry);
+  const index = lookup("", {
+    names: { sample: "facts_sample" },
+    view: "index",
+  });
+  assert.deepEqual(index.methods, [
+    {
+      method: "sample",
+      name: "facts_sample",
+      description: registry.sample.description,
+    },
+  ]);
+  assert.equal(index.coverage.view, "index");
+  assert.equal(index.coverage.declared_methods, 1);
+  assert.throws(() => lookup("sample"), /Schema was not requested/);
+  assert.throws(
+    () => lookup("", { view: "unknown" }),
+    /Unknown reference view/,
+  );
+  const all = reference("", { view: "index" });
+  assert.equal(all.methods.length, 14);
+  assert.ok(
+    all.methods.some(
+      (m) => m.method === "relations" && m.description.includes("operands"),
+    ),
+  );
+  assert.ok(
+    all.methods.every(
+      (m) => !Object.hasOwn(m, "input_schema") && !Object.hasOwn(m, "returns"),
+    ),
+  );
+  assert.ok(
+    Buffer.byteLength(JSON.stringify(all)) <
+      Buffer.byteLength(JSON.stringify(reference())),
+  );
+});
 
 test("named reference lists preserve caller order and exact schemas across presentations", () => {
   const names = Object.fromEntries(

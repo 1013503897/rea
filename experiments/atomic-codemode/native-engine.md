@@ -618,3 +618,24 @@ deduplication, in 39.385 wall / 39.163 CPU seconds, 591.3 MiB peak, with cleanup
 verified and OOM 0. The different scripted read paths/host state do not isolate
 adapter costs. The [wide-operand oracle](operands-oracle.md) fixes the next seeded
 real-model task before launch; it is not a before/after of the PHI-format task.
+
+## Static method index
+
+The wide-operand pair exposes a discovery cost: Code Mode asks four times for
+help before using the same seven fact requests as direct. `reference view:index`
+now returns the same fourteen canonical/display names and descriptions without
+constructing schemas, return contracts or examples. `view:contracts` preserves
+the existing default and exact-name/topic behavior. Both presentations share one
+named documentation contract/owner and the API's registry; no analysis change or
+engine rebuild is involved. An index is static declared support, never live
+provider capability. Runtime facets remain authoritative.
+
+The shared suite passes 58 tests, including a getter that proves an index does
+not access an unrequested input contract. Changed JS lint/format and both real
+SDK catalogs/reference schemas pass. The first discovery probe takes 5.284 family
+wall / 4.028 CPU seconds, 137.6 MiB peak, cleanup verified and OOM 0. Code Mode's
+index is 7,212 JSON bytes versus 24,010 for all contracts; direct is 7,240 versus
+22,939. These bytes are static discovery output, not demonstrated token/time
+savings. A subsequent focused check and real probe cover moving the input schema
+into the documentation owner and unifying presentation construction. The same
+wide-operand question/oracle are retained for a new real-model pair.

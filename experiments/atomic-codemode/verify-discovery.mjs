@@ -26,10 +26,10 @@ for (const direct of [false, true]) {
     env: { ...process.env, REA_ATOMIC_ADAPTER: direct ? "direct" : "codemode" },
     stderr: "pipe",
   });
-  const call = async (query) => {
+  const call = async (query, view = "contracts") => {
     const reply = await client.callTool({
       name: "reference",
-      arguments: { query },
+      arguments: { query, view },
     });
     return JSON.parse(reply.content[0].text);
   };
@@ -101,11 +101,40 @@ for (const direct of [false, true]) {
     const all = await call("");
     assert.equal(all.methods.length, 14);
     for (const method of all.methods) ajv.compile(method.input_schema);
+    const index = await call("", "index");
+    assert.equal(index.coverage.view, "index");
+    assert.deepEqual(
+      index.methods.map((m) => m.method),
+      all.methods.map((m) => m.method),
+    );
+    assert.ok(
+      index.methods.every(
+        (m) =>
+          !Object.hasOwn(m, "input_schema") && !Object.hasOwn(m, "returns"),
+      ),
+    );
+    assert.deepEqual(
+      index.methods.map((m) => ({
+        method: m.method,
+        name: m.name,
+        description: m.description,
+      })),
+      all.methods.map((m) => ({
+        method: m.method,
+        name: m.name,
+        description: m.description,
+      })),
+    );
+    assert.ok(
+      Buffer.byteLength(JSON.stringify(index)) <
+        Buffer.byteLength(JSON.stringify(all)),
+    );
     assert.ok(JSON.stringify(selected).length < JSON.stringify(all).length);
     results.push({
       direct,
       selected,
       all_reference_bytes: Buffer.byteLength(JSON.stringify(all)),
+      index_bytes: Buffer.byteLength(JSON.stringify(index)),
       selected_reference_bytes: Buffer.byteLength(JSON.stringify(selected)),
       actual_catalog_and_named_schema_checks_passed: true,
     });
