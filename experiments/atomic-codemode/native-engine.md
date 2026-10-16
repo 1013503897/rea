@@ -639,3 +639,36 @@ index is 7,212 JSON bytes versus 24,010 for all contracts; direct is 7,240 versu
 savings. A subsequent focused check and real probe cover moving the input schema
 into the documentation owner and unifying presentation construction. The same
 wide-operand question/oracle are retained for a new real-model pair.
+
+The final real SDK probe passes in 4.380 wall / 3.807 CPU seconds, 141.4 MiB peak,
+cleanup verified and OOM 0. Both subsequent real-model answers satisfy the
+unchanged oracle. Code Mode uses index plus one exact contract query, reducing
+its discovery lookups from four to two. Whole-task costs remain mixed; all
+attempts and limits are recorded in [trials.md](trials.md).
+
+## Fact granularity versus computation granularity
+
+The eight successful real-model VM captures using the preserved `a0685486...`
+engine each retain 4,008,032 bytes, including 126,519 bytes of reconstructed C
+that the selected-operand models never read. Fresh-lease native request wall
+ranges from 36.702 to 53.124 seconds. A separate failed first attempt hits the
+120-second timeout before one successful capture; its cause remains unknown.
+These are fresh private native caches, not controlled OS-cold samples. Same-lease
+warm source reuse remains separately measured above.
+
+Source inspection explains the current computation boundary: the project core
+drives whole-function decompilation, renders C and extracts metadata, then
+collects independent call/graph/projection facets from the live function. The
+new slot atom reduces selected read/serialization scope, but does not implement
+selected-slot native analysis. The complete VM CFG is still unavailable and
+arbitrary definitions outside the retained call-rooted projection cannot be
+expanded by a fact read. Provider parity and general complex-software superiority
+remain unestablished.
+
+Pipeline, C rendering, metadata and fact-export phase costs have not been
+separately profiled. Their source order and C size do not prove which dominates
+runtime. A phase-timing experiment is needed before choosing compute/cache
+changes; suppressing C or retaining a live function must preserve explicit
+capability/lifetime and Evidence semantics. Current model comparisons share the
+same computation and fact owners, avoiding a capability difference between the
+two adapters.

@@ -945,3 +945,59 @@ input (492,928 cached, 78,136 uncached), 3,522 output (72 included reasoning),
 187.516 model wall seconds. Builds, scripted verification, development
 conversation, resolved model build, remote compute and money remain unmeasured
 or outside these totals. Memory is kernel cgroup peak including charged cache.
+
+## Wide operands after the static discovery index
+
+Both runs use `a44004902`, unchanged wide-operand question/oracle, native engine,
+fact implementation, model request and per-lane guidance. Code Mode runs first.
+Runtime/target/engine fingerprints and usage reconciliation pass; process/profile
+cleanup verifies, with no transport/API failure, retry, abort or OOM.
+
+| Measurement                            | Atomic direct operands v2 | Code Mode operands v2 |
+| -------------------------------------- | ------------------------: | --------------------: |
+| MCP requests / transport failures      |                    10 / 0 |                 7 / 0 |
+| Analysis API failures                  |                         0 |                     0 |
+| Observed model responses               |                        12 |                    11 |
+| Client exec / wait calls               |                     8 / 3 |                 8 / 2 |
+| Model wall seconds                     |                    98.818 |                98.894 |
+| Family wall seconds                    |                    99.335 |                99.498 |
+| Family CPU seconds                     |                    44.307 |                44.866 |
+| Family memory peak MiB                 |                     870.0 |                 851.6 |
+| Cumulative input tokens                |                   235,201 |               268,311 |
+| Cached input tokens                    |                   196,224 |               245,376 |
+| Uncached input tokens                  |                    38,977 |                22,935 |
+| Output tokens, including reasoning     |                     1,686 |                 1,945 |
+| Reasoning tokens, included in output   |                        60 |                    35 |
+| Largest observed response input tokens |                    23,943 |                30,397 |
+
+Both complete answers again pass every fixed fact and uncertainty requirement.
+Each uses the same seven fact requests, one native capture and only selected
+slots/values/immediate definitions. Each cites its sole verified source; function
+records equal each other, both v1 records and the earlier public golden. The
+native request takes 39.625 seconds direct and 39.209 Code Mode. This remains a
+seeded native relationship task, without a whole-input/C read or a runtime claim.
+
+Code Mode uses the new fourteen-method index, then a single exact four-contract
+lookup, without unmatched names. Discovery falls from four requests to two;
+overall MCP requests from nine to seven, model responses from twelve to eleven.
+Direct uses one exact four-contract lookup in both revisions, leaving the two
+session-tool names explicitly unmatched. No analysis behavior or native coverage
+was changed to obtain these results.
+
+Whole-task effects remain mixed. Code Mode's cumulative/uncached input decreases
+from its v1 sample, but elapsed time and maximum response input increase. Direct
+also uses fewer cumulative/uncached tokens and takes longer despite unchanged
+query counts. In this second pair, Code Mode has more cumulative input, less
+uncached input and almost identical wall time to direct. The index's intended
+discovery behavior works; fewer lookups do not prove general latency/token gains.
+One sample per cell, stochastic/client behavior, cached prompts and OS state
+remain uncontrolled. There is no traditional-provider cell for this question.
+
+Ledger: `.cache/atomic-codemode/ledger-operands-index-round-a440049.json`;
+manual/source review: `operands-answer-review-v2.json` beside it. Pair totals:
+503,512 input (441,600 cached, 61,912 uncached), 3,631 output (95 included
+reasoning), 197.712 model wall seconds. All four wide-operand launches cost
+1,074,576 input (934,528 cached, 140,048 uncached), 7,153 output (167 included
+reasoning), 385.228 model wall seconds. Builds, scripted verification, development
+conversation, resolved model build, remote compute and money remain outside
+these model totals. Memory is kernel cgroup peak including charged cache.

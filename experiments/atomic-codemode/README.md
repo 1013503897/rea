@@ -263,3 +263,12 @@ The index describes declared methods, while `snapshot` remains the live coverage
 authority. This addresses observed blind discovery without inventing aliases or
 changing analysis facts; its whole-task effect must be measured on the unchanged
 wide-operand question.
+
+The identical question now completes correctly through both indexed adapters.
+Code Mode uses the intended index plus one named lookup; discovery drops from
+four calls to two, without changing the seven fact reads. The new pair takes
+about 98.8 seconds each; cumulative input favors direct, uncached input favors
+Code Mode. All four wide-operand answers pass, with no retry or OOM. Costs remain
+mixed. A selected-slot read still incurs whole-function native decompilation on
+a fresh lease; phase profiling is the next computation question, separate from
+the now finer fact/query boundary.

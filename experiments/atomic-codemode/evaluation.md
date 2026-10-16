@@ -244,3 +244,18 @@ uncached input remain a mixed single sample. Discovery is itself part of the
 analyst workflow and deserves a separate test. Broader behavior reconstruction,
 complete large-function CFG/use coverage, aliases and a universal RE basis are
 still unproven. See [the complete scoped results](trials.md#selected-wide-phi-input-relationships).
+
+The same question after adding a static method index again completes correctly
+through both adapters. Code Mode now uses two discovery calls instead of four,
+without changing the seven fact reads. Observed model responses decrease by one,
+but total time increases slightly; direct also takes longer and uses fewer input
+tokens without changing query counts. The second pair is approximately 98.8
+seconds each, with more cumulative and less uncached input for Code Mode. This
+supports the index's discoverability, while leaving whole-task cost mixed.
+
+There is a further distinction to test: an atomic fact API does not itself make
+native computation atomic. A fresh selected-slot question still incurs an entire
+function decompilation and C rendering. Phase costs are unmeasured, so neither
+removing C nor introducing persistent state is yet justified as a speed fix.
+Measure that boundary before claiming analysis-time improvement from narrower
+fact responses.
