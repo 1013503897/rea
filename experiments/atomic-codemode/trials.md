@@ -877,3 +877,71 @@ reasoning), 434.004 model wall seconds. All four PHI launches cost 1,806,508 inp
 706.159 model wall seconds. These totals exclude builds/scripted verification,
 development conversation, remote compute and money. Memory is the kernel cgroup
 peak including charged file cache, not RSS; resolved model build is unknown.
+
+## Selected wide-PHI input relationships
+
+Both runs use `e38a4c439`, the separately pre-pinned wide-operand question/oracle,
+same preserved `a0685486...` engine, fourteen-method API and model request
+`gpt-6.1-sol/high`. Direct runs first. Fresh leases/native caches and common
+guidance/resource limits remain. Runtime, engine and target fingerprints are
+unchanged; usage reconciliation, process/profile cleanup and OOM-zero verify.
+
+| Measurement                            | Atomic direct operands v1 | Code Mode operands v1 |
+| -------------------------------------- | ------------------------: | --------------------: |
+| MCP requests / transport failures      |                    10 / 0 |                 9 / 0 |
+| Analysis API failures                  |                         0 |                     0 |
+| Observed model responses               |                        12 |                    12 |
+| Client exec / wait calls               |                     8 / 3 |                 8 / 3 |
+| Model wall seconds                     |                    91.817 |                95.699 |
+| Family wall seconds                    |                    92.844 |                96.267 |
+| Family CPU seconds                     |                    44.568 |                43.401 |
+| Family memory peak MiB                 |                     876.0 |                 840.0 |
+| Cumulative input tokens                |                   285,953 |               285,111 |
+| Cached input tokens                    |                   241,280 |               251,648 |
+| Uncached input tokens                  |                    44,673 |                33,463 |
+| Output tokens, including reasoning     |                     1,654 |                 1,868 |
+| Reasoning tokens, included in output   |                        23 |                    49 |
+| Largest observed response input tokens |                    28,546 |                29,240 |
+
+Both complete answers pass the unchanged oracle: wide merge identity/opcode/
+block/output/arity; all five requested value/predecessor/edge tuples; the two
+distinct values' exact storage and retained defining operation identities,
+opcodes and outputs. They preserve four distinct edges sharing one value, and
+separately prove slot 156 absent for the retained node while `0xffff:0` is
+unretained/unknown. Both state projection/frontier, CFG/use/alias/runtime and
+machine-transfer limits. Neither reads the whole input array or C report.
+
+Each performs seven identical fact-method requests: one snapshot, two operation
+reads, three selected-operand relations and one batch value read. Each captures
+and cites one native source; every digest/context/reference verifies. Native
+function records equal each other and the earlier public golden. Native snapshot
+wall is 39.778 seconds direct and 38.627 Code Mode; neither retries. This is
+producer-gold/source verification for a seeded relationship task, not independent
+machine/IR equivalence, unseeded reconstruction or runtime proof.
+
+Code Mode composes four related reads in one execution, then two dependent reads
+in another. It also makes four reference queries versus direct's one. Its initial
+natural-language query includes canonical `values`, so automatic named selection
+matches only that method and reports other words unmatched; a later lookup of
+invented `rea.operation_inputs` is explicitly unmatched. It then discovers the
+existing `relations` method correctly. These are retained discovery costs, not
+failed analysis calls. Direct already sees fact names/descriptions in its catalog.
+Fewer MCP requests therefore do not reduce observed model responses or client
+dispatch/wait calls in this sample.
+
+The added operand atom works for both adapters, including selected absence and
+uncertainty. Code Mode's cumulative input is nearly equal, uncached input lower,
+and latency/output/largest response input higher. One sample, stochastic discovery
+and uncontrolled prompt/OS caching do not establish stable cost superiority.
+No same-question pre-change model cell exists: the old explicit `inputs` field
+could retrieve all slots, even though the old default single-node slice exceeds
+the output budget. Do not compare this task's lower cost to the earlier, broader
+PHI-format task as a speedup. A new discovery index/search experiment and broader
+address-unseeded tasks remain useful next tests.
+
+Ledger: `.cache/atomic-codemode/ledger-operands-round-e38a4c4.json`; full answer/
+source review: `operands-answer-review-v1.json` beside it. Pair totals: 571,064
+input (492,928 cached, 78,136 uncached), 3,522 output (72 included reasoning),
+187.516 model wall seconds. Builds, scripted verification, development
+conversation, resolved model build, remote compute and money remain unmeasured
+or outside these totals. Memory is kernel cgroup peak including charged cache.

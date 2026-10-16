@@ -168,7 +168,7 @@ scope; definition IDs do not imply readable defining operations. See the
 [boundary question and oracle](boundary-oracle.md) and its completed real-model
 pair in [trials.md](trials.md). Both answers pass, using one VM capture each.
 Code Mode's single-sample latency is lower, with mixed context costs; broader
-efficiency remains unproven. The current focused JS suite passes 49 tests.
+efficiency remains unproven. The focused JS suite at that stage passes 49 tests.
 
 Available snapshot call facets now include `by_opcode` known/unknown-target
 counts and their own coverage. The owner derives them once from the same
@@ -243,3 +243,13 @@ seed types and selector applicability enforced at runtime. The fourteen-method
 API and both adapters remain shared; no new engine or output-budget increase is
 needed. The [seeded wide-operand task/oracle](operands-oracle.md) is separate from
 the earlier PHI-format question and is pinned before model trials.
+
+Both actual wide-operand model answers now pass that fixed oracle, including
+distinct edges sharing a value and absent-slot versus unretained-seed semantics.
+Each performs one native analysis and reads only selected slots, distinct values
+and their immediate definitions. Code Mode takes 95.699 seconds versus direct's
+91.817, with nearly equal cumulative input and lower uncached input. Its four
+discovery lookups prevent fewer MCP requests from becoming fewer model responses.
+These [mixed costs](trials.md#selected-wide-phi-input-relationships) validate the
+fact boundary while leaving broad efficiency unproven. The current shared JS
+suite passes 57 tests; the Python cost-ledger suite passes three.

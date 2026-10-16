@@ -227,3 +227,20 @@ has a 120-second native timeout before a successful retry; Code Mode changes its
 query strategy and costs more than its first run. The complete costs and failure
 remain in [the ledger](trials.md#phi-alternatives-after-named-discovery-correction).
 Fairness requires sufficient facts, correct discovery and honest retry reporting.
+
+The wide-PHI experiment provides a more precise candidate atom: an input slot is
+an individually selectable relationship, not just an array inside an operation.
+Its identity includes the operation and slot index; several relationships can
+share one value while preserving different predecessor edges. A value definition
+can then be composed with selected operation/value reads. Both measured models
+recover those distinctions and separate retained-node absence from unretained
+membership without fetching all 156 slots.
+
+This validates the shared query boundary, not adapter superiority. Code Mode
+groups the same seven fact requests, but four discovery lookups erase the
+MCP-request reduction at the observed model-response/client-dispatch level. Its
+95.699 seconds versus direct's 91.817, nearly equal cumulative input and lower
+uncached input remain a mixed single sample. Discovery is itself part of the
+analyst workflow and deserves a separate test. Broader behavior reconstruction,
+complete large-function CFG/use coverage, aliases and a universal RE basis are
+still unproven. See [the complete scoped results](trials.md#selected-wide-phi-input-relationships).
