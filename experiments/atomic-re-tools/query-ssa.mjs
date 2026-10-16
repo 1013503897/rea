@@ -9,12 +9,27 @@ import { assertVerifierCleanupComplete } from "../../scripts/lib/verifier-run.mj
 export const queryLiteralUses = (snapshot, literal, maxOperations = 48) => {
   const allSeeds = snapshot.findConstant(literal);
   const seeds = allSeeds.slice(0, 16);
+  const effectSeeds = seeds.filter((id) =>
+    ["store", "call"].includes(snapshot.operation(id).kind),
+  );
   const allUses = [
-    ...new Set(seeds.flatMap((id) => snapshot.uses(id).map((e) => e.use))),
+    ...new Set([
+      ...effectSeeds,
+      ...seeds.flatMap((id) => snapshot.uses(id).map((e) => e.use)),
+    ]),
   ];
   const selectedUses = allUses.slice(0, 16);
   const consumers = selectedUses.map((id) => snapshot.operation(id));
-  const controlEdges = consumers.flatMap((row) => snapshot.incoming(row.block));
+  const controlEdges = [
+    ...new Map(
+      consumers
+        .flatMap((row) => snapshot.incoming(row.block))
+        .map((edge) => [
+          JSON.stringify([edge.from, edge.to, edge.operation, edge.polarity]),
+          edge,
+        ]),
+    ).values(),
+  ];
   const branchIds = [
     ...new Set(
       controlEdges.flatMap((edge) =>
@@ -37,6 +52,7 @@ export const queryLiteralUses = (snapshot, literal, maxOperations = 48) => {
     literal,
     snapshot: snapshot.identity,
     constant_operations: seeds,
+    effect_seed_operations: effectSeeds,
     direct_uses: selectedUses,
     control_edges: controlEdges,
     operations: facts,
@@ -60,7 +76,7 @@ export const queryLiteralUses = (snapshot, literal, maxOperations = 48) => {
         snapshot.coverage.unrepresented_outgoing_blocks.length,
       source_issues: snapshot.coverage.issues.length,
       scope:
-        "literal equality, its direct printed uses, their explicit incoming edges and bounded branch definitions",
+        "literal equality, effect seeds and direct printed uses, their explicit incoming edges and bounded branch definitions",
       address_object_identity: "unknown",
       call_argument_bindings: "unknown",
     },
@@ -135,6 +151,7 @@ const main = async () => {
       null,
       2,
     ),
+    { flag: "wx" },
   );
   console.log(
     JSON.stringify({

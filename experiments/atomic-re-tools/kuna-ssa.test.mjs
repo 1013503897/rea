@@ -102,3 +102,19 @@ test("cloned blocks share starts; operation identity includes sequence, and fact
   assert.ok(query.direct_uses.includes("0x112:5"));
   assert.equal(query.coverage.control_flow, "partial");
 });
+
+test("a literal directly in STORE is itself an effect seed; shared block edges are returned once", () => {
+  const snapshot = parseKunaSsaDump(
+    dump.replace(
+      "*(ram,u1(0x110:4)) = r0(0x100:1)",
+      "*(ram,u1(0x110:4)) = #0x20",
+    ),
+  );
+  const query = queryLiteralUses(snapshot, "0x20");
+  assert.deepEqual(query.effect_seed_operations, ["0x112:5"]);
+  assert.deepEqual(
+    query.control_edges.map((e) => e.operation),
+    ["0x106:3"],
+  );
+  assert.ok(query.operations.some((row) => row.id === "0x102:2"));
+});
