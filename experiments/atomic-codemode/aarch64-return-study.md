@@ -1,8 +1,14 @@
 # AArch64 import entries and return coverage
 
-This continues the [three-way warning investigation](aarch64-xref-study.md).
-All three model interfaces encountered the same dropped post-warning path.
-Improving the underlying producer must precede a new interface comparison.
+Two independent producer defects are corrected: BTI import-entry identity and
+false no-return promotion that erased a post-warning path. A fresh three-way
+model run passes the selected task oracle with all interfaces. Direct atomic
+reads use less cumulative and uncached input and finish sooner than Code Mode
+in this sample, despite more MCP requests. Correct primitive facts are useful;
+the extra Code Mode layer does not automatically improve a completed task.
+
+This continues the [three-way warning investigation](aarch64-xref-study.md),
+where all three interfaces encountered the same dropped post-warning path.
 
 ## PLT entry checkpoint
 
@@ -49,6 +55,9 @@ The warning's recovered tail call names `free`. The real native CLI
 path and PT_DYNAMIC fallback using a separately hashed derived copy with only
 ELF section-header coordinates zeroed. Both produce the corrected entries.
 Neither input is executed. Both patch application directions pass.
+The original and sectionless inventories contain 1713 and 518 entries; this
+check compares selected imports, not whole-inventory completeness. PAC coverage
+uses synthetic byte fixtures; the real SSH checks exercise the BTI form.
 
 | Executed check                                                            | Family wall s | Family CPU s | Kernel family peak MiB |
 | ------------------------------------------------------------------------- | ------------- | ------------ | ---------------------- |
@@ -148,3 +157,95 @@ sample, while retaining the previously missing path. This single sequential
 pair does not establish a general performance delta. Changed-file JS lint,
 format and Python compilation checks pass. Broad repository type checking
 retains the previously disclosed resource-limited gap.
+
+## Fresh real-model comparison after both corrections
+
+All three trials freeze REA runtime
+`bf9d3a6e47de1e16a7eefb58bf385dfbe093fdb9`, the final engine above, the same
+target and the unchanged [question](aarch64-warning-question.txt). Trial prefixes
+are `arm-return-{direct,codemode,traditional}-v1` under the ignored local cache.
+Execution order is Direct, Code Mode, traditional. Each uses a fresh isolated
+Codex profile; traditional gets a new project-cache directory and the atomic
+modes get new evidence stores. Each requests `gpt-6.1-sol` with high
+reasoning through Codex 0.161.0, and receives its actual advertised tools:
+22 Direct, 4 Code Mode, or all 16 Kuna-supported traditional tools. Discovery
+and SDK-converted schema verification precede these runs. No runtime or engine
+mutation occurs during the three trials.
+
+| Whole-task observation                       | Traditional | Code Mode | Direct atomic |
+| -------------------------------------------- | ----------: | --------: | ------------: |
+| Cumulative input tokens                      |     662,683 |   371,571 |       351,157 |
+| Cached input, included above                 |     570,368 |   323,968 |       310,912 |
+| Uncached input                               |      92,315 |    47,603 |        40,245 |
+| Output tokens                                |       5,304 |     6,069 |         5,402 |
+| Reasoning tokens, included in output         |       1,181 |     1,586 |         1,379 |
+| Model responses                              |          20 |        14 |            12 |
+| Client executor calls / waits                |      15 / 4 |    13 / 0 |        11 / 0 |
+| MCP attempts                                 |          20 |        13 |            25 |
+| Rejected MCP attempts                        |           2 |         0 |             0 |
+| Reference-document requests, included in MCP |           — |         3 |             1 |
+| Shared fact API calls                        |           — |        23 |            22 |
+| Model wall seconds                           |     263.085 |   166.756 |       139.033 |
+| Family wall seconds                          |     263.580 |   167.258 |       139.587 |
+| Local family CPU seconds                     |  166.299552 | 41.040445 |     34.362879 |
+| Kernel family peak MiB                       |      1279.4 |     617.0 |         625.2 |
+
+The unique per-response usage sums match each runner total. Cache writes are
+zero. All three runs preserve runtime/engine/target fingerprints, close the
+target, remove their isolated profiles, verify payload cleanup and observe OOM 0. Whole-scope final counters remain unavailable; family CPU/memory use verified
+payload-exit observations. Memory includes charged file cache, not just RSS.
+Remote compute, resolved service model build, OS cache state and host contention
+are unmeasured. Fresh local profiles do not imply cold OS or remote model caches.
+
+Code Mode executes its 23 fact calls inside eight `execute_javascript` requests;
+Direct issues 22 `facts_*` requests. Each mode retains the same two complete
+native function documents, verified equal, including restored strict call
+`0x2854c`, the selected pointer bindings, and the warning's named `free` tail.
+Code Mode requests three snapshots but captures only two distinct sources; a
+repeat uses the existing lease cache. Different queries/field selections and
+model response counts are part of the measured workflows, not equal instruction
+traces. Both modes, and traditional, also have the same client-side JavaScript
+executor available. This compares MCP/API surfaces, not JavaScript versus its
+absence.
+
+The traditional run first passes xref instruction addresses `0x25750` and
+`0x2853c` to an exact-entry analysis operation; both are correctly rejected. It
+recovers with `list_procedures`. Traditional `xrefs` normalizes these results to
+address strings; the atomic response also supplies native owning-function
+facts. Those navigation differences and retries are counted. Its two successful
+function dossiers share the same ready project-export key
+`dbfd828b95d9c1a2981707728a9e31b4c38688162e851a904c3808fd911c79eb`.
+Higher CPU is not evidence of a broken project cache. Traditional project export
+and per-function atomic export remain different native analysis profiles; the
+comparison does not isolate transport or schema cost from analysis scope.
+
+All complete answers were read and passed agent review against the frozen
+question, independent file/GNU oracle, selected additional GNU checks and their
+actual delivered Evidence. Each identifies both functions, proves the selected
+pointer transfer and first helper target, verifies format formation/passing,
+the four-byte test and actual zero/nonzero successors, conditional cleanup
+return, and the necessary runtime/logging/alias limitations. This is selected
+task correctness, not human readiness or general analysis completeness.
+
+Every cited source is verified: 11 traditional, 14 Code Mode and 14 Direct IDs.
+Traditional projected views correctly have their own provider and null engine
+profile; their explicit parent-Evidence links trace to the pinned engine. An
+initial audit incorrectly required a native engine profile on each projection;
+the corrected audit follows that provenance chain and passes. Atomic retained
+source byte counts/digests, target/engine contexts, selected native call/value
+bindings, restored strict call and complete selected-function equality pass.
+Answer SHA-256 values are:
+
+- Traditional: `655877f07ce8819e7f086c584b49fb6d63dd2a7319c792deb09a721092eb7c5b`
+- Code Mode: `35d96912940a3a51704093d08ab228aea3e40fbdc80085d8137385f0d9199f61`
+- Direct: `24b1f3954397c3c30686a199189d0a37b61bc6ce74dfc49cfc061e79fe5c7fa9`
+
+The local `return-model-costs.json`, `return-answer-checks.json` and
+`return-answer-review.json` retain the detailed receipts/review; raw model and
+native captures remain ignored. The earlier Code Mode advantage does not repeat:
+this sample uses 5.8% more cumulative input, 18.3% more uncached input and 19.9%
+more model wall time than Direct. Its memory peak is slightly lower. One
+sequential sample with different model choices cannot establish a stable winner
+or attribute the change solely to the fixes. It supplies a concrete counterexample
+to treating fewer RPCs as proof of fewer tokens or faster completed analysis.
+Broader complex-software effectiveness remains unproved.
