@@ -1,6 +1,7 @@
 // One named contract registry shared by SDK, CLI, direct MCP and Code Mode.
 import { z } from "zod";
 import { MAX_BYTE_BATCH_BYTES } from "./limits.mjs";
+import { MAX_GRAPH_BLOCKS } from "./graph-limits.mjs";
 import { createReference } from "./reference.mjs";
 
 const hex = z.string().regex(/^0x(?:0|[1-9a-f][0-9a-f]{0,15})$/u);
@@ -310,6 +311,32 @@ export const methods = {
     },
     "blocks",
     "await rea.blocks({snapshot:s,ids:[op.block]})",
+  ),
+  path: definition(
+    {
+      summary:
+        "Find one shortest recovered CFG path to a block or exit, with exclusions and paged native edges; feasibility stays unknown.",
+      description:
+        "Find one shortest edge-count witness in the complete recovered CFG from a numeric block ID to a block or any zero-successor recovered exit, excluding avoid IDs. Ties follow native successor order. Return paged native edges with a separate step_index; index remains the original successor ordinal. A found zero-edge path is distinct from not-found. Unknown start/target/avoid identities produce status unknown and unretained_blocks, never absence. Not-found applies only to this recovered graph under the requested exclusions; exits, termination, machine flow and branch-predicate feasibility remain unproved. Requires the full recovered_ir facet, not a call-rooted projection. Search state is bounded by the admitted graph; one last-query cache per resident immutable graph expires with eviction/lease close. The avoid selection is bounded by the maximum admitted graph block count.",
+    },
+    {
+      snapshot,
+      from: z.number().int().nonnegative(),
+      target: z.discriminatedUnion("kind", [
+        z.strictObject({
+          kind: z.literal("block"),
+          id: z.number().int().nonnegative(),
+        }),
+        z.strictObject({ kind: z.literal("exit") }),
+      ]),
+      avoid: z
+        .array(z.number().int().nonnegative())
+        .max(MAX_GRAPH_BLOCKS)
+        .default([]),
+      ...page,
+    },
+    "path",
+    'await rea.path({snapshot:s,from:block,target:{kind:"exit"},avoid:[join]})',
   ),
   slice: definition(
     {

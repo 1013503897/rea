@@ -2,6 +2,7 @@
 import { z } from "zod";
 import { FactFailure } from "./fact-error.mjs";
 import { NATIVE_OUTPUT_BYTES } from "./limits.mjs";
+import { MAX_GRAPH_BLOCKS } from "./graph-limits.mjs";
 import { readCallFacet } from "./native-call-contract.mjs";
 import { readProjectionFacet } from "./native-projection-contract.mjs";
 import { readSwitchFacet } from "./native-switch-contract.mjs";
@@ -44,7 +45,7 @@ const factsSchema = z.strictObject({
       }),
     )
     .min(1)
-    .max(12000),
+    .max(MAX_GRAPH_BLOCKS),
   operations: z.array(operation).max(32000),
   values: z.array(value).max(36000),
   coverage: z.strictObject({

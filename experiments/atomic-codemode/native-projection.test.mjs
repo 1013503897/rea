@@ -269,6 +269,7 @@ test("partial definition facts compose through phi operands without implying a C
   assert.equal(located.coverage.value_scope, model.coverage.value_scope);
   for (const read of [
     () => model.blocks({}),
+    () => model.path({ from: 9, target: { kind: "exit" } }),
     () => model.edges({ kind: "controllers", seeds: [9] }),
   ])
     assert.throws(read, (e) => e.code === "capability_unavailable");

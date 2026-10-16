@@ -19,6 +19,11 @@ The [capability map](capability-map.md) distinguishes verified task coverage,
 experimental exporter requirements and remaining unknowns before interpreting
 adapter comparisons.
 
+The [path-query study](path-query-study.md) adds a shared, bounded recovered-CFG
+witness query with exclusions and paging. Both actual MCP adapters verify the
+same four real SQLite witnesses without requiring the model to fetch the entire
+graph. This establishes graph-relative facts; predicate feasibility stays unknown.
+
 The [control-query study](control-query-study.md) verifies every derived control
 triple on the real SQLite VM, fixes unknown CFG seeds and reuses a lazy
 postdominator index. Its [two-level investigation](controller-oracle.md) is
@@ -138,7 +143,7 @@ the ledger now records actual model responses and client dispatch/wait calls.
 owner. Recovered operations use `origin_address` and blocks `origin_start`;
 these locations cannot be substituted for machine branch destinations. The
 value-origin trial demonstrates why this boundary matters. The experiment
-now has fifteen fact methods, still behind the same four-tool Code Mode
+now has sixteen fact methods, still behind the same four-tool Code Mode
 catalog.
 
 `calls` connects recovered call operations to native target specifications and

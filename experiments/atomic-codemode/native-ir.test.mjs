@@ -25,6 +25,24 @@ const input = (n, value_id, phi_predecessor = null) => ({
   phi_predecessor_edge:
     phi_predecessor === null ? null : `${phi_predecessor}:0`,
 });
+test("native graph owner exposes paths while malformed graphs keep the facet failure", () => {
+  const source = diamond();
+  const model = parseNativeIR(JSON.stringify(source), "0x1000");
+  const found = model.path({ from: 0, target: { kind: "exit" }, avoid: [1] });
+  assert.equal(found.status, "found");
+  assert.deepEqual(
+    found.items.map((row) => row.id),
+    ["0:1", "2:0"],
+  );
+  assert.equal(found.items[0].operation, id(0));
+  source.functions[0].atomic_facts.blocks[0].successors[0].target = 999;
+  const malformed = parseNativeIR(JSON.stringify(source), "0x1000");
+  assert.equal(malformed.code, "reconstructed C");
+  assert.throws(
+    () => malformed.path({ from: 0, target: { kind: "exit" } }),
+    (error) => error.details.facet === "recovered_ir",
+  );
+});
 const edge = (from, target, index, polarity = null) => ({
   id: `${from}:${index}`,
   target,

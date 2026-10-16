@@ -1,7 +1,7 @@
 # Capability and comparison scope
 
-The experiment has fifteen fact methods behind a shared SDK/CLI owner, exposed
-as eighteen direct MCP tools or four Code Mode tools. The structured IR/call/
+The experiment has sixteen fact methods behind a shared SDK/CLI owner, exposed
+as nineteen direct MCP tools or four Code Mode tools. The structured IR/call/
 projection/switch facts require the explicitly pinned experimental Kuna patch;
 they are not capabilities added to stock Kuna or integrated REA by registration
 alone. Other providers are not wired to this experimental service.
@@ -61,3 +61,9 @@ feasible paths and nontermination remain unknown. The current evidence does
 not establish provider parity, broad complex-software superiority or a stable
 Code Mode cost advantage. The [wait repeat](client-wait-study.md) shows why fewer
 MCP requests or polls cannot replace correct answers and whole-task costs.
+
+The [path query](path-query-study.md) composes selected recovered edges into one
+paged witness under explicit exclusions, with zero-edge/not-found/unknown
+outcomes. Both real SQLite MCP lanes preserve every original edge field; complete
+native function fidelity is checked. This removes an observed graph-reading
+burden without establishing feasible runtime paths or an adapter cost advantage.

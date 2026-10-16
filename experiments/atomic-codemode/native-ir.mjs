@@ -9,6 +9,7 @@ import {
 } from "./native-switch-views.mjs";
 import { parseNativeFunction } from "./native-ir-contract.mjs";
 import { createControlDependenceIndex } from "./control-dependence.mjs";
+import { createGraphPathReader } from "./cfg-path.mjs";
 import { freezeFacts as freeze } from "./fact-reads.mjs";
 import {
   indexCallFacet,
@@ -152,6 +153,7 @@ function createViews(facts, code, indexes) {
     block: (id) => blocks.get(id) ?? null,
     incoming: (id) => incoming.get(id) ?? [],
     blocks: (input) => readIdentities(blocks, input),
+    path: createGraphPathReader(blocks, outgoing),
     edges: (input) => {
       if (isNativeOperationRelation(input.kind))
         return core.operationRelations(input);
@@ -334,6 +336,7 @@ export function parseNativeIR(text, entry, expectedInput) {
   };
   return Object.freeze({
     ...(graph.view ?? projection.view ?? fallback),
+    path: graph.view?.path ?? unavailableGraph,
     edges: (input) =>
       input.kind === "cases"
         ? (switches.view?.cases ?? unavailableSwitches)(input)

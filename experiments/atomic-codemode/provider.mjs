@@ -440,6 +440,13 @@ export class KunaFactOwner {
       coverage: model.coverage,
     }));
   }
+  async path(input) {
+    this.#requireNativeIR(input.snapshot);
+    return this.#query(input, (model) => ({
+      ...model.path(input),
+      coverage: model.coverage,
+    }));
+  }
   async code(input) {
     const descriptor = this.#snapshots.get(input.snapshot);
     if (!descriptor)

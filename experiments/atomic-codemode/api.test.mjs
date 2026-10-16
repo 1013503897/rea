@@ -22,6 +22,33 @@ const factory = () => {
   });
   return { create, calls };
 };
+test("path selectors agree in runtime and JSON Schema, without inferred target or string identities", () => {
+  const validate = new Ajv2020({ strict: false }).compile(
+    reference("path").methods[0].input_schema,
+  );
+  for (const [request, valid] of [
+    [{ from: 0, target: { kind: "exit" } }, true],
+    [
+      {
+        from: 0,
+        target: { kind: "block", id: 1 },
+        avoid: [2, 2],
+        offset: 1,
+        limit: 1,
+      },
+      true,
+    ],
+    [{ from: "0", target: { kind: "exit" } }, false],
+    [{ from: 0, target: { kind: "block" } }, false],
+    [{ from: 0, target: { kind: "exit", id: 1 } }, false],
+    [{ from: 0, target: { kind: "exit" }, avoid: [-1] }, false],
+    [{ from: 0, target: { kind: "exit" }, limit: 129 }, false],
+  ]) {
+    const input = { snapshot: "snap_test", ...request };
+    assert.equal(methods.path.input.safeParse(input).success, valid);
+    assert.equal(validate(input), valid, JSON.stringify(validate.errors));
+  }
+});
 test("relation identity and operand-only selectors agree in runtime and advertised schemas", () => {
   const validate = new Ajv2020({ strict: false }).compile(
     reference("relations").methods[0].input_schema,
