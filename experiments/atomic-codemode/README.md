@@ -10,6 +10,10 @@ The goal is a real model completing reverse-engineering questions through
 composable facts, with Code Mode as the calling adapter. A configured feature flag,
 a scripted verifier or a small response does not prove that goal.
 
+The [capability map](capability-map.md) distinguishes verified task coverage,
+experimental exporter requirements and remaining unknowns before interpreting
+adapter comparisons.
+
 The reference is [Hex-Rays IDA MCP](https://github.com/HexRaysSA/ida-mcp/blob/df6de7985b534a964c125d5a86e41b26b17b14f6/ida_mcp/mcp.py):
 an on-demand `reference` lookup and an execution entrypoint over a richer analysis
 API. This experiment uses JavaScript and a QuickJS WASM environment rather than

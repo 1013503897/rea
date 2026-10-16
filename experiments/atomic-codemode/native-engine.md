@@ -6,6 +6,11 @@ against [Kuna v1.833](https://github.com/Noelo-Lab/kuna/tree/fe01d6294eb0d1053ce
 It is not an upstream release or an integrated REA capability. No upstream commit,
 PR or merge is being made.
 
+The sections below record successive pinned prototypes and their historical
+limits. For current comparison scope use the [capability map](capability-map.md),
+[full-graph transport study](native-graph-transport-study.md) and
+[independent switch study](switch-study.md), together with the live contracts.
+
 `decompile --json --atomic-facts` captures the live function that produced C.
 The default path does not collect the facet. Graph records include ordered CFG
 edges, native value identities, indexed operands, outputs and phi input bindings
