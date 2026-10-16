@@ -90,6 +90,9 @@ query order are uncontrolled. This establishes a useful query boundary, not a
 native analysis acceleration or completed-agent efficiency advantage.
 
 Local receipts use `.cache/atomic-codemode/ssh-values-{code,direct}-v1*`,
-`ssh-value-query-profile*`, and `value-query-shared-tests.log`. The next real
-question should use the stripped application's warning/caller/stack-format/
-local-guard flow, with an independent machine oracle frozen before model runs.
+`ssh-value-query-profile*`, and `value-query-shared-tests.log`. The
+[real-agent comparison](ssh-warning-study.md) now completes the stripped
+application's warning/caller/stack-format/local-guard task in all three lanes.
+Code Mode uses the new queries correctly; direct atomic answers with machine
+facts alone and has lower observed whole-task costs. The new core-query result
+must not be substituted for that completed-task comparison.

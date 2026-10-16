@@ -15,10 +15,15 @@ experimental exporter requirements and remaining unknowns before interpreting
 adapter comparisons.
 
 The [exact-value query study](value-query-study.md) adds location-to-value and
-value-to-operand-use queries, including undefined function inputs and constants.
+value-to-operand-use queries, including inputs/constants without defining operations.
 Real stripped OpenSSH checks preserve all 250 SSA versions / 369 occurrences at
 one selected policy location while reducing an equivalent core read task from
-244 queries to six. Whole-agent token and latency effects remain to be measured.
+244 queries to six. A subsequent [real-agent OpenSSH comparison](ssh-warning-study.md)
+completes the same machine-supported task through all three interfaces, after
+correcting an incomplete traditional evaluator toolset. Atomic direct has the
+lowest measured costs in this sample, using machine facts without decompilation;
+Code Mode uses the new queries but takes extra analysis steps. General efficiency
+claims still require broader evidence.
 
 The reference is [Hex-Rays IDA MCP](https://github.com/HexRaysSA/ida-mcp/blob/df6de7985b534a964c125d5a86e41b26b17b14f6/ida_mcp/mcp.py):
 an on-demand `reference` lookup and an execution entrypoint over a richer analysis

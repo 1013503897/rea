@@ -41,6 +41,13 @@ without definitions. It checks every retained selected version/use against the
 complete source graph; this is separate from machine-byte evidence and does not
 turn SSA occurrences into a memory-alias proof.
 
+The [stripped OpenSSH model comparison](ssh-warning-study.md) also verifies a
+common warning/caller/stack/guard question through the two atomic adapters and
+the traditional Kuna workflow. Exact machine facts suffice for the direct
+answer; extra SSA capture is not required by every RE question. The corrected
+traditional baseline has its complete declared native toolset. This expands
+the completed-task evidence while retaining the local scope and cost confounds.
+
 Memory alias dependencies, full machine-flow recovery, indirect runtime binding,
 feasible paths and nontermination remain unknown. The current evidence does
 not establish provider parity, broad complex-software superiority or a stable
