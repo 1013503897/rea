@@ -373,3 +373,41 @@ of composition. `summarize-trials.py` now counts unique response/call identities
 from actual retained events and verifies that per-response usage sums to the
 runner's declared totals. Missing captures remain unknown. Client waiting during
 long analysis is part of completed-task cost, not additional analysis facts.
+
+After repairing encoded-output capacity, a model task over the restored Pragma
+code pins `9e1b39358` and the rebuilt `2290e8b1…` engine. Both experimental lanes
+have identical fact capabilities and common envelope/stopping guidance enabled;
+this is not a rerun with only one changed variable relative to older tasks.
+The question and independent instruction anchors were committed before the runs.
+No traditional cell was run for this new question.
+
+| Measurement | Code Mode Pragma v1 | Atomic direct Pragma v1 |
+| --- | ---: | ---: |
+| MCP attempts / failures | 11 / 0 | 14 / 0 |
+| Unique model responses | 13 | 12 |
+| Client `exec` / `wait` calls | 12 / 0 | 11 / 0 |
+| Cumulative input tokens | 370,307 | 353,364 |
+| Included cached input | 333,184 | 278,272 |
+| Uncached input | 37,123 | 75,092 |
+| Output / included reasoning | 3,612 / 803 | 2,830 / 326 |
+| Model wall seconds | 121.459 | 107.625 |
+| Family wall seconds | 122.256 | 108.066 |
+| Family CPU seconds | 20.003 | 20.261 |
+| Kernel family peak MiB | 590.1 | 560.6 |
+
+Both answers match the machine oracle: null value pointer reads without the
+state check; a supplied value plus zero `D+0x65` selects the diagnostic before
+the selector-one bypass; allowed updates write the transformed byte at `S+0x10`
+and one at `S+0x11`; the diagnostic and shared cleanup have the correct physical
+addresses. Both avoid inventing source member names or a numeric return from the
+void reconstruction, preserve Evidence/target identity, and explicitly state
+the unavailable graph and unknown runtime feasibility/binding. Cleanup is
+verified, runtime/target bytes stay unchanged and OOM kills are zero.
+
+The restored C now supports a completed real-model task in both interfaces.
+Code Mode has fewer MCP requests and fewer uncached input tokens here; direct
+atomic has fewer model responses, lower cumulative input/output and shorter wall
+time. Prompt-cache state and model strategy remain uncontrolled, so no economic
+or general adapter ranking follows. The native byte-budget repair is a coverage
+fix, not a demonstrated Code Mode speedup. Private captures and the separate
+`round-9e1b393-ledger.json` retain these observations.
