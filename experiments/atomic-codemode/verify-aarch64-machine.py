@@ -66,6 +66,7 @@ add(0x2853c, 6, page(0x28534, 6, 0xb1000), 0xb1330)
 for at, target, opcode in [(0x2841c, 0x256c0, 0x94000000),
                            (0x256f0, 0x3d108, 0x94000000),
                            (0x25754, 0x5ae04, 0x94000000),
+                           (0x25858, 0xbad0, 0x14000000),
                            (0x2854c, 0x5ae04, 0x94000000),
                            (0x28550, 0x281c0, 0x14000000)]:
     w = word(at)
@@ -74,6 +75,16 @@ for at, target, opcode in [(0x2841c, 0x256c0, 0x94000000),
 
 assert word(0x28414) == 0xaa1b03e0  # MOV X0,X27
 assert word(0x256e8) == 0xaa0003f7  # MOV X23,X0
+# The warning's normal epilogue restores LR/SP before a tail transfer to free.
+# BTI is the called entry; the following ADRP is not another function entry.
+assert word(0xbad0) == 0xd503245f  # BTI c
+assert page(0xbad4, 16, 0x10f000) == 0x10f000
+assert word(0xbad8) == 0xf941ca11  # LDR X17,[X16,#0x390]
+add(0xbadc, 16, 0x10f000, 0x10f390)
+assert word(0xbae0) == 0xd61f0220  # BR X17
+assert word(0x2583c) == 0xa9417bfd  # LDP X29,X30,[SP,#16]
+assert word(0x25850) == 0x910143ff  # ADD SP,SP,#0x50
+assert word(0x25854) == 0xd50323bf  # AUTIASP
 assert page(0x27904, 25, 0x10f000) == 0x10f000
 w = word(0x27908)
 assert w & 0xffc00000 == 0xf9400000 and w & 31 == 25 and (w >> 5) & 31 == 25
@@ -95,10 +106,14 @@ ranges = {(int(a, 16), int(b, 16)) for a, b in re.findall(r'pc=([0-9a-f]+)\.\.([
 assert {(0x256c0, 0x25888), (0x27848, 0x297d4)} <= ranges
 relocations = subprocess.check_output(['readelf', '-Wr', str(binary)], text=True)
 assert re.search(r'000000000010ff20\s+0000000000000403\s+R_AARCH64_RELATIVE\s+110470', relocations)
+assert re.search(r'000000000010f390\s+[0-9a-f]+\s+R_AARCH64_JUMP_SLOT\s+[0-9a-f]+\s+free@GLIBC_2\.17\s+\+\s+0', relocations)
 report = {'binary_sha256': digest, 'elf_machine': 183,
           'selected_machine_word_and_target_checks': 'passed',
           'selected_function_fde_ranges': [['0x256c0', '0x25888'], ['0x27848', '0x297d4']],
           'got_slot': '0x10ff20', 'relative_addend': '0x110470',
+          'warning_tail_transfer': {'from': '0x25858', 'entry': '0xbad0',
+                                    'adrp_body': '0xbad4', 'slot': '0x10f390',
+                                    'relocation_symbol': 'free@GLIBC_2.17'},
           'scope': 'Independent file/GNU checks, not Kuna output, execution, live relocation or path-feasibility proof.'}
 with output.open('x') as stream:
     json.dump(report, stream, indent=2)

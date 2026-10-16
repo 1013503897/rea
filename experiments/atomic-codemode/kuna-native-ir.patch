@@ -2026,6 +2026,376 @@ index b39058b1..9dc7ec0f 100644
  }
 
  /// The data references one instruction's p-code carries.
+diff --git a/decompiler/crates/kuna-analysis/src/loader/elf_plt.rs b/decompiler/crates/kuna-analysis/src/loader/elf_plt.rs
+index 4ab6cbca..abcf8c5b 100644
+--- a/decompiler/crates/kuna-analysis/src/loader/elf_plt.rs
++++ b/decompiler/crates/kuna-analysis/src/loader/elf_plt.rs
+@@ -43,6 +43,8 @@ use std::collections::{HashMap, HashSet};
+ use object::read::{Object, ObjectSection, ObjectSymbol};
+ use object::{Architecture, RelocationTarget};
+
++mod aarch64;
++
+ /// One resolved PLT-stub import: the stub entry address (the CALL target the
+ /// decompiler sees) and the clean imported name.
+ pub(crate) struct PltSym {
+@@ -395,7 +397,7 @@ fn decode_plt_section(
+         }
+         Architecture::I386 => decode_i386(vma, data, i386_got_base, map, out, named_got),
+         Architecture::Aarch64 | Architecture::Aarch64_Ilp32 => {
+-            decode_aarch64(vma, data, map, out, named_got)
++            aarch64::decode(vma, data, map, out, named_got)
+         }
+         Architecture::Arm => decode_arm(vma, data, map, out, named_got),
+         Architecture::Riscv64 | Architecture::Riscv32 => {
+@@ -470,7 +472,7 @@ fn decode_x86_64(
+ ///   `jmp *disp32(%ebx)`, GOT-relative, where `%ebx` holds the GOT base (the PIC
+ ///   prologue's `call __x86.get_pc_thunk.bx; add $_,%ebx` sets it to
+ ///   `_GLOBAL_OFFSET_TABLE_`).  The slot is `base + sign(disp32)`.  This is the
+-///   i386-PIE analog of [`decode_x86_64`] (RIP-relative) / [`decode_aarch64`]
++///   i386-PIE analog of [`decode_x86_64`] (RIP-relative) / [`aarch64::decode`]
+ ///   (adrp/ldr veneer); naming these stubs lets the no-return pass flag `exit`
+ ///   and collapses the spurious fall-through loop (angr
+ ///   `test_decompiling_nl_i386_pie`).  `i386_got_base` is `None` when the GOT
+@@ -564,62 +566,6 @@ fn x86_stub_start(data: &[u8], i: usize, endbr: &[u8; 4]) -> usize {
+ // no-op, so those arches keep the pre-fix behavior.
+ // ---------------------------------------------------------------------------
+
+-/// AArch64 standard GNU `ld` import veneer (16-byte entry):
+-/// ```text
+-///     adrp x16, GOT_page          ; PC-relative page of the GOT slot
+-///     ldr  x17, [x16, #lo12]      ; 64-bit unsigned-offset load (scaled by 8)
+-///     add  x16, x16, #lo12
+-///     br   x17
+-/// ```
+-/// `got = (adrp_addr & !0xFFF) + (sign_extend_21(immhi:immlo) << 12) + imm12*8`.
+-/// A64 is fixed 32-bit little-endian, so we scan at 4-byte alignment matching the
+-/// `adrp x16` + `ldr x17,[x16]` pair; the 32-byte PLT0 header and any leading
+-/// `bti c` fall out of the pattern, and the GOT-vs-map cross-check drops the rest.
+-fn decode_aarch64(
+-    vma: u64,
+-    data: &[u8],
+-    map: &HashMap<u64, Vec<u8>>,
+-    out: &mut Vec<PltSym>,
+-    named_got: &mut HashSet<u64>,
+-) {
+-    let mut off = 0usize;
+-    while off + 8 <= data.len() {
+-        let adrp = u32::from_le_bytes([data[off], data[off + 1], data[off + 2], data[off + 3]]);
+-        let ldr =
+-            u32::from_le_bytes([data[off + 4], data[off + 5], data[off + 6], data[off + 7]]);
+-
+-        // adrp Xd, imm: op=1 (bit31), bits[28:24]=10000; immlo=bits[30:29],
+-        // immhi=bits[23:5], Rd=bits[4:0].
+-        let is_adrp = (adrp >> 31) & 1 == 1 && (adrp >> 24) & 0x1f == 0b1_0000;
+-        let adrp_rd = adrp & 0x1f;
+-        // ldr Xt,[Xn,#imm] 64-bit unsigned offset: size=11(bits[31:30]),
+-        // bits[29:24]=111001, opc=01(bits[23:22]=LDR), imm12=bits[21:10],
+-        // Rn=bits[9:5], Rt=bits[4:0].
+-        let is_ldr = (ldr >> 30) & 0x3 == 0b11
+-            && (ldr >> 24) & 0x3f == 0b11_1001
+-            && (ldr >> 22) & 0x3 == 0b01;
+-        let ldr_rn = (ldr >> 5) & 0x1f;
+-        let ldr_rt = ldr & 0x1f;
+-
+-        if is_adrp && adrp_rd == 16 && is_ldr && ldr_rn == 16 && ldr_rt == 17 {
+-            let immlo = ((adrp >> 29) & 0x3) as i64;
+-            let immhi = ((adrp >> 5) & 0x7_ffff) as i64; // 19 bits
+-            let mut imm21 = (immhi << 2) | immlo;
+-            if imm21 & (1 << 20) != 0 {
+-                imm21 -= 1 << 21; // sign-extend the 21-bit page offset
+-            }
+-            let page_off = imm21 << 12;
+-            let ldr_off = (((ldr >> 10) & 0xfff) as u64) * 8; // 64-bit scale
+-            let adrp_addr = vma.wrapping_add(off as u64);
+-            let got = (adrp_addr & !0xFFF)
+-                .wrapping_add(page_off as u64)
+-                .wrapping_add(ldr_off);
+-            record(adrp_addr, got, map, out, named_got);
+-        }
+-        off += 4;
+-    }
+-}
+-
+ /// ARM A32 "modified immediate" (data-processing operand2): an 8-bit value
+ /// `imm8` rotated right by `2*rot`.  `op2` is the low 12 bits of the instruction.
+ fn arm_modified_immediate(op2: u32) -> u32 {
+@@ -1159,32 +1105,6 @@ mod tests {
+     //! in `loadimage_object`'s tests.
+     use super::*;
+
+-    #[test]
+-    fn aarch64_plt_decode() {
+-        // clang bytes: `adrp x16,0x3000; ldr x17,[x16,#0xff8]; add x16,x16,#0xff8; br x17`.
+-        let mut data: Vec<u8> = vec![0u8; 32]; // dummy PLT0 header
+-        data.extend_from_slice(&0xf0000010u32.to_le_bytes()); // adrp x16, +0x3000
+-        data.extend_from_slice(&0xf947fe11u32.to_le_bytes()); // ldr  x17,[x16,#0xff8]
+-        data.extend_from_slice(&0x913fe210u32.to_le_bytes()); // add  x16,x16,#0xff8
+-        data.extend_from_slice(&0xd61f0220u32.to_le_bytes()); // br   x17
+-
+-        let vma = 0x10000u64;
+-        let adrp_addr = vma + 32;
+-        // got = (adrp_addr & !0xFFF) + page(0x3000) + ldr_off(0xff8)
+-        let expected_got = (adrp_addr & !0xFFF) + 0x3000 + 0xff8;
+-        assert_eq!(expected_got, 0x13ff8);
+-
+-        let mut map: HashMap<u64, Vec<u8>> = HashMap::new();
+-        map.insert(expected_got, b"read".to_vec());
+-        let mut out: Vec<PltSym> = Vec::new();
+-        let mut named: HashSet<u64> = HashSet::new();
+-        decode_aarch64(vma, &data, &map, &mut out, &mut named);
+-
+-        assert_eq!(out.len(), 1);
+-        assert_eq!(out[0].addr, adrp_addr);
+-        assert_eq!(out[0].name, b"read".to_vec());
+-    }
+-
+     #[test]
+     fn arm_plt_decode() {
+         // clang bytes: `add ip,pc,#0x600000; add ip,ip,#0x3000; ldr pc,[ip,#0xff8]!`.
+diff --git a/decompiler/crates/kuna-analysis/src/loader/elf_plt/aarch64.rs b/decompiler/crates/kuna-analysis/src/loader/elf_plt/aarch64.rs
+new file mode 100644
+index 00000000..ee493912
+--- /dev/null
++++ b/decompiler/crates/kuna-analysis/src/loader/elf_plt/aarch64.rs
+@@ -0,0 +1,237 @@
++//! AArch64 PLT entry identity, shared by section and PT_DYNAMIC scans.
++//!
++//! Recognize the complete standard GNU/LLVM veneer, with optional BTI c and
++//! AUTIA1716 as described in Arm's System V ABI, "Sample PLT sequences":
++//! https://github.com/ARM-software/abi-aa/blob/main/sysvabi64/sysvabi64.rst#sample-plt-sequences
++//! Correlate the decoded GOT slot with the relocation owner in the parent.
++//! Prefixes belong to the entry; the ADRP's own PC supplies the page. An
++//! ordinary preceding instruction is never absorbed into the entry. Other
++//! veneer forms remain unrecognized rather than inheriting a guessed name.
++
++use std::collections::{HashMap, HashSet};
++
++use super::{record, PltSym};
++
++const BTI_C: u32 = 0xd503245f;
++const AUTIA1716: u32 = 0xd503219f;
++const BR_X17: u32 = 0xd61f0220;
++
++fn word(data: &[u8], off: usize) -> Option<u32> {
++    let bytes = data.get(off..)?.get(..4)?;
++    Some(u32::from_le_bytes(bytes.try_into().ok()?))
++}
++
++pub(super) fn decode(
++    vma: u64,
++    data: &[u8],
++    map: &HashMap<u64, Vec<u8>>,
++    out: &mut Vec<PltSym>,
++    named_got: &mut HashSet<u64>,
++) {
++    if vma & 3 != 0 {
++        return;
++    }
++    for off in (0..data.len()).step_by(4) {
++        let Some(adrp) = word(data, off) else { break };
++        // ADRP X16, page; opcode plus destination, with both immediate fields free.
++        if adrp & 0x9f00001f != 0x90000010 {
++            continue;
++        }
++        let body = &data[off..];
++        let Some(ldr) = word(body, 4) else { continue };
++        // LDR X17,[X16,#imm12*8], not a 32-bit load, another register or a call.
++        if ldr & 0xffc003ff != 0xf9400211 {
++            continue;
++        }
++        let lo = ((ldr >> 10) & 0xfff) * 8;
++        // The ADD must form exactly the same GOT slot for the lazy resolver
++        // (and for PAC's modifier); neither an unrelated load nor an incomplete
++        // ADRP/LDR pair establishes an imported function.
++        if lo > 0xfff || word(body, 8) != Some(0x91000210 | (lo << 10)) {
++            continue;
++        }
++        let transfer = if word(body, 12) == Some(AUTIA1716) {
++            16
++        } else {
++            12
++        };
++        if word(body, transfer) != Some(BR_X17) {
++            continue;
++        }
++        let Some(adrp_addr) = vma.checked_add(off as u64) else {
++            break;
++        };
++        if adrp_addr.checked_add(transfer as u64 + 3).is_none() {
++            continue;
++        }
++        let imm21 = (((adrp >> 5) & 0x7ffff) << 2) | ((adrp >> 29) & 3);
++        let pages = ((imm21 as i32) << 11 >> 11) as i64;
++        let got = (adrp_addr & !0xfff)
++            .wrapping_add((pages << 12) as u64)
++            .wrapping_add(lo as u64);
++        let prefix = off.checked_sub(4).and_then(|at| word(data, at)) == Some(BTI_C);
++        let entry = if prefix { adrp_addr - 4 } else { adrp_addr };
++        record(entry, got, map, out, named_got);
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::{decode, PltSym};
++    use std::collections::{HashMap, HashSet};
++
++    // Actual Debian arm64 OpenSSH entry: BTI; ADRP 0x10f000; LDR #0x390;
++    // ADD #0x390; BR x17. Relocation 0x10f390 is free, not the neighbouring
++    // name printed by GNU objdump's synthetic fixed-stride PLT labels.
++    const BTI_C: u32 = 0xd503245f;
++    const AUTIA1716: u32 = 0xd503219f;
++    const BODY: [u32; 4] = [0x90000830, 0xf941ca11, 0x910e4210, 0xd61f0220];
++
++    fn words(words: &[u32]) -> Vec<u8> {
++        words.iter().flat_map(|word| word.to_le_bytes()).collect()
++    }
++
++    fn names(vma: u64, data: &[u8]) -> Vec<(u64, Vec<u8>)> {
++        let map = HashMap::from([(0x10f390, b"free".to_vec())]);
++        let mut out: Vec<PltSym> = Vec::new();
++        decode(vma, data, &map, &mut out, &mut HashSet::new());
++        out.into_iter().map(|s| (s.addr, s.name)).collect()
++    }
++
++    #[test]
++    fn aarch64_plt_decode() {
++        // clang bytes: `adrp x16,0x3000; ldr x17,[x16,#0xff8]; add x16,x16,#0xff8; br x17`.
++        let mut data: Vec<u8> = vec![0u8; 32]; // dummy PLT0 header
++        data.extend_from_slice(&0xf0000010u32.to_le_bytes()); // adrp x16, +0x3000
++        data.extend_from_slice(&0xf947fe11u32.to_le_bytes()); // ldr  x17,[x16,#0xff8]
++        data.extend_from_slice(&0x913fe210u32.to_le_bytes()); // add  x16,x16,#0xff8
++        data.extend_from_slice(&0xd61f0220u32.to_le_bytes()); // br   x17
++
++        let vma = 0x10000u64;
++        let adrp_addr = vma + 32;
++        // got = (adrp_addr & !0xFFF) + page(0x3000) + ldr_off(0xff8)
++        let expected_got = (adrp_addr & !0xFFF) + 0x3000 + 0xff8;
++        assert_eq!(expected_got, 0x13ff8);
++
++        let mut map: HashMap<u64, Vec<u8>> = HashMap::new();
++        map.insert(expected_got, b"read".to_vec());
++        let mut out: Vec<PltSym> = Vec::new();
++        let mut named: HashSet<u64> = HashSet::new();
++        decode(vma, &data, &map, &mut out, &mut named);
++
++        assert_eq!(out.len(), 1);
++        assert_eq!(out[0].addr, adrp_addr);
++        assert_eq!(out[0].name, b"read".to_vec());
++    }
++
++    #[test]
++    fn bti_and_plain_entries_share_the_relocation_name_not_the_body_identity() {
++        let mut entry = vec![BTI_C];
++        entry.extend_from_slice(&BODY);
++        assert_eq!(names(0xbad0, &words(&entry)), [(0xbad0, b"free".to_vec())]);
++        assert_eq!(names(0xbad4, &words(&BODY)), [(0xbad4, b"free".to_vec())]);
++    }
++
++    #[test]
++    fn pac_and_bti_pac_entries_keep_their_entry_address() {
++        let mut entry = BODY[..3].to_vec();
++        entry.extend([AUTIA1716, BODY[3]]);
++        assert_eq!(names(0xbad4, &words(&entry)), [(0xbad4, b"free".to_vec())]);
++        entry.insert(0, BTI_C);
++        assert_eq!(names(0xbad0, &words(&entry)), [(0xbad0, b"free".to_vec())]);
++    }
++
++    #[test]
++    fn only_the_exact_immediate_bti_call_prefix_extends_the_entry() {
++        for prefix in [0xd503201f, 0xd503249f, 0xd50324df, 0xd503245e, 0] {
++            let mut entry = vec![prefix];
++            entry.extend_from_slice(&BODY);
++            assert_eq!(names(0xbad0, &words(&entry)), [(0xbad4, b"free".to_vec())]);
++        }
++        let mut entry = vec![BTI_C, 0xd503201f];
++        entry.extend_from_slice(&BODY);
++        assert_eq!(names(0xbacc, &words(&entry)), [(0xbad4, b"free".to_vec())]);
++    }
++
++    #[test]
++    fn incomplete_or_corrupt_veneer_never_consumes_a_relocation() {
++        for pac in [false, true] {
++            let mut entry = vec![BTI_C];
++            entry.extend_from_slice(&BODY[..3]);
++            if pac {
++                entry.push(AUTIA1716);
++            }
++            entry.push(BODY[3]);
++            let data = words(&entry);
++            for len in 0..data.len() {
++                assert!(
++                    names(0xbad0, &data[..len]).is_empty(),
++                    "truncated at {len}, PAC={pac}"
++                );
++            }
++        }
++        for (index, word) in [
++            (0, BODY[0] ^ 1),         // wrong page register
++            (1, BODY[1] ^ 1),         // wrong load register
++            (1, BODY[1] ^ (1 << 30)), // 32-bit load
++            (2, 0xd503201f),          // no ADD
++            (2, BODY[2] ^ (1 << 10)), // inconsistent GOT modifier
++            (2, BODY[2] | (1 << 22)), // ADD's shifted immediate
++            (3, 0xd63f0220),          // BLR is a call, not the veneer transfer
++            (3, 0xd61f0200),          // BR x16 is not the loaded x17
++        ] {
++            let mut body = BODY;
++            body[index] = word;
++            assert!(
++                names(0xbad4, &words(&body)).is_empty(),
++                "corrupt index {index}"
++            );
++        }
++        let mut body = BODY[..3].to_vec();
++        body.extend([0xd503219e, BODY[3]]); // not AUTIA1716
++        assert!(names(0xbad4, &words(&body)).is_empty());
++    }
++
++    #[test]
++    fn adjacent_entries_use_adrp_pc_and_exact_slots_without_stride_assumptions() {
++        // First ADRP sits on the next page after its BTI, with a negative page
++        // delta. The second plain entry is adjacent: no fixed 16/24-byte stride.
++        let first = [BTI_C, 0xf0fffff0, 0xf947fe11, 0x913fe210, 0xd61f0220];
++        let second = [0xf0fffff0, 0xf947fa11, 0x913fc210, 0xd61f0220];
++        let mut data = words(&first);
++        data.extend(words(&second));
++        let map = HashMap::from([(0x30ff8, b"one".to_vec()), (0x30ff0, b"two".to_vec())]);
++        let mut out = Vec::new();
++        let mut named = HashSet::new();
++        decode(0x30ffc, &data, &map, &mut out, &mut named);
++        assert_eq!(
++            out.iter()
++                .map(|s| (s.addr, s.name.as_slice()))
++                .collect::<Vec<_>>(),
++            [(0x30ffc, b"one".as_slice()), (0x31010, b"two".as_slice())]
++        );
++        decode(0x30ffc, &data, &map, &mut out, &mut named);
++        assert_eq!(out.len(), 2, "shared GOT deduplication remains intact");
++    }
++
++    #[test]
++    fn absent_slot_misalignment_and_overflow_cannot_create_entries() {
++        let data = words(&BODY);
++        assert!(names(0xbad5, &data).is_empty());
++        assert!(names(0xbbad4, &data).is_empty());
++        let mut out = Vec::new();
++        let map = HashMap::from([(0x104390, b"wrapped".to_vec())]);
++        decode(
++            0xbad4,
++            &data,
++            &HashMap::new(),
++            &mut out,
++            &mut HashSet::new(),
++        );
++        assert!(out.is_empty());
++        let mut overflow = words(&[BTI_C, BTI_C]);
++        overflow.extend_from_slice(&data);
++        decode(u64::MAX - 3, &overflow, &map, &mut out, &mut HashSet::new());
++        assert!(out.is_empty());
++    }
++}
 diff --git a/decompiler/crates/kuna-cli/Cargo.toml b/decompiler/crates/kuna-cli/Cargo.toml
 index 06231a77..db79599c 100644
 --- a/decompiler/crates/kuna-cli/Cargo.toml
