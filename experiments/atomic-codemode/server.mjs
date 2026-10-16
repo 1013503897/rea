@@ -5,11 +5,21 @@ import { z } from "zod";
 import { AtomicSession, methods, reference } from "./api.mjs";
 import { executeJavaScript } from "./executor.mjs";
 import { referenceInput } from "./reference.mjs";
+import { EXECUTION_LIMITS } from "./limits.mjs";
 import { TARGET_CONTENT_RESULT_META } from "../../dist/server/toolResultEncoding.js";
 import { appendFile } from "node:fs/promises";
 
 const DIRECT_REFERENCE_LANGUAGE =
   "Direct MCP calls: use the displayed facts_* tools with the same JSON arguments; results have {ok,context,data}.";
+const executionInput = z.strictObject({
+  code: z.string().min(1).max(EXECUTION_LIMITS.code_utf8_bytes),
+  timeout_ms: z
+    .number()
+    .int()
+    .min(EXECUTION_LIMITS.timeout_ms.minimum)
+    .max(EXECUTION_LIMITS.timeout_ms.maximum)
+    .default(EXECUTION_LIMITS.timeout_ms.default),
+});
 const session = new AtomicSession();
 const createServer = () => {
   const server = new McpServer({ name: "rea-codemode", version: "0.1.0" });
@@ -82,6 +92,7 @@ const createServer = () => {
         view: input.view,
         includeExamples: !direct,
         language: direct ? DIRECT_REFERENCE_LANGUAGE : undefined,
+        execution: !direct,
       }),
   );
   if (direct) {
@@ -95,11 +106,8 @@ const createServer = () => {
   } else {
     register(
       "execute_javascript",
-      "Execute a JavaScript async function body against the open binary's atomic rea API. Use reference first. Await rea methods, compose/filter locally, and return a small JSON answer with evidence IDs and unknowns. No Node/filesystem/network APIs. Fresh JS environment per call; analysis facts are reused across calls.",
-      z.strictObject({
-        code: z.string().min(1).max(32768),
-        timeout_ms: z.number().int().min(100).max(120000).default(120000),
-      }),
+      `Execute a JavaScript async function body against the open binary's atomic rea API. Use reference first. Await rea methods, compose/filter locally, and return a small JSON answer with evidence IDs and unknowns. Omit timeout_ms for the ${EXECUTION_LIMITS.timeout_ms.default} ms wall deadline (also the maximum); guest CPU is separately bounded. No Node/filesystem/network APIs. Fresh JS environment per call; analysis facts are reused across calls.`,
+      executionInput,
       (input, signal) =>
         executeJavaScript(session, input.code, {
           signal,

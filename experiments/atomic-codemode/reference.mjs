@@ -2,6 +2,7 @@
 import { z } from "zod";
 import { FactFailure } from "./fact-error.mjs";
 import { freezeFacts } from "./fact-reads.mjs";
+import { EXECUTION_LIMITS } from "./limits.mjs";
 const referenceViews = ["index", "contracts"];
 export const referenceInput = z.strictObject({
   query: z.string().default(""),
@@ -23,7 +24,7 @@ const returns = {
   references:
     "data:{results:[{ok,address,source:{evidence_id},items:[{source_row,from,to,kind,fromFunction:{address,name}|null,toFunction:{address,name}|null,instruction}],total,next_offset,coverage}|{ok:false,address,error}]}. source_row is the zero-based row in retained native xrefs; Evidence identity plus source_row identifies an occurrence. Coverage preserves examined/excluded/unattributed counts and unknown function scope/discovery. fields projects optional columns; endpoints/kind/source_row stay.",
   snapshot:
-    "data:{snapshot:string,entry,source:{evidence_id,sha256},facets:{code:{availability},recovered_ir:{availability,error?},operations:{availability,scope?,count?,root_count?,definition_frontier_count?,error?},calls:{availability,count?,by_opcode?:[{opcode,known_target_count,unknown_target_count}],coverage?,error?},values:{availability,scope?,count?,error?}},coverage}. Call counts cover all retained recovered calls, including is_dead rows, not complete machine/runtime calls; target knowledge comes from a non-null native target, independent of opcode. An unavailable facet omits counts; an available empty call facet reports zeros. The complete graph can be unavailable while operations reports a bounded projection count; an unavailable operation facet has unknown/null counts, never a fabricated empty set; code remains readable through the same handle.",
+    "data:{snapshot:string,entry,source:{evidence_id,sha256},facets:{code:{availability},recovered_ir:{availability,error?},operations:{availability,scope?,count?,root_count?,definition_frontier_count?,error?},calls:{availability,count?,by_opcode?:[{opcode,known_target_count,unknown_target_count}],coverage?,error?},values:{availability,scope?,count?,error?},switches?:{availability,count?,table_count?,partial_table_count?,case_count?,relation_count?,error?}},coverage}. Call counts cover all retained recovered calls, including is_dead rows, not complete machine/runtime calls; target knowledge comes from a non-null native target, independent of opcode. An unavailable facet omits counts; an available empty call facet reports zeros. The complete graph can be unavailable while operations reports a bounded projection count; an unavailable operation facet has unknown/null counts, never a fabricated empty set; code remains readable through the same handle.",
   operations:
     "data:{items:[{id,origin_address,block,is_dead,kind,opcode,output,input_count,definition_count,constant_count}],total,next_offset,evidence_id,coverage}. Native defaults are compact summaries; fields optionally selects statement,inputs,definitions,constants or summary columns; identity/is_dead stay. Native inputs:[{input_index,value_id,phi_predecessor,phi_predecessor_edge}], output:value_id|null; constants:[{value_id,input_index,value,printed_size_bytes,is_annotation}] retain exact u64 offsets, not arbitrary-width computed values; definitions:[{definition,use,input_index,value_id,phi_predecessor,phi_predecessor_edge}]. Page large input lists with relations kind:operands. Diagnostic rows retain legacy printed statements/occurrences and omit unavailable native counts. Projection scope is partial, with unknown CFG and definition frontier coverage.",
   relations:
@@ -98,7 +99,13 @@ export const createReference =
   (methods) =>
   (
     query = "",
-    { names = {}, language, includeExamples = true, view = "contracts" } = {},
+    {
+      names = {},
+      language,
+      includeExamples = true,
+      view = "contracts",
+      execution = true,
+    } = {},
   ) => {
     if (!referenceViews.includes(view))
       throw new FactFailure("invalid_input", "Unknown reference view");
@@ -136,16 +143,17 @@ export const createReference =
       })),
       coverage,
       unmatched_queries: selected.unmatched,
-      limits: {
-        execution_heap_mib: 64,
-        max_host_calls: 64,
-        output_utf8_bytes: 32768,
-      },
+      ...(execution ? { limits: EXECUTION_LIMITS } : {}),
       notes: [
         "Select exact displayed method names or canonical method IDs, separated by spaces/commas; a topic query searches descriptions. Empty query returns all contracts.",
-        "No process, filesystem, network, imports or Node globals in the execution environment.",
-        "Select facts inside code, return only what the question needs, and keep real source IDs and unknowns.",
-        "A fresh JavaScript environment is used per execute_javascript call; analysis snapshots live until close_binary.",
+        "Return only the facts the question needs, and keep real source IDs and unknowns.",
+        ...(execution
+          ? [
+              "No process, filesystem, network, imports or Node globals in the execution environment.",
+              `Omit timeout_ms to use the ${EXECUTION_LIMITS.timeout_ms.default} ms wall deadline (also the MCP maximum); guest CPU has a separate ${EXECUTION_LIMITS.execution_cpu_ms} ms budget.`,
+              "A fresh JavaScript environment is used per execute_javascript call; analysis snapshots live until close_binary.",
+            ]
+          : []),
       ],
     };
   };

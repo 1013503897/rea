@@ -1,8 +1,8 @@
 import { getQuickJS } from "quickjs-emscripten";
 import { methods } from "./api.mjs";
-import { MAX_BRIDGE_BYTES as MAX_BRIDGE } from "./limits.mjs";
+import { MAX_BRIDGE_BYTES as MAX_BRIDGE, EXECUTION_LIMITS } from "./limits.mjs";
 
-const MAX_OUTPUT = 32768;
+const MAX_OUTPUT = EXECUTION_LIMITS.output_utf8_bytes;
 const failure = (code, message) => ({ ok: false, error: { code, message } });
 const projectGuestError = (code, error) => {
   const message =
@@ -15,8 +15,7 @@ const projectGuestError = (code, error) => {
   )
     return {
       code: "output_budget",
-      message:
-        "JavaScript error exceeds the 32 KiB output budget; its message is omitted. Native Evidence remains retained.",
+      message: `JavaScript error exceeds the ${MAX_OUTPUT / 1024} KiB output budget; its message is omitted. Native Evidence remains retained.`,
       details: {
         original_error_code: code,
         original_message_code_units: message.length,
@@ -30,12 +29,15 @@ export const executeJavaScript = async (
   code,
   {
     signal = new AbortController().signal,
-    timeoutMs = 120000,
-    cpuBudgetMs = 2000,
+    timeoutMs = EXECUTION_LIMITS.timeout_ms.default,
+    cpuBudgetMs = EXECUTION_LIMITS.execution_cpu_ms,
   } = {},
 ) => {
-  if (Buffer.byteLength(code) > 32768)
-    return failure("code_budget", "JavaScript source exceeds 32 KiB");
+  if (Buffer.byteLength(code) > EXECUTION_LIMITS.code_utf8_bytes)
+    return failure(
+      "code_budget",
+      `JavaScript source exceeds ${EXECUTION_LIMITS.code_utf8_bytes / 1024} KiB`,
+    );
   const started = performance.now();
   const context = session.context;
   const lease = context?.lease;
@@ -45,8 +47,8 @@ export const executeJavaScript = async (
   const timer = setTimeout(() => stop.abort(), timeoutMs);
   const QuickJS = await getQuickJS();
   const runtime = QuickJS.newRuntime();
-  runtime.setMemoryLimit(64 * 1024 * 1024);
-  runtime.setMaxStackSize(512 * 1024);
+  runtime.setMemoryLimit(EXECUTION_LIMITS.execution_heap_mib * 1024 * 1024);
+  runtime.setMaxStackSize(EXECUTION_LIMITS.execution_stack_bytes);
   const budget = { used: 0, deadline: 0, exhausted: false };
   const runGuest = (work) => {
     budget.deadline = Date.now() + Math.max(1, cpuBudgetMs - budget.used);
@@ -83,8 +85,7 @@ export const executeJavaScript = async (
         ok: false,
         error: {
           code: "output_budget",
-          message:
-            "Return a smaller projection (32 KiB UTF-8 output budget); native Evidence remains retained",
+          message: `Return a smaller projection (${MAX_OUTPUT / 1024} KiB UTF-8 output budget); native Evidence remains retained`,
         },
       };
     else
@@ -145,7 +146,10 @@ const installBridge = (
   const bridge = vm.newFunction("analysis", (methodHandle, inputHandle) => {
     const name = vm.getString(methodHandle);
     const inputText = vm.getString(inputHandle);
-    if (calls.length >= 64 || Buffer.byteLength(inputText) > MAX_BRIDGE)
+    if (
+      calls.length >= EXECUTION_LIMITS.max_host_calls ||
+      Buffer.byteLength(inputText) > MAX_BRIDGE
+    )
       throw new Error("Host call or argument budget exceeded");
     const promise = vm.newPromise();
     const index = calls.length;

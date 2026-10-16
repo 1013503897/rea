@@ -107,3 +107,26 @@ uncontrolled-cache/host and unmeasured-remote-compute limitations remain as abov
 Kernel peaks include charged file cache, not RSS. Both clients already provide
 JavaScript composition. Full records use the declared `-v2` local paths; the
 unchanged summarizer reconstructs actual usage but does not grade correctness.
+
+## Discovery follow-up
+
+The execution owner, MCP admission schema and Code Mode help now use one frozen
+policy in `limits.mjs`. Both the execution description and detailed reference
+state that omitting `timeout_ms` uses the 120,000 ms default/maximum; the separate
+2,000 ms guest CPU budget remains explicit. Heap, stack, host-call, source and
+result budgets are unchanged. The direct adapter omits Code Mode execution
+limits/notes. Snapshot documentation also names the optional independent switch
+facet, avoiding a stale return description after the new exporter.
+
+All 73 shared JS tests pass (4.349 family wall / 4.114 CPU seconds, 79.6 MiB
+kernel peak). The actual SDK catalogs and named references validate in both
+lanes. The Code Mode MCP check rejects the observed 200,000 ms parameter, then
+successfully executes a defaulted request with zero host calls (final catalog
+check: 5.086 family wall / 4.111 CPU seconds, 142.2 MiB kernel peak).
+A real zlib MCP check also verifies bounded
+ordinary/oversized guest errors and retained source access after failure
+(1.530 wall / 1.338 CPU seconds, 136.6 MiB). All have OOM 0 and verified cleanup;
+focused lint has no warnings and formatting passes. No native rebuild or full
+repository gate ran for this discovery change. No new model pair has measured
+whether it reduces mistakes or whole-task cost; earlier results retain their
+original runtime pins.

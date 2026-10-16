@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 import { Client } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import Ajv2020 from "ajv/dist/2020.js";
+import { EXECUTION_LIMITS } from "./limits.mjs";
 import {
   createVerifierRun,
   completeVerifierRun,
@@ -56,6 +57,44 @@ for (const direct of [false, true]) {
     assert.equal(selected.coverage.declared_methods, 15);
     const ajv = new Ajv2020({ strict: false });
     for (const tool of catalog.tools) ajv.compile(tool.inputSchema);
+    assert.equal(Object.hasOwn(selected, "limits"), !direct);
+    if (!direct) {
+      assert.deepEqual(selected.limits, EXECUTION_LIMITS);
+      const execution = catalog.tools.find(
+        (tool) => tool.name === "execute_javascript",
+      );
+      const timeout = execution.inputSchema.properties.timeout_ms;
+      assert.deepEqual(
+        {
+          minimum: timeout.minimum,
+          maximum: timeout.maximum,
+          default: timeout.default,
+        },
+        EXECUTION_LIMITS.timeout_ms,
+      );
+      assert.ok(
+        execution.description.includes(
+          `${timeout.default} ms wall deadline (also the maximum)`,
+        ),
+      );
+      const validate = ajv.compile(execution.inputSchema);
+      assert.equal(validate({ code: "return 7" }), true);
+      assert.equal(validate({ code: "return 7", timeout_ms: 200000 }), false);
+      const rejected = await client.callTool({
+        name: "execute_javascript",
+        arguments: { code: "return 7", timeout_ms: 200000 },
+      });
+      assert.equal(rejected.isError, true);
+      const resumed = await client.callTool({
+        name: "execute_javascript",
+        arguments: { code: "return 7" },
+      });
+      const value = JSON.parse(resumed.content[0].text);
+      assert.equal(value.ok, true);
+      assert.equal(value.value, 7);
+      assert.equal(value.execution.host_calls, 0);
+      assert.deepEqual(value.evidence_ids, []);
+    }
     for (const method of selected.methods) {
       ajv.compile(method.input_schema);
       assert.equal(method.name, prefix + method.method);
@@ -164,6 +203,7 @@ for (const direct of [false, true]) {
       index_bytes: Buffer.byteLength(JSON.stringify(index)),
       selected_reference_bytes: Buffer.byteLength(JSON.stringify(selected)),
       actual_catalog_and_named_schema_checks_passed: true,
+      execution_policy_and_rejection_recovery_checked: !direct,
     });
   } catch (error) {
     failures.push(error.stack ?? String(error));
