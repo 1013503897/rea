@@ -93,8 +93,15 @@ the ledger now records actual model responses and client dispatch/wait calls.
 owner. Recovered operations use `origin_address` and blocks `origin_start`;
 these locations cannot be substituted for machine branch destinations. The
 value-origin trial demonstrates why this boundary matters. The experiment
-now has thirteen fact methods, still behind the same four-tool Code Mode
+now has fourteen fact methods, still behind the same four-tool Code Mode
 catalog.
+
+`calls` connects recovered call operations to native target specifications and
+separates argument SSA values from passing storage. `values(is_input:true)`
+selects retained callee inputs for exact storage comparisons. These candidate
+links preserve snapshot identities, missing specifications, unknown storage and
+runtime-binding limits. The [cross-function task and oracle](call-oracle.md)
+are fixed before its real-model trials; the native wire format is now version 2.
 
 `bytes` reads explicit virtual-address ranges as native loaded-image hex without
 decoding them as instructions. Batched reads preserve short reads and individual

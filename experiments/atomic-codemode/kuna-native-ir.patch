@@ -684,12 +684,143 @@ index 40b093b6..8f03b654 100644
  toml = { version = "1.1", default-features = false, features = ["parse", "serde", "std"] }
 
  [build-dependencies]
+diff --git a/decompiler/crates/kuna-decomp/src/substrate/atomic_calls.rs b/decompiler/crates/kuna-decomp/src/substrate/atomic_calls.rs
+new file mode 100644
+index 00000000..c9d9ec70
+--- /dev/null
++++ b/decompiler/crates/kuna-decomp/src/substrate/atomic_calls.rs
+@@ -0,0 +1,125 @@
++//! Recovered call relations. Argument values and passing storage are separate.
++use crate::{
++    atomic_facts::{operation_id, value_id},
++    context::OpId,
++    fspec::{FuncCallSpecs, OFFSET_UNKNOWN},
++    funcdata::Funcdata,
++};
++use kuna_base::address::Address;
++use serde::Serialize;
++
++#[derive(Debug, Clone, Serialize)]
++pub struct Location {
++    pub space: String,
++    pub offset: String,
++}
++#[derive(Debug, Clone, Serialize)]
++pub struct Storage {
++    #[serde(flatten)]
++    pub location: Location,
++    pub size_bytes: i32,
++}
++#[derive(Debug, Clone, Serialize)]
++pub struct Argument {
++    pub input_index: i32,
++    pub value_id: Option<String>,
++    pub storage: Option<Storage>,
++    pub storage_authority: Option<&'static str>,
++}
++#[derive(Debug, Clone, Serialize)]
++pub struct Prototype {
++    pub model: Option<String>,
++    pub model_unknown: Option<bool>,
++    pub inputs_locked: bool,
++    pub variadic: bool,
++    pub parameter_shift: i32,
++}
++#[derive(Debug, Clone, Serialize)]
++pub struct CallFact {
++    pub id: String,
++    pub spec_available: bool,
++    pub target: Option<Location>,
++    pub target_name: Option<String>,
++    pub arguments: Vec<Argument>,
++    pub output: Option<String>,
++    pub prototype: Option<Prototype>,
++    pub stack_offset: Option<String>,
++}
++fn location(address: &Address) -> Option<Location> {
++    address.get_space().map(|space| Location {
++        space: space.get_name().to_string(),
++        offset: format!("0x{:x}", address.get_offset()),
++    })
++}
++fn storage(address: &Address, size_bytes: i32) -> Option<Storage> {
++    if size_bytes <= 0 {
++        return None;
++    }
++    location(address).map(|location| Storage {
++        location,
++        size_bytes,
++    })
++}
++
++pub fn collect(fd: &Funcdata, key: OpId, spec: Option<&FuncCallSpecs>) -> Result<CallFact, String> {
++    let op = fd.obank().get(key).ok_or("stale call operation")?;
++    let arguments = (1..op.num_input())
++        .map(|input_index| {
++            // The native owner stores finalized passing locations separately
++            // from SSA values. Admit that mapping only with matching arity.
++            // Placeholder/shifted inputs are not source parameter ordinals.
++            let binding = spec.and_then(|spec| {
++                if spec.get_paramshift() != 0 || spec.get_stack_placeholder_slot() == input_index {
++                    return None;
++                }
++                if spec.final_input_storage().len() + 1 == op.num_input() as usize {
++                    let (address, size) = &spec.final_input_storage()[(input_index - 1) as usize];
++                    return storage(address, *size).map(|s| (s, "final-input-storage"));
++                }
++                let proto = spec.proto();
++                if proto.has_store() && proto.is_input_locked() {
++                    return proto.get_param(input_index - 1).and_then(|param| {
++                        storage(&param.get_address(), param.get_size())
++                            .map(|s| (s, "locked-prototype"))
++                    });
++                }
++                None
++            });
++            let (storage, storage_authority) = match binding {
++                Some((s, authority)) => (Some(s), Some(authority)),
++                None => (None, None),
++            };
++            Argument {
++                input_index,
++                value_id: op.get_in(input_index).map(value_id),
++                storage,
++                storage_authority,
++            }
++        })
++        .collect();
++    Ok(CallFact {
++        id: operation_id(fd, key)?,
++        spec_available: spec.is_some(),
++        target: spec.and_then(|s| location(s.get_entry_address())),
++        target_name: spec
++            .and_then(|s| (!s.get_name().is_empty()).then(|| s.get_name().to_string())),
++        arguments,
++        output: op.get_out().map(value_id),
++        prototype: spec.map(|s| {
++            let proto = s.proto();
++            Prototype {
++                model: proto
++                    .has_model()
++                    .then(|| proto.get_model_name().to_string()),
++                model_unknown: proto.has_model().then(|| proto.is_model_unknown()),
++                inputs_locked: proto.is_input_locked(),
++                variadic: proto.is_dotdotdot(),
++                parameter_shift: s.get_paramshift(),
++            }
++        }),
++        stack_offset: spec.and_then(|s| {
++            (s.get_spacebase_offset() != OFFSET_UNKNOWN)
++                .then(|| format!("0x{:x}", s.get_spacebase_offset()))
++        }),
++    })
++}
 diff --git a/decompiler/crates/kuna-decomp/src/substrate/atomic_facts.rs b/decompiler/crates/kuna-decomp/src/substrate/atomic_facts.rs
 new file mode 100644
-index 00000000..65e18270
+index 00000000..822f9d8e
 --- /dev/null
 +++ b/decompiler/crates/kuna-decomp/src/substrate/atomic_facts.rs
-@@ -0,0 +1,274 @@
+@@ -0,0 +1,295 @@
 +//! Opt-in, read-only export of the recovered function IR for the REA experiment.
 +//! IDs are local to this captured model; addresses alone are not SSA identities.
 +use crate::{
@@ -700,7 +831,7 @@ index 00000000..65e18270
 +use kuna_num::opcodes::OpCode;
 +use serde::Serialize;
 +use slotmap::Key;
-+use std::collections::BTreeSet;
++use std::collections::{BTreeSet, HashMap};
 +
 +#[derive(Debug, Clone, Serialize)]
 +pub struct FunctionFacts {
@@ -708,6 +839,7 @@ index 00000000..65e18270
 +    pub blocks: Vec<BlockFact>,
 +    pub operations: Vec<OperationFact>,
 +    pub values: Vec<ValueFact>,
++    pub calls: Vec<crate::atomic_calls::CallFact>,
 +    pub coverage: Coverage,
 +}
 +#[derive(Debug, Clone, Serialize)]
@@ -765,10 +897,10 @@ index 00000000..65e18270
 +    pub definition: Option<String>,
 +    pub type_name: String,
 +}
-+fn value_id(id: VarnodeId) -> String {
++pub(super) fn value_id(id: VarnodeId) -> String {
 +    format!("v{:x}", id.data().as_ffi())
 +}
-+fn operation_id(fd: &Funcdata, id: OpId) -> Result<String, String> {
++pub(super) fn operation_id(fd: &Funcdata, id: OpId) -> Result<String, String> {
 +    let operation = fd.obank().get(id).ok_or("stale operation identity")?;
 +    let seq = operation.get_seq_num();
 +    Ok(format!(
@@ -793,6 +925,18 @@ index 00000000..65e18270
 +    }
 +    let mut blocks = Vec::new();
 +    let mut operations = Vec::new();
++    if fd.num_calls() < 0 || fd.num_calls() as usize > MAX_OPERATIONS {
++        return Err("atomic call-spec capacity exceeded".into());
++    }
++    // One pass: repeatedly looking up a spec by operation would be quadratic.
++    let mut specs = HashMap::new();
++    for i in 0..fd.num_calls() {
++        let spec = fd.get_call_specs(i);
++        if specs.insert(spec.get_op(), spec).is_some() {
++            return Err("duplicate native call-spec operation".into());
++        }
++    }
++    let mut calls = Vec::new();
 +    let mut value_keys = BTreeSet::new();
 +    let mut retained_ops = BTreeSet::new();
 +    let mut input_count = 0usize;
@@ -868,6 +1012,13 @@ index 00000000..65e18270
 +                .ok_or("atomic input count overflow")?;
 +            if input_count > MAX_INPUTS {
 +                return Err("atomic input-edge capacity exceeded".into());
++            }
++            if matches!(op.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND) {
++                calls.push(crate::atomic_calls::collect(
++                    fd,
++                    key,
++                    specs.get(&key).copied(),
++                )?);
 +            }
 +            if op.code() == OpCode::CPUI_BRANCHIND {
 +                coverage.indirect_branch_operations.push(id.clone());
@@ -957,10 +1108,11 @@ index 00000000..65e18270
 +    }
 +    coverage.omitted_definition_ids = missing.into_iter().collect();
 +    Ok(FunctionFacts {
-+        schema_version: 1,
++        schema_version: 2,
 +        blocks,
 +        operations,
 +        values,
++        calls,
 +        coverage,
 +    })
 +}
@@ -978,22 +1130,23 @@ index 39927ceb..844950a6 100644
      let num_input = fd.obank().get(op).ok_or_else(|| "render_op: stale op".to_string())?.num_input();
      let in_at = |i: int4| -> Option<VarnodeId> { fd.obank().get(op).and_then(|o| o.get_in(i)) };
 diff --git a/decompiler/crates/kuna-decomp/src/substrate/mod.rs b/decompiler/crates/kuna-decomp/src/substrate/mod.rs
-index 00528cb5..08da88eb 100644
+index 00528cb5..be1b84d3 100644
 --- a/decompiler/crates/kuna-decomp/src/substrate/mod.rs
 +++ b/decompiler/crates/kuna-decomp/src/substrate/mod.rs
-@@ -11,6 +11,7 @@ pub mod funcdata_block;
+@@ -11,6 +11,8 @@ pub mod funcdata_block;
  pub mod funcdata_encode;
  pub mod funcdata_op;
  pub mod funcdata_printraw;
 +pub mod atomic_facts;
++pub mod atomic_calls;
  pub mod funcdata_varnode;
  pub mod dtype;
  pub mod context;
 diff --git a/docs/spec/00-overview.md b/docs/spec/00-overview.md
-index ce499c4f..e1bebe28 100644
+index ce499c4f..3c8e3470 100644
 --- a/docs/spec/00-overview.md
 +++ b/docs/spec/00-overview.md
-@@ -3431,3 +3431,30 @@ Reserving it creates no analysis varnode and changes no physical mapping or
+@@ -3431,3 +3431,39 @@ Reserving it creates no analysis varnode and changes no physical mapping or
  emitted C. Ghidra receives temporary storage for the logical local, rather than
  a persistable ordinary stack-variable location; ordinary symbol storage and
  register-plus-stack parameter JOINs keep their existing encoding.
@@ -1024,3 +1177,12 @@ index ce499c4f..e1bebe28 100644
 +retains C, locations and ordinary metadata. If that base record also cannot fit,
 +the command reports failure instead of truncating it or analyzing the target
 +again. This flag requires `--atomic-facts --json`; ordinary output is unchanged.
++
++Schema version 2 adds a structured record for every retained CALL/CALLIND.
++The `FuncCallSpecs` owner supplies the recovered entry, name and prototype
++properties; an fspec annotation's offset is never treated as a callee address.
++Arguments retain their operation input slot and SSA value separately from their
++passing storage. Storage comes from finalized native argument storage only when
++its arity matches, or from a locked prototype. Shifted arguments, placeholders
++and unavailable storage stay unknown. These facts describe the recovered model,
++not original source parameter ordinals, dynamic binding or runtime execution.

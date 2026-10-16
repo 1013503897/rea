@@ -134,10 +134,10 @@ observer limit establishes the exact producer sizes; it is not relabeled as a
 successful public-provider workflow. The old engine is preserved locally by its
 `7d357e75…` digest for historical reproduction.
 
-| Function | Previous pretty JSON bytes | Revised source bytes | C characters | Revised graph |
-| --- | ---: | ---: | ---: | --- |
-| `sqlite3Parser` | 8,492,810 | 4,526,811 | 50,508 | All 5,164 operations retained |
-| `sqlite3Pragma` | 16,728,407 | 136,501 | 67,300 | Explicitly unavailable at encoded-byte capacity |
+| Function        | Previous pretty JSON bytes | Revised source bytes | C characters | Revised graph                                   |
+| --------------- | -------------------------: | -------------------: | -----------: | ----------------------------------------------- |
+| `sqlite3Parser` |                  8,492,810 |            4,526,811 |       50,508 | All 5,164 operations retained                   |
+| `sqlite3Pragma` |                 16,728,407 |              136,501 |       67,300 | Explicitly unavailable at encoded-byte capacity |
 
 The structural fix is at the producing serialization boundary. Atomic output
 uses the existing record producer and shared compact ASCII-safe writer.
@@ -183,3 +183,62 @@ contradictory duplicated hex, invalid extents and rows, and preserves exact u64
 addresses. Completeness follows examined byte coverage rather than the native
 truncation flag. It never claims these loaded-image bytes are live memory or
 proves an original-file mapping. Targeted JS tests now total 41.
+
+## Structured call relations (wire version 2)
+
+The next observed gap was input zero of CALL: a native `fspec` annotation is an
+internal reference, not a code address. The read-only `atomic_calls.rs` exporter
+now uses the existing `FuncCallSpecs` owner for recovered entry/name, model flags,
+argument passing storage and stack offset. A single operation-to-spec index
+avoids a linear lookup for every call. Input slots and SSA IDs remain separate
+from passing locations. Finalized storage is admitted only at matching arity;
+locked prototype storage is the alternative. Shifted inputs, placeholders,
+missing specs, unavailable storage and unresolved indirect entries remain
+explicit. There is no display-text parser or original-source ordinal claim.
+
+`calls` provides ID/origin filtering, field projection and paging through the
+shared SDK/CLI/MCP owner. Callee `values(is_input:true)` exposes retained input
+values for exact storage candidate matching. Source schemas, unique call
+ownership, call coverage, operand indexes/values and output identities are
+validated before exposing an index; a bad or old-version graph preserves valid
+C. Machine CALL instructions remain the independent check of a recovered edge.
+
+Engine `64c6b3fe5737056fc29c10b0aad6c7cbd489ad7d17bd1726141b77bdcf5e15b7`
+uses the same upstream revision, embedded specs and one-job build profile.
+The rebuild took 317.090 family wall seconds, 315.808 CPU seconds and a 2,145.695
+MiB kernel process-family memory peak (including charged file cache), OOM 0.
+The previous compact exporter engine is preserved by its SHA-256 locally.
+
+Real SQLite MCP verification passes both adapters, including a composed Code
+Mode join: caller `0x65211 -> 0x64060`, argument passing storage
+`register:0x38/8`, one matching callee input, and a bounded definition slice from
+the context updates to that input. Formatter calls `0x5f031`/`0x5f062` point to
+`0x2adc0`/`0x27e50`; their fspec offsets remain `0x10000`/`0x10001`.
+All three functions' C, ordinary metadata/line mappings, blocks, operations,
+values and existing coverage equal retained earlier captures. Those earlier
+sources were pretty-printed: encoded-size changes are not a call-exporter
+performance result. The structured call counts are 8, 33 and 2 respectively.
+
+The Code Mode verifier took 7.872 family wall / 7.573 CPU seconds, 297.1 MiB;
+the direct verifier took 7.771 / 7.499 seconds, 278.7 MiB. These differ in assertion
+calls and warm file-cache state, so they are verification receipts, not a
+controlled adapter speed comparison. Both verified cleanup and OOM 0. The
+existing real zlib controller/phi/instruction verifier also passes with this
+engine (10.992 wall / 10.795 CPU seconds, 285.7 MiB, cleanup verified, OOM 0).
+`check-spec` passes in its default lenient mode; full upstream gates still have
+not run. The independent cross-function question and acceptance criteria are in
+[call-oracle.md](call-oracle.md), pinned before model evaluation.
+
+The strengthened verifier additionally reads all five retained indirect calls in
+this parser and checks their unknown targets. Machine bytes `ff5328` at
+`0x644eb` independently describe a register-indirect CALL. The Code Mode rerun
+passes (16.628 wall / 8.239 CPU seconds, 300.5 MiB); native test compilation was
+also active on the same CPU, so its wall time is not an isolated performance
+sample. The source checks pass 45 JS tests across both prototype directories and
+two Python ledger tests; changed source lint and formatting pass.
+
+A current coverage limit remains: call facts are part of the recovered IR
+facet. A function that exceeds graph capacity also loses these call records,
+even if a selected call-target view could fit. This is a reason to explore
+independent fact facets; it must not be mistaken for proof of no calls or full
+coverage on large functions. No full provider parity claim is made.

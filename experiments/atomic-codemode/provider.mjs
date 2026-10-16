@@ -92,7 +92,7 @@ export class KunaFactOwner {
       engine_version: owner.#installation.version,
       address_space: "native-default",
       analysis_model: owner.#nativeIR
-        ? "experimental-native-ir-v1"
+        ? "experimental-native-ir-v2"
         : "diagnostic-ssa-1.833",
       profile: owner.#nativeIR
         ? "pinned engine with embedded specs; fresh private engine cache per lease; byte reads suppress global discovery; other native CLI defaults; no annotations"
@@ -421,6 +421,10 @@ export class KunaFactOwner {
       ...model.values(input),
       coverage: model.coverage,
     }));
+  }
+  async calls(input) {
+    this.#requireNativeIR(input.snapshot);
+    return this.#query(input, (model) => model.calls(input));
   }
   async blocks(input) {
     this.#requireNativeIR(input.snapshot);

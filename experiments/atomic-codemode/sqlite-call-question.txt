@@ -1,0 +1,13 @@
+Analyze {{artifact_path}} statically. In sqlite3Fts3ExprParse, explain how a
+"malformed MATCH expression" error can be selected even when its parsing helper
+returns success. Trace the relevant caller-owned context into the helper: identify
+the call site, actual callee entry, the passed SSA value and passing location, and
+the corresponding recovered function input. Explain which context field the helper
+updates for opening/closing parentheses, where the caller checks that same field,
+and how the successful and malformed paths differ. Verify the essential pointer,
+field and control-transfer claims against selected machine instructions.
+
+Keep the answer focused on this cross-function state flow. Give function and
+instruction addresses and real Evidence references. Distinguish recovered call
+slots from original source parameter ordinals, exact storage matches from proven
+alias analysis, and local static conditions from demonstrated runtime feasibility.

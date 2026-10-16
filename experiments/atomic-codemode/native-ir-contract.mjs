@@ -3,6 +3,7 @@ import { z } from "zod";
 import { FactFailure } from "./fact-error.mjs";
 import { ok, err } from "../../dist/domain/result.js";
 import { NATIVE_OUTPUT_BYTES } from "./limits.mjs";
+import { nativeCall } from "./native-calls.mjs";
 const requireFact = (condition, reason) => {
   if (!condition) throw new FactFailure("invalid_provider_output", reason);
 };
@@ -49,7 +50,7 @@ const value = z.strictObject({
   type_name: z.string(),
 });
 const factsSchema = z.strictObject({
-  schema_version: z.literal(1),
+  schema_version: z.literal(2),
   blocks: z
     .array(
       z.strictObject({
@@ -64,6 +65,7 @@ const factsSchema = z.strictObject({
     .max(12000),
   operations: z.array(operation).max(12000),
   values: z.array(value).max(36000),
+  calls: z.array(nativeCall).max(12000),
   coverage: z.strictObject({
     scope: z.string(),
     machine_semantic_equivalence: z.literal("unknown"),
@@ -116,16 +118,24 @@ const parseBlock = rowParser(nativeBlock, {
 const parseOperation = rowParser(operation, {
   inputs: (row) => operation.shape.inputs.element.parse(row),
 });
+const parseCall = rowParser(nativeCall, {
+  arguments: (row) => nativeCall.shape.arguments.element.parse(row),
+});
 const parseFacts = rowParser(factsSchema, {
   blocks: parseBlock,
   operations: parseOperation,
   values: (row) => value.parse(row),
+  calls: parseCall,
 });
 
 function preflight(facts) {
   requireFact(
     facts && typeof facts === "object",
     "Native atomic facts facet is unavailable; inspect the retained source for its reason and C",
+  );
+  requireFact(
+    facts.schema_version === 2,
+    "Unsupported native atomic facts schema version; expected 2",
   );
   requireFact(
     facts.blocks?.length > 0,
@@ -135,6 +145,7 @@ function preflight(facts) {
     ["blocks", 12000],
     ["operations", 12000],
     ["values", 36000],
+    ["calls", 12000],
   ])
     requireFact(
       Array.isArray(facts[key]) && facts[key].length <= limit,
@@ -157,7 +168,14 @@ function preflight(facts) {
     0,
   );
   requireFact(
-    inputs <= 50000 && members <= 12000 && edges <= 100000,
+    inputs <= 50000 &&
+      members <= 12000 &&
+      edges <= 100000 &&
+      facts.calls.reduce(
+        (sum, call) =>
+          sum + (Array.isArray(call?.arguments) ? call.arguments.length : 0),
+        0,
+      ) <= 50000,
     "Native relationships exceed resource capacity",
   );
 }

@@ -5,6 +5,7 @@ import { parseNativeFunction } from "./native-ir-contract.mjs";
 import { backwardSlice } from "../atomic-re-tools/kuna-ssa.mjs";
 import { controlDependencies } from "./control-dependence.mjs";
 import { freezeFacts as freeze } from "./fact-reads.mjs";
+import { indexCalls, callCoverage } from "./native-calls.mjs";
 const index = (map, key, row) => {
   if (!map.has(key)) map.set(key, []);
   map.get(key).push(row);
@@ -47,11 +48,12 @@ const page = (rows, { offset = 0, limit = 20, fields } = {}) => ({
 const requireFact = (condition, reason) => {
   if (!condition) throw new FactFailure("invalid_provider_output", reason);
 };
-const readIdentities = (index, input) => ({
+const readIdentities = (index, input, filter = () => true) => ({
   ...page(
-    input.ids
+    (input.ids
       ? input.ids.flatMap((id) => index.get(id) ?? [])
-      : [...index.values()],
+      : [...index.values()]
+    ).filter(filter),
     input,
   ),
   missing: input.ids?.filter((id) => !index.has(id)) ?? [],
@@ -147,6 +149,7 @@ function indexNative(facts) {
   validateBlocks(operations, values, blocks);
   validateOperations(operations, values, blocks);
   validateValues(facts, operations, values);
+  const calls = indexCalls(facts.calls, operations);
   const users = new Map(),
     incoming = new Map(),
     outgoing = new Map(),
@@ -212,12 +215,21 @@ function indexNative(facts) {
     outgoing,
     constants,
     normalized,
+    calls,
   };
 }
 
 function createViews(facts, code, indexes) {
-  const { values, blocks, users, incoming, outgoing, constants, normalized } =
-    indexes;
+  const {
+    values,
+    blocks,
+    users,
+    incoming,
+    outgoing,
+    constants,
+    normalized,
+    calls,
+  } = indexes;
   const coverage = freeze({
     ...facts.coverage,
     operations: normalized.size,
@@ -242,7 +254,36 @@ function createViews(facts, code, indexes) {
         fields: ["kind", "statement", "definitions", "constants"],
         ...input,
       }),
-    values: (input) => readIdentities(values, input),
+    values: (input) =>
+      readIdentities(
+        values,
+        input,
+        (value) =>
+          input.is_input === undefined || value.is_input === input.is_input,
+      ),
+    calls: (input) => ({
+      ...readIdentities(
+        calls,
+        {
+          fields: [
+            "spec_available",
+            "opcode",
+            "target",
+            "target_name",
+            "arguments",
+            "output",
+          ],
+          ...input,
+          ...(input.fields && {
+            fields: ["spec_available", "opcode", ...input.fields],
+          }),
+        },
+        (row) =>
+          !input.origin_addresses ||
+          input.origin_addresses.includes(row.origin_address),
+      ),
+      coverage: callCoverage,
+    }),
     blocks: (input) => readIdentities(blocks, input),
     edges: (input) => {
       if (input.kind === "controllers") {
@@ -393,6 +434,7 @@ export function parseNativeIR(text, entry, expectedInput) {
         "incoming",
         "select",
         "values",
+        "calls",
         "blocks",
         "edges",
         "slice",

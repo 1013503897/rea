@@ -83,7 +83,7 @@ return {snapshot:s.data,code:c.data,graph};`,
       }
     }
   } else if (scenario === "sqlite-partial") {
-    assert.equal(opened.context.analysis_model, "experimental-native-ir-v1");
+    assert.equal(opened.context.analysis_model, "experimental-native-ir-v2");
     const result = await call("execute_javascript", {
       code: `
 const read=async(p)=>{const r=await p;if(!r.ok)throw new Error(JSON.stringify(r));return r.data;};
@@ -141,7 +141,7 @@ return {literal,entry,snapshot:s,consumer_blocks:[...new Set(consumers.data.item
     assert.equal(result.value.projected, true);
     assert.equal(result.value.coverage.status, "partial");
     assert.ok(result.value.guards.some((s) => s.includes("/ #0x1f")));
-    if (opened.context.analysis_model === "experimental-native-ir-v1") {
+    if (opened.context.analysis_model === "experimental-native-ir-v2") {
       const native = await call("execute_javascript", {
         code: `const s=${JSON.stringify(result.value.snapshot)};
 const read=async(p)=>{const r=await p;if(!r.ok)throw new Error(JSON.stringify(r));return r.data;};

@@ -144,10 +144,11 @@ export const methods = {
     'await rea.relations({snapshot:s,kind:"uses",seeds:[op.id]})',
   ),
   values: definition(
-    "Read identified native SSA values in a batch. Offset is an address-space offset, not a computed arbitrary-width value. Width, constants, function inputs, annotation status and defining operation are separate facts. Requires native IR.",
+    "Read identified native SSA values in a batch; is_input filters retained operand/output values, not an original source signature. Offset is an address-space offset, not a computed arbitrary-width value. Width, constants, function inputs, annotation status and defining operation are separate facts. Requires native IR.",
     {
       snapshot,
       ids: z.array(z.string()).max(128).optional(),
+      is_input: z.boolean().optional(),
       fields: z
         .array(
           z.enum([
@@ -167,6 +168,30 @@ export const methods = {
     },
     "values",
     "await rea.values({snapshot:s,ids:op.inputs.map(i=>i.value_id).filter(Boolean)})",
+  ),
+  calls: definition(
+    "Select structured recovered call sites and argument bindings. Target comes from native call specifications, never the fspec annotation offset or display text. Each argument separates its SSA value from its passing storage. Input slots are not original source parameter ordinals; missing storage and indirect/runtime targets remain unknown. To investigate across functions, snapshot the selected callee and select values with is_input:true, comparing exact space/offset/width. Requires native IR.",
+    {
+      snapshot,
+      ids: z.array(z.string()).max(128).optional(),
+      origin_addresses: z.array(hex).max(128).optional(),
+      fields: z
+        .array(
+          z.enum([
+            "target",
+            "target_name",
+            "arguments",
+            "output",
+            "prototype",
+            "stack_offset",
+          ]),
+        )
+        .min(1)
+        .optional(),
+      ...page,
+    },
+    "calls",
+    'await rea.calls({snapshot:s,origin_addresses:["0x1100"]})',
   ),
   blocks: definition(
     "Read native recovered blocks by stable snapshot-local ID, with ordered predecessors, successor edges and member operation IDs. origin_start describes optimized IR provenance, not a machine block extent. Requires native IR. Runtime successors remain unknown.",
@@ -239,6 +264,8 @@ const returns = {
     "data:{items:definition/use edges OR CFG edges{from,to,operation,polarity?,condition_value?,condition_test?} OR controllers{controller,dependent,edge},total,next_offset,evidence_id,coverage,relation_coverage?}. definitions/uses seeds are operation-ID strings; incoming/outgoing/controllers seeds are numeric block IDs. Native def/use edges include input_index,value_id,phi_predecessor; diagnostic edges include occurrence only.",
   values:
     "data:{items:[{id,space,offset,size_bytes,is_constant,is_input,is_annotation,definition,type_name}],total,next_offset,evidence_id,coverage}; definitions are operation IDs, offsets are exact hex strings.",
+  calls:
+    "data:{items:[{id,origin_address,block,opcode,spec_available,target:{space,offset}|null,target_name,arguments:[{input_index,value_id,storage:{space,offset,size_bytes}|null,storage_authority}],output}],total,next_offset,missing,evidence_id,coverage}. fields selects target/target_name/arguments/output/prototype/stack_offset. Calls include all retained call operations; null facts are unknown, not proof of no arguments or runtime binding. Candidate cross-function links require matching target identity and exact passing/input storage; join/subregister/alias interpretation remains unknown.",
   blocks:
     "data:{items:[{id,origin_start,operations,predecessors,successors:[{target,index,polarity,condition_value,condition_test}]}],total,next_offset,evidence_id,coverage}; IDs are local to this snapshot.",
   slice:
