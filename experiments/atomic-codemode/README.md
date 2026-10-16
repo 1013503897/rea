@@ -49,7 +49,7 @@ directory. `REA_ATOMIC_TRACE` and `REA_ATOMIC_EVIDENCE_DIR` retain actual API ca
 and complete sources outside the model workspace when explicitly selected by the
 evaluator. The ambient environment and credentials are not logged.
 
-Current bounds: 64 MiB guest heap, 32 KiB code/output, 64 host calls per execution,
+Current bounds: 64 MiB guest heap, 32 KiB code and script value/error payloads, 64 host calls per execution,
 120 seconds wall deadline and 2 seconds of guest synchronous execution; native requests have existing supervision, an 8 MiB
 capture budget and 1 GiB function-memory limit. Retained source storage is 64 MiB
 per target, with two resident indexes (at most 2 MiB diagnostic or 8 MiB native
@@ -57,6 +57,16 @@ source each). Sources are
 content-digested and retained until close; explicit evaluator copies survive
 close. Capacity failures are explicit, not clipped facts. Leases and snapshot
 handles prevent cross-session joins.
+
+Invocation context and observed source IDs are additional bounded receipt
+metadata; the script payload bound is not a 32 KiB whole-MCP-wire limit. A real
+MCP probe found that a 40,000-byte guest exception bypassed that payload policy
+and produced a 40,183-byte response. Oversized errors now return explicit
+`output_budget` with omission metadata. Escaping expansion is checked too;
+ordinary smaller errors remain intact. `verify-executor.mjs` confirms real MCP
+delivery and continued access to source Evidence collected before the exception.
+It measures response bytes, not model tokens or an analysis speedup. Targeted JS
+tests now total 42, alongside the separate real-provider and native-writer checks.
 
 The diagnostic SSA format still has incomplete CFG and phi predecessor coverage.
 The opt-in [native recovered IR experiment](native-engine.md) adds full recovered

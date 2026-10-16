@@ -87,3 +87,34 @@ test("failed compositions keep completed facts and their provenance after draini
     assert.equal(result.calls[0].status, "ok");
   }
 });
+
+test("guest exceptions obey output capacity, including JSON expansion, and preserve observations", async () => {
+  for (const code of [
+    'throw new Error("x".repeat(40000))',
+    'throw new Error("\\0".repeat(6000))',
+  ]) {
+    const result = await executeJavaScript(
+      {
+        context: { lease: "error-output" },
+        call: async () => ({
+          ok: true,
+          data: { evidence_id: "ev_before_error" },
+        }),
+      },
+      `await rea.strings({}); ${code}`,
+    );
+    assert.equal(result.ok, false);
+    assert.equal(result.error.code, "output_budget");
+    assert.equal(result.error.details.original_error_code, "javascript_error");
+    assert.equal(result.error.details.original_message_omitted, true);
+    assert.ok(Buffer.byteLength(JSON.stringify(result.error)) <= 32768);
+    assert.deepEqual(result.evidence_ids, ["ev_before_error"]);
+    assert.equal(result.context.lease, "error-output");
+  }
+  const ordinary = await executeJavaScript(
+    fake,
+    'throw new Error("x".repeat(10000))',
+  );
+  assert.equal(ordinary.error.code, "javascript_error");
+  assert.ok(ordinary.error.message.includes("x".repeat(10000)));
+});

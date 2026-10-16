@@ -4,6 +4,27 @@ import { MAX_BRIDGE_BYTES as MAX_BRIDGE } from "./limits.mjs";
 
 const MAX_OUTPUT = 32768;
 const failure = (code, message) => ({ ok: false, error: { code, message } });
+const projectGuestError = (code, error) => {
+  const message =
+    typeof error?.message === "string" ? error.message : String(error);
+  // Check raw size first: JSON escaping expands each code unit at most sixfold,
+  // so the second check has a 6×32 KiB string bound plus a fixed envelope.
+  if (
+    Buffer.byteLength(message) > MAX_OUTPUT ||
+    Buffer.byteLength(JSON.stringify({ code, message })) > MAX_OUTPUT
+  )
+    return {
+      code: "output_budget",
+      message:
+        "JavaScript error exceeds the 32 KiB output budget; its message is omitted. Native Evidence remains retained.",
+      details: {
+        original_error_code: code,
+        original_message_code_units: message.length,
+        original_message_omitted: true,
+      },
+    };
+  return { code, message };
+};
 export const executeJavaScript = async (
   session,
   code,
@@ -74,16 +95,16 @@ export const executeJavaScript = async (
   } catch (error) {
     outcome = {
       ok: false,
-      error: {
-        code: budget.exhausted
+      error: projectGuestError(
+        budget.exhausted
           ? "cpu_budget"
           : combined.aborted
             ? "cancelled"
             : "javascript_error",
-        message: budget.exhausted
+        budget.exhausted
           ? "Guest synchronous execution budget exceeded"
-          : (error.message ?? String(error)),
-      },
+          : error,
+      ),
     };
   } finally {
     clearTimeout(timer);
