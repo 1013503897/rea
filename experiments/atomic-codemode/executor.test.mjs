@@ -1,0 +1,39 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { executeJavaScript } from "./executor.mjs";
+
+const fake = {
+  context: { lease: "test" },
+  call: async (name, input) => ({ ok: true, data: { name, input } }),
+};
+test("real QuickJS composes async API calls and does not expose host globals", async () => {
+  const result = await executeJavaScript(
+    fake,
+    'const a=await rea.strings({query:"x"}); const b=await rea.operations({ids:[a.data.name]}); return {a,b,host:[typeof process,typeof require,typeof fetch]};',
+  );
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.deepEqual(result.value.host, ["undefined", "undefined", "undefined"]);
+  assert.equal(result.calls.length, 2);
+  assert.equal(result.value.b.data.input.ids[0], "strings");
+});
+test("infinite guest execution and never-resolving promises terminate", async () => {
+  const loop = await executeJavaScript(fake, "while(true){}", {
+    timeoutMs: 30,
+  });
+  assert.equal(loop.ok, false);
+  const stalled = await executeJavaScript(
+    fake,
+    "await new Promise(()=>{});return 1",
+    { timeoutMs: 30 },
+  );
+  assert.equal(stalled.ok, false);
+});
+test("output budgets and failures survive without silently clipping evidence", async () => {
+  const result = await executeJavaScript(fake, 'return "x".repeat(40000)');
+  assert.equal(result.error.code, "output_budget");
+  const failure = await executeJavaScript(
+    fake,
+    'throw new Error("explicit failure")',
+  );
+  assert.equal(failure.ok, false);
+});

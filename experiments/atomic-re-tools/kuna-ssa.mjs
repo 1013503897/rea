@@ -232,14 +232,83 @@ export const parseKunaSsaDump = (text) => {
       control_flow: "partial",
       machine_semantic_equivalence: "unknown",
     },
-    // The owner parses/indexes once; all compositions reuse the same facts.
-    operation: (id) => operations.get(id) ?? null,
-    block: (id) => blocks.get(id) ?? null,
-    findConstant: (value) => [...(constants.get(address(value)) ?? [])],
-    uses: (id) => users.get(id) ?? [],
-    incoming: (id) => incoming.get(id) ?? [],
+    ...queryViews({ operations, blocks, constants, users, incoming, edges }),
   });
 };
+
+const queryViews = ({
+  operations,
+  blocks,
+  constants,
+  users,
+  incoming,
+  edges,
+}) => ({
+  // The owner parses/indexes once; all compositions reuse the same facts.
+  operation: (id) => operations.get(id) ?? null,
+  block: (id) => blocks.get(id) ?? null,
+  findConstant: (value) => [...(constants.get(address(value)) ?? [])],
+  uses: (id) => users.get(id) ?? [],
+  incoming: (id) => incoming.get(id) ?? [],
+  select: ({
+    ids,
+    addresses,
+    block_ids,
+    constant,
+    kind,
+    offset = 0,
+    limit = 20,
+    fields,
+  } = {}) => {
+    const selectedIds = ids === undefined ? null : new Set(ids);
+    const locations =
+      addresses === undefined ? null : new Set(addresses.map(address));
+    const selectedBlocks = block_ids === undefined ? null : new Set(block_ids);
+    const literalIds =
+      constant === undefined
+        ? null
+        : new Set(constants.get(address(constant)) ?? []);
+    const rows = [...operations.values()].filter(
+      (row) =>
+        (!selectedIds || selectedIds.has(row.id)) &&
+        (!locations || locations.has(row.address)) &&
+        (!selectedBlocks || selectedBlocks.has(row.block)) &&
+        (!literalIds || literalIds.has(row.id)) &&
+        (kind === undefined || row.kind === kind),
+    );
+    return page(rows, offset, limit, fields);
+  },
+  edges: ({ kind, seeds, offset = 0, limit = 20 }) => {
+    const rows = seeds.flatMap((seed) =>
+      kind === "definitions"
+        ? (operations.get(seed)?.definitions ?? [])
+        : kind === "uses"
+          ? (users.get(seed) ?? [])
+          : kind === "incoming"
+            ? (incoming.get(seed) ?? [])
+            : edges.filter((edge) => edge.from === seed),
+    );
+    return page(rows, offset, limit);
+  },
+});
+
+const page = (rows, offset, limit, fields) => ({
+  items: rows
+    .slice(offset, offset + limit)
+    .map((row) =>
+      fields === undefined
+        ? row
+        : Object.fromEntries(
+            [...new Set(["id", "address", "block", "source_line", ...fields])]
+              .filter((key) => Object.hasOwn(row, key))
+              .map((key) => [key, row[key]]),
+          ),
+    ),
+  total: rows.length,
+  offset,
+  next_offset: offset + limit < rows.length ? offset + limit : null,
+  scope: "retained printed facts; not complete machine semantics",
+});
 
 // Dependency-closed only within the caller's selected budget and boundaries.
 export const backwardSlice = (

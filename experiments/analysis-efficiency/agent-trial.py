@@ -39,6 +39,10 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--mode', choices=['direct', 'client-code'], default='direct')
     parser.add_argument('--runtime-root', type=Path, required=True)
+    parser.add_argument('--mcp-entrypoint', type=Path,
+                        help='Caller-selected experimental stdio MCP entrypoint; leaves production dispatcher unchanged')
+    parser.add_argument('--server-name', default='rea')
+    parser.add_argument('--protocol-profile', choices=['canonical', 'atomic'], default='canonical')
     parser.add_argument('--revision', required=True)
     parser.add_argument('--prompt', type=Path, required=True)
     parser.add_argument('--artifact-path', help='Replace {{artifact_path}} in a question template')
@@ -119,7 +123,12 @@ def main():
         'NODE_OPTIONS': '--max-old-space-size=512',
     })
     target_digest = file_digest(Path(args.artifact_path)) if args.artifact_path else None
-    command_args = [str(repository / 'scripts/rea.mjs'), 'mcp']
+    if not args.server_name.replace('-', '').replace('_', '').isalnum():
+        raise ValueError('server-name must contain only letters, digits, hyphens or underscores')
+    if args.mcp_entrypoint and not args.mcp_entrypoint.is_absolute():
+        raise ValueError('mcp-entrypoint must be absolute')
+    command_args = ([str(args.mcp_entrypoint)] if args.mcp_entrypoint
+                    else [str(repository / 'scripts/rea.mjs'), 'mcp'])
     instruction = (
         'Use the registered REA MCP server for this investigation. Static analysis '
         'only: do not execute target code, fetch URLs, launch a GUI, or modify targets. '
@@ -132,6 +141,18 @@ def main():
         'Prefer summary/focused views where appropriate. Do not invent successful facts '
         'after a tool error. No other agents. Stop once the requested facts are supported.'
     )
+    if args.protocol_profile == 'atomic':
+        instruction = (
+            'Use the registered ' + args.server_name + ' MCP server for this static binary investigation. '
+            'Call reference to inspect API contracts, then compose the supported analysis calls. '
+            'Do not execute target code, fetch URLs, launch a GUI, modify targets, use shell/file tools, '
+            'or use other agents. API methods return {ok,context,data} or {ok:false,error}; '
+            'execute_javascript returns the script value, with script-derived authority. '
+            'Preserve real evidence_id values, artifact digest, uncertainty and traversal boundaries. '
+            'Check failures before reading data. Do not infer absence from partial coverage. '
+            'Do not return complete inventories or source reports when a focused answer suffices. '
+            'Close the binary when finished. No precomputed answer is available to you.'
+        )
     if args.authority == 'browser':
         instruction = (
             'Use the registered REA tools for the explicitly selected public browser scenario. '
@@ -166,16 +187,16 @@ def main():
         'code_mode = ' + ('true' if args.mode == 'client-code' else 'false'),
         'code_mode_only = ' + ('true' if args.mode == 'client-code' else 'false'),
         '[history]', 'persistence = "none"',
-        '[mcp_servers.rea]', 'command = ' + quote(node),
+        '[mcp_servers.' + args.server_name + ']', 'command = ' + quote(node),
         'args = ' + quote(command_args), 'startup_timeout_sec = 60',
         'tool_timeout_sec = 600',
         *([] if enabled_tools is None else ['enabled_tools = ' + quote(enabled_tools)]),
-        '[mcp_servers.rea.env]',
+        '[mcp_servers.' + args.server_name + '.env]',
         *[key + ' = ' + quote(value) for key, value in provider_env.items()],
     ]) + '\n'
     # MCP read-only hints cover normal static tools. Explicitly authorize only
     # the session-opening primitive needed by the requested native tasks.
-    config += '[mcp_servers.rea.tools.open_binary]\napproval_mode = "approve"\n'
+    config += '[mcp_servers.' + args.server_name + '.tools.open_binary]\napproval_mode = "approve"\n'
     for tool in ['analyze_javascript_application', 'inspect_analysis_view',
                  'inspect_android_package', 'search_android_classes',
                  'inspect_android_class', 'inspect_android_method',
@@ -189,7 +210,7 @@ def main():
                  'inspect_evm_interface', 'get_evidence_bundle', 'export_evidence_bundle',
                  'capture_browser_scenario',
                  'resolve_containing_procedure', 'analyze_function', 'close_binary']:
-        config += '[mcp_servers.rea.tools.' + tool + ']\napproval_mode = "approve"\n'
+        config += '[mcp_servers.' + args.server_name + '.tools.' + tool + ']\napproval_mode = "approve"\n'
     try:
         if source_auth.exists():
             shutil.copyfile(source_auth, auth)
@@ -213,6 +234,10 @@ def main():
                 ['git', 'rev-parse', 'HEAD'], cwd=driver_repository, text=True).strip(),
             'runtime_revision': args.revision,
             'runtime_root': str(repository),
+            'mcp_server_name': args.server_name,
+            'protocol_profile': args.protocol_profile,
+            'mcp_entrypoint': str(args.mcp_entrypoint) if args.mcp_entrypoint else None,
+            'mcp_entrypoint_sha256': file_digest(args.mcp_entrypoint) if args.mcp_entrypoint else None,
             'selected_artifact_path': args.artifact_path,
             'selected_artifact_sha256_before': target_digest,
             'enabled_tools': enabled_tools,

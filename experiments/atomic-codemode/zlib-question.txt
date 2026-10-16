@@ -1,0 +1,9 @@
+Statically investigate {{artifact_path}} using the registered analysis server.
+Find what causes the message "incorrect header check" to be assigned in inflate.
+Explain the local branch conditions and the data they depend on, with exact
+native addresses, target SHA-256 and real retained evidence IDs. Distinguish a
+local guard from a complete feasible path or a runtime observation. Explain any
+unresolved input/state, phi, memory or coverage boundaries that affect the answer.
+Use whichever representations the advertised API actually supports. Keep the
+answer focused; do not return whole inventories or whole-function reports.
+Do not fetch source code or execute the target. Close the binary when finished.

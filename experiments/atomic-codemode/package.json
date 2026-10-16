@@ -1,0 +1,12 @@
+{
+  "dependencies": {
+    "quickjs-emscripten": "0.32.0"
+  },
+  "name": "rea-atomic-codemode-experiment",
+  "private": true,
+  "type": "module",
+  "packageManager": "npm@11.16.0",
+  "scripts": {
+    "test": "node --test *.test.mjs"
+  }
+}

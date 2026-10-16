@@ -1,0 +1,19 @@
+import { readFile } from "node:fs/promises";
+import { AtomicSession } from "./api.mjs";
+import { executeJavaScript } from "./executor.mjs";
+
+const [binary, script] = process.argv.slice(2);
+if (!binary || !script)
+  throw new Error("Usage: node cli.mjs BINARY JAVASCRIPT_FILE");
+const session = new AtomicSession();
+try {
+  await session.open(binary);
+  console.log(
+    JSON.stringify(
+      await executeJavaScript(session, await readFile(script, "utf8")),
+    ),
+  );
+} finally {
+  session.abort();
+  await session.close();
+}
