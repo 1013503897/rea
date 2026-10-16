@@ -6,6 +6,8 @@ Started from REA main `5b16f2431062eea6ffd245a9e05512790007cb13`.
 Read [measured results](results.md) and [mechanism / prior-art notes](research.md).
 The first round includes an object-reference counterexample and a failed
 code-mapping composition; it does not claim every hypothesis succeeded.
+The [control-flow / SSA follow-up](relations.md) repairs three zlib mapping
+paths, tests a SQLite call guard, and records where structured slices cost more.
 
 The question is whether composable facts improve **completed reverse-engineering
 tasks**, especially on complex software. Three outcomes matter together:

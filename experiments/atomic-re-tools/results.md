@@ -1,5 +1,8 @@
 # First-round results
 
+Continued in the [control-flow / SSA experiment](relations.md). The results below
+remain the fixed first-round baseline, including its failed mapping composition.
+
 This is a completed, bounded first round of exploration, including failures.
 It does **not** establish that an agent solves complex RE tasks better than with
 the existing tools. No PR, merge, target execution or executable mutation occurred;

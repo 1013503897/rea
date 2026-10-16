@@ -57,7 +57,7 @@ try {
   if (!outcome.ok) throw outcome.error;
   const snapshot = outcome.value;
   const file = `${prefix}.native.txt`;
-  await writeFile(file, snapshot.stdout.text);
+  await writeFile(file, snapshot.stdout.text, { flag: "wx" });
   calls.push({
     arguments: arguments_(snapshot.input),
     elapsed_ms: performance.now() - start,
@@ -95,7 +95,9 @@ const report = {
     .update(await readFile(binary))
     .digest("hex"),
 };
-await writeFile(`${prefix}.report.json`, JSON.stringify(report, null, 2));
+await writeFile(`${prefix}.report.json`, JSON.stringify(report, null, 2), {
+  flag: "wx",
+});
 console.log(
   JSON.stringify({
     view,

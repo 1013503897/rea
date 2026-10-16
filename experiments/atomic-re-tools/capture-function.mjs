@@ -83,7 +83,9 @@ try {
   await call("binary_session");
   for (const phase of ["first", "warm"]) {
     const dossier = await call("analyze_function", { procedure }, true);
-    await writeFile(`${prefix}.${phase}.json`, JSON.stringify(dossier));
+    await writeFile(`${prefix}.${phase}.json`, JSON.stringify(dossier), {
+      flag: "wx",
+    });
   }
   await call("export_evidence_bundle", {
     path: resolve(`${prefix}.bundle.json`),
@@ -107,9 +109,11 @@ try {
 } catch (error) {
   failures.push(String(error));
 }
-await writeFile(`${prefix}.wire.json`, JSON.stringify(wire));
-await writeFile(`${prefix}.catalog.json`, JSON.stringify(catalog));
-await writeFile(`${prefix}.stderr.txt`, stderr);
+await writeFile(`${prefix}.wire.json`, JSON.stringify(wire), { flag: "wx" });
+await writeFile(`${prefix}.catalog.json`, JSON.stringify(catalog), {
+  flag: "wx",
+});
+await writeFile(`${prefix}.stderr.txt`, stderr, { flag: "wx" });
 const report = {
   provider,
   binary: resolve(binary),
@@ -122,7 +126,9 @@ const report = {
   failures,
   lifecycle,
 };
-await writeFile(`${prefix}.report.json`, JSON.stringify(report, null, 2));
+await writeFile(`${prefix}.report.json`, JSON.stringify(report, null, 2), {
+  flag: "wx",
+});
 console.log(
   JSON.stringify({
     provider,
