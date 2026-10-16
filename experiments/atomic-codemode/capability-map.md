@@ -75,3 +75,14 @@ similar wall time with mixed token/resource costs. Stock 1.833 explicitly reject
 the unsupported path query while preserving readable Evidence/code in a real SDK
 check. These are scoped observations, not stock-provider parity or complete
 runtime reachability coverage.
+
+The [function-boundary study](function-boundary-study.md) adds independent native
+prototype entries/return descriptors. On real stripped SSH, prototype counts
+4/10 differ from raw input counts 3/44; both actual models preserve that distinction,
+all exact matches/missing tuples and the selected caller-to-callee/helper transfer.
+Call-passing storage is separate from the caller value's own coordinate. Native
+model labels and recovered entries do not prove original source arity/ABI.
+Complete old function fidelity is preserved except for the new facet. Actual
+old-native/stock checks return explicit unavailability with readable Evidence.
+The two completed model tasks have mixed token/time/resource costs; no stable
+Code Mode advantage or provider parity follows.

@@ -21,8 +21,10 @@ adapter comparisons.
 
 The [function-boundary study](function-boundary-study.md) adds independent native
 prototype entries and return descriptors, separated from raw input varnodes.
-Initial real SSH checks expose different inventories; final native and model
-verification is recorded there as it completes.
+Both real SSH models correctly distinguish these inventories and compose the
+selected caller/parameter/helper transfer. Direct uses 331,674 cumulative input
+tokens / 118.4 seconds; Code Mode uses 359,789 / 125.7, with lower uncached input
+but mixed overall costs. Native and real-provider checks are recorded there.
 
 The [path-query study](path-query-study.md) adds a shared, bounded recovered-CFG
 witness query with exclusions and paging. Both actual MCP adapters verify the
