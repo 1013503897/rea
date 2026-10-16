@@ -1,7 +1,7 @@
 # Capability and comparison scope
 
-The experiment has seventeen fact methods behind a shared SDK/CLI owner, exposed
-as twenty direct MCP tools or four Code Mode tools. The structured IR/call/
+The experiment has nineteen fact methods behind a shared SDK/CLI owner, exposed
+as twenty-two direct MCP tools or four Code Mode tools. The structured IR/call/
 projection/switch facts require the explicitly pinned experimental Kuna patch;
 they are not capabilities added to stock Kuna or integrated REA by registration
 alone. Other providers are not wired to this experimental service.
@@ -86,3 +86,9 @@ Complete old function fidelity is preserved except for the new facet. Actual
 old-native/stock checks return explicit unavailability with readable Evidence.
 The two completed model tasks have mixed token/time/resource costs; no stable
 Code Mode advantage or provider parity follows.
+
+The [storage study](storage-study.md) exposes native address-space descriptors
+and exact varnode_xref names without function decompilation. Width-qualified
+coordinates compose with prototype/value/passing-storage facts. Real x86-64
+and AArch64 OpenSSH catalog checks do not establish big-endian, alias, runtime
+or full provider parity coverage.

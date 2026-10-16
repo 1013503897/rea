@@ -6,6 +6,8 @@ export const requireFact = (condition, reason) => {
   if (!condition) throw new FactFailure("invalid_provider_output", reason);
 };
 export const hex = z.string().regex(/^0x(?:0|[1-9a-f][0-9a-f]{0,15})$/u);
+export const nativeLocationKey = ({ space, offset, size_bytes }) =>
+  JSON.stringify([space, offset, size_bytes]);
 export const edgeId = z.string().regex(/^\d+:\d+$/u);
 export const ordinal = z.number().int().nonnegative().max(0x7fffffff);
 export const valueId = z.string().regex(/^v[0-9a-f]{1,16}$/u);
@@ -66,7 +68,7 @@ export const formatFailure = (error) => {
       : { reason: String(error.message).slice(0, 256) };
   return new FactFailure(
     "invalid_provider_output",
-    "Native IR source does not match the declared format",
+    "Native source does not match the declared format",
     details,
   );
 };

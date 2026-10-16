@@ -19,6 +19,11 @@ The [capability map](capability-map.md) distinguishes verified task coverage,
 experimental exporter requirements and remaining unknowns before interpreting
 adapter comparisons.
 
+The [architecture storage study](storage-study.md) adds exact native register-name
+and address-space queries, sharing one bounded immutable capture per lease.
+It separates coordinates, widths and native map misses from hardware absence,
+SSA equality or alias claims.
+
 The [function-boundary study](function-boundary-study.md) adds independent native
 prototype entries and return descriptors, separated from raw input varnodes.
 Both real SSH models correctly distinguish these inventories and compose the
@@ -154,7 +159,7 @@ the ledger now records actual model responses and client dispatch/wait calls.
 owner. Recovered operations use `origin_address` and blocks `origin_start`;
 these locations cannot be substituted for machine branch destinations. The
 value-origin trial demonstrates why this boundary matters. The experiment
-now has seventeen fact methods, still behind the same four-tool Code Mode
+now has nineteen fact methods, still behind the same four-tool Code Mode
 catalog.
 
 `calls` connects recovered call operations to native target specifications and

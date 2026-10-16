@@ -1168,7 +1168,7 @@ index 6710e12a..ef90468c 100644
 +    );
 +}
 diff --git a/decompiler/crates/kuna-cli/src/main.rs b/decompiler/crates/kuna-cli/src/main.rs
-index 2345743c..3da94435 100644
+index 2345743c..a16abb71 100644
 --- a/decompiler/crates/kuna-cli/src/main.rs
 +++ b/decompiler/crates/kuna-cli/src/main.rs
 @@ -1,6 +1,8 @@
@@ -1180,6 +1180,22 @@ index 2345743c..3da94435 100644
  mod callgraph;
  mod catalog;
  mod crypto;
+@@ -31,6 +33,7 @@ mod runtime_hints;
+ mod skill;
+ mod specs;
+ mod strings;
++mod storage_map;
+ mod test;
+ mod unpack;
+ mod xrefs;
+@@ -52,6 +55,7 @@ const COMMANDS: &[(&str, CommandHandler)] = &[
+     ("read", disassemble::run_read),
+     ("xrefs", xrefs::run),
+     ("strings", strings::run),
++    ("storage-map", storage_map::run),
+     ("crypto", crypto::run),
+     ("unpack", unpack::run),
+     ("docs", docs::run),
 diff --git a/decompiler/crates/kuna-cli/src/project_stream.rs b/decompiler/crates/kuna-cli/src/project_stream.rs
 index e40b18c9..b8cae233 100644
 --- a/decompiler/crates/kuna-cli/src/project_stream.rs
@@ -1192,6 +1208,244 @@ index e40b18c9..b8cae233 100644
          want_pointer_arguments: false,
      };
  
+diff --git a/decompiler/crates/kuna-cli/src/storage_map.rs b/decompiler/crates/kuna-cli/src/storage_map.rs
+new file mode 100644
+index 00000000..b2a30345
+--- /dev/null
++++ b/decompiler/crates/kuna-cli/src/storage_map.rs
+@@ -0,0 +1,232 @@
++//! Read-only architecture storage metadata without discovery or decompilation.
++use crate::decompile_all::{load_program, Args, DriverDefaults};
++use kuna_base::space::{AddrSpaceManager, VarnodeStorage};
++use serde::{
++    ser::{SerializeSeq, SerializeStruct},
++    Serialize, Serializer,
++};
++use std::{
++    collections::BTreeMap,
++    io::{self, Write},
++};
++
++const OUTPUT_BYTES: usize = 8 * 1024 * 1024;
++struct BoundedOutput {
++    bytes: Vec<u8>,
++    limit: usize,
++}
++impl Write for BoundedOutput {
++    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
++        let next = self
++            .bytes
++            .len()
++            .checked_add(bytes.len())
++            .filter(|n| *n <= self.limit)
++            .ok_or_else(|| io::Error::other("storage map encoded-byte capacity exceeded"))?;
++        if next > self.bytes.capacity() {
++            let capacity = next
++                .checked_next_power_of_two()
++                .unwrap_or(self.limit)
++                .min(self.limit);
++            self.bytes
++                .try_reserve_exact(capacity - self.bytes.len())
++                .map_err(io::Error::other)?;
++        }
++        self.bytes.extend_from_slice(bytes);
++        Ok(bytes.len())
++    }
++    fn flush(&mut self) -> io::Result<()> {
++        Ok(())
++    }
++}
++#[derive(Serialize)]
++struct Space<'a> {
++    native_index: i32,
++    name: &'a str,
++    kind: String,
++    address_size_bytes: u32,
++    addressable_unit_bytes: u32,
++    endianness: &'static str,
++    highest_offset: String,
++}
++struct Spaces<'a>(&'a AddrSpaceManager);
++impl Serialize for Spaces<'_> {
++    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
++        let mut rows = serializer.serialize_seq(None)?;
++        for index in 0..self.0.num_spaces() {
++            if let Some(space) = self.0.get_space(index) {
++                rows.serialize_element(&Space {
++                    native_index: space.get_index(),
++                    name: space.get_name(),
++                    kind: format!("{:?}", space.get_type()),
++                    address_size_bytes: space.get_addr_size(),
++                    addressable_unit_bytes: space.get_word_size(),
++                    endianness: if space.is_big_endian() {
++                        "big"
++                    } else {
++                        "little"
++                    },
++                    highest_offset: format!("0x{:x}", space.get_highest()),
++                })?;
++            }
++        }
++        rows.end()
++    }
++}
++#[derive(Serialize)]
++struct Register<'a> {
++    native_row: usize,
++    space: Option<&'a str>,
++    offset: String,
++    size_bytes: u32,
++    name: Option<&'a str>,
++    name_bytes_hex: Option<String>,
++}
++struct Registers<'a>(&'a BTreeMap<VarnodeStorage, Vec<u8>>);
++impl Serialize for Registers<'_> {
++    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
++        let mut rows = serializer.serialize_seq(Some(self.0.len()))?;
++        for (native_row, (location, bytes)) in self.0.iter().enumerate() {
++            let name = std::str::from_utf8(bytes).ok();
++            let name_bytes_hex = if name.is_some() {
++                None
++            } else {
++                if bytes.len() > OUTPUT_BYTES / 2 {
++                    return Err(serde::ser::Error::custom(
++                        "native register name exceeds encoded budget",
++                    ));
++                }
++                Some(bytes.iter().map(|b| format!("{b:02x}")).collect())
++            };
++            rows.serialize_element(&Register {
++                native_row,
++                space: location.space.as_ref().map(|s| s.get_name()),
++                offset: format!("0x{:x}", location.offset),
++                size_bytes: location.size,
++                name,
++                name_bytes_hex,
++            })?;
++        }
++        rows.end()
++    }
++}
++struct Catalog<'a> {
++    binary: &'a str,
++    program: &'a kuna_console::engine::ConsoleProgram,
++}
++impl Serialize for Catalog<'_> {
++    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
++        let arch = self.program.arch();
++        let sleigh = arch
++            .translate()
++            .as_sleigh()
++            .ok_or_else(|| serde::ser::Error::custom("native Sleigh register map unavailable"))?;
++        let registers = sleigh.base().get_all_registers();
++        let manager = arch.manage();
++        let mut doc = serializer.serialize_struct("StorageMap", 8)?;
++        doc.serialize_field("schema_version", &1)?;
++        doc.serialize_field("binary", self.binary)?;
++        doc.serialize_field(
++            "architecture",
++            &serde_json::json!({
++                "native_id": arch.get_description(),
++                "default_code_space": manager.get_default_code_space().map(|s|s.get_name()),
++            }),
++        )?;
++        doc.serialize_field("space_index_capacity", &manager.num_spaces())?;
++        doc.serialize_field("register_count", &registers.len())?;
++        doc.serialize_field("spaces", &Spaces(manager))?;
++        doc.serialize_field("registers", &Registers(registers))?;
++        doc.serialize_field("coverage", &serde_json::json!({
++            "scope":"bootstrapped native architecture spaces and exact varnode_xref register-name map",
++            "native_exact_register_map":"complete", "alias_relationships":"unknown",
++            "dynamic_join_records":"not-collected", "memory_values":"not-returned",
++            "listing_discovery":false, "functions_decompiled":0,
++        }))?;
++        doc.end()
++    }
++}
++pub(crate) fn run(argv: &[String]) -> i32 {
++    if argv.len() != 2 || argv[1] != "--json" {
++        eprintln!("usage: kuna storage-map <binary> --json");
++        return 2;
++    }
++    let embedded = match crate::embedded_specs::tree() {
++        Some(Ok(root)) => root.to_string_lossy().into_owned(),
++        Some(Err(error)) => {
++            eprintln!("error: embedded specs: {error}");
++            return 1;
++        }
++        None => {
++            eprintln!("error: storage-map requires embedded specs");
++            return 1;
++        }
++    };
++    let args = Args {
++        binary: argv[0].clone(),
++        json: true,
++        sleighpath: Some(embedded),
++        options: vec![
++            ("listing".into(), "off".into()),
++            ("fast_funcdisc".into(), "off".into()),
++        ],
++        ..Args::serial()
++    };
++    let result = (|| {
++        let program = load_program(&args, DriverDefaults::Query)?;
++        let mut output = BoundedOutput {
++            bytes: Vec::new(),
++            limit: OUTPUT_BYTES,
++        };
++        serde_json::to_writer(
++            &mut output,
++            &Catalog {
++                binary: &args.binary,
++                program: &program,
++            },
++        )
++        .map_err(|e| e.to_string())?;
++        output.write_all(b"\n").map_err(|e| e.to_string())?;
++        String::from_utf8(output.bytes).map_err(|e| e.to_string())
++    })();
++    match result {
++        Ok(text) => crate::output::emit_with_status(&text, 0),
++        Err(error) => {
++            eprintln!("error: {error}");
++            1
++        }
++    }
++}
++#[cfg(test)]
++mod tests {
++    use super::*;
++    #[test]
++    fn output_admission_precedes_allocation_and_failed_writes_preserve_prefix() {
++        let mut output = BoundedOutput {
++            bytes: Vec::new(),
++            limit: 5,
++        };
++        output.write_all(b"123").unwrap();
++        assert!(output.write_all(b"456").is_err());
++        assert_eq!(output.bytes, b"123");
++        assert!(output.bytes.capacity() <= 5);
++        output.write_all(b"45").unwrap();
++        assert_eq!(output.bytes, b"12345");
++    }
++    #[test]
++    fn invalid_utf8_names_keep_exact_bytes_instead_of_lossy_text() {
++        let mut map = BTreeMap::new();
++        map.insert(
++            VarnodeStorage {
++                space: None,
++                offset: u64::MAX,
++                size: 1,
++            },
++            vec![0xff, 0x00],
++        );
++        let value = serde_json::to_value(Registers(&map)).unwrap();
++        assert!(value[0]["name"].is_null());
++        assert_eq!(value[0]["name_bytes_hex"], "ff00");
++        assert_eq!(value[0]["offset"], "0xffffffffffffffff");
++    }
++}
 diff --git a/decompiler/crates/kuna-console/src/inspect.rs b/decompiler/crates/kuna-console/src/inspect.rs
 index 74024b10..9e36d55f 100644
 --- a/decompiler/crates/kuna-console/src/inspect.rs

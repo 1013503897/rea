@@ -1,0 +1,47 @@
+Analyze {{artifact_path}} statically from these two observed formats:
+- REMOTE HOST IDENTIFICATION HAS CHANGED
+- Host key for %.200s has changed and you have requested strict checking.
+
+Identify the function that passes the banner format to its logging/formatting
+call, and the caller that owns the strict-checking diagnostic. Establish both
+from real references, not guessed source names. Reuse one retained native
+capture per selected function and selected structured facts.
+
+For both functions, inspect the native recovered function prototype separately
+from raw input varnodes. Report its parameter-entry count, each native parameter
+index with storage/width, return descriptor including explicit void/type/storage
+knowledge, native model label, lock state and recovery-error flags. The model
+label and recovered entries are not a proven original ABI or source signature.
+Keep explicit unknowns and native hidden/indirect-storage flags.
+
+Count retained values marked is_input in each complete recovered graph. For
+each native parameter storage tuple, determine whether an exact space/offset/
+width match exists among those retained input values, preserving matched value
+IDs and explicitly reporting missing matches. Do not treat missing retained
+matches as proof that a source parameter is absent. Do the two inventories
+mean the same thing? Can either count establish original source arity? Use
+the observed facts to explain the distinction, without parsing a C declaration.
+
+At the selected direct caller-to-banner-function call, show the target and the
+passed pointer's recovered operand index, value identity, storage and width.
+Relate that transfer to the callee's matching native parameter entry and its
+first helper-call use. Keep the two snapshots' SSA identities separate; matching
+storage is not cross-function SSA equality or a general alias proof. Verify
+the selected pointer setup/call and callee helper use with focused machine
+instructions, including actual call targets and passing registers.
+
+Return a focused answer with real Evidence IDs, target digest and necessary
+coverage. Distinguish native recovered model observations, storage-based
+connections and machine corroboration from original signature/ABI/runtime
+claims. Preserve unresolved stack rebasing, split/join/subregister mappings,
+aliases, runtime binding and feasibility. Do not return complete C/graph reports
+or execute the target. Close the target lease.
+
+Use native architecture metadata to name each selected register storage tuple
+exactly, including widths, the caller return and the transferred value's own
+storage versus its call-site passing storage. Do not substitute a containing
+register for an unmatched slice. For the native code, register and stack spaces,
+report kind, byte order, address-size bytes and addressable-unit bytes. Keep
+stack tuples without an exact register-map match explicit, without inventing
+a hardware-register name. Cite the retained native catalog separately from
+function facts and machine corroboration.

@@ -3,22 +3,14 @@ import { z } from "zod";
 import { MAX_BYTE_BATCH_BYTES } from "./limits.mjs";
 import { MAX_GRAPH_BLOCKS } from "./graph-limits.mjs";
 import { createReference } from "./reference.mjs";
+import { definition, hex, page, valueLocation } from "./api-contracts.mjs";
+import { storageMethods } from "./storage-contracts.mjs";
 
-const hex = z.string().regex(/^0x(?:0|[1-9a-f][0-9a-f]{0,15})$/u);
 const snapshot = z.string().startsWith("snap_");
-const valueLocation = z.strictObject({
-  space: z.string(),
-  offset: hex,
-  size_bytes: z.number().int().positive(),
-});
 const byteWindow = z.strictObject({
   address: hex,
   length: z.number().int().min(1).max(MAX_BYTE_BATCH_BYTES).default(256),
 });
-const page = {
-  offset: z.number().int().nonnegative().default(0),
-  limit: z.number().int().min(1).max(128).default(20),
-};
 const kinds = z.enum([
   "value",
   "load",
@@ -46,13 +38,6 @@ const fields = z
     ]),
   )
   .optional();
-const definition = ({ summary, description }, input, method, example) => ({
-  summary,
-  description,
-  input: z.strictObject(input),
-  method,
-  example,
-});
 const identitySeeds = z.array(z.string()).min(1).max(128);
 const relationInput = z.discriminatedUnion("kind", [
   z.strictObject({
@@ -84,6 +69,7 @@ const relationInput = z.discriminatedUnion("kind", [
   }),
 ]);
 export const methods = {
+  ...storageMethods,
   switches: definition(
     {
       summary:

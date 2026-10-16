@@ -1,5 +1,5 @@
 import { pageFacts } from "./fact-reads.mjs";
-import { requireFact } from "./native-contract.mjs";
+import { requireFact, nativeLocationKey } from "./native-contract.mjs";
 
 export const nativePage = (
   rows,
@@ -27,9 +27,6 @@ export const readNativeIdentities = (index, input, filter = () => true) => ({
     : [],
 });
 
-const locationKey = ({ space, offset, size_bytes }) =>
-  JSON.stringify([space, offset, size_bytes]);
-
 // One owner for graph, projection and call-boundary value selection. The lazy
 // index contains only retained facts, never arbitrary caller query/cache keys.
 export function createNativeValueReader(values, coverage) {
@@ -43,7 +40,7 @@ export function createNativeValueReader(values, coverage) {
           unknownSpaces++;
           continue;
         }
-        const key = locationKey(row);
+        const key = nativeLocationKey(row);
         if (!locations.has(key)) locations.set(key, []);
         locations.get(key).push(row);
       }
@@ -57,7 +54,7 @@ export function createNativeValueReader(values, coverage) {
     const requested =
       input.locations === undefined
         ? null
-        : new Map(input.locations.map((row) => [locationKey(row), row]));
+        : new Map(input.locations.map((row) => [nativeLocationKey(row), row]));
     const groups = requested ? locate(requested) : null;
     const candidates = input.ids
       ? [...new Set(input.ids)].flatMap((id) => values.get(id) ?? [])
@@ -68,7 +65,9 @@ export function createNativeValueReader(values, coverage) {
       ...nativePage(
         candidates.filter(
           (row) =>
-            (!requested || !input.ids || requested.has(locationKey(row))) &&
+            (!requested ||
+              !input.ids ||
+              requested.has(nativeLocationKey(row))) &&
             (input.is_input === undefined || row.is_input === input.is_input),
         ),
         input,

@@ -9,13 +9,12 @@ import { referenceReader } from "./reference-reads.mjs";
 import { PrivateRuntimeRoot } from "../../dist/process/PrivateRuntimeRoot.js";
 import { parseNativeIR } from "./native-ir.mjs";
 import { NativeEvidenceReads } from "./native-evidence-reads.mjs";
+import { NativeCatalogReads } from "./native-catalog-reads.mjs";
 import { DEFAULT_NATIVE_OPERATION_FIELDS } from "./native-operation-views.mjs";
 import { FactFailure, requireResult } from "./fact-error.mjs";
 import { windowReaders } from "./window-readers.mjs";
 import { NATIVE_OUTPUT_BYTES } from "./limits.mjs";
 import { sourceSummary, projectFact, readFactBatch } from "./fact-reads.mjs";
-import { parseFunctionFacts, selectFunctionFacts } from "./function-facts.mjs";
-import { parseStringFacts, selectStringFacts } from "./string-facts.mjs";
 import {
   parseKunaSsaDump,
   backwardSlice,
@@ -40,8 +39,11 @@ export class KunaFactOwner {
   #target;
   #installation;
   #retainedBytes = 0;
-  #strings;
-  #functions;
+  #catalogs = new NativeCatalogReads(
+    (...args) => this.#native(...args),
+    (id) => this.#sourceText(id),
+    () => this.#requireNativeIR(),
+  );
   #captureDirectory;
   #evidence = new NativeEvidenceReads(async (id) => ({
     text: await this.#sourceText(id),
@@ -104,7 +106,7 @@ export class KunaFactOwner {
         ? "experimental-native-ir-v3"
         : "diagnostic-ssa-1.833",
       profile: owner.#nativeIR
-        ? "pinned engine with embedded specs; fresh private engine cache per lease; byte reads suppress global discovery; other native CLI defaults; no annotations"
+        ? "pinned engine with embedded specs; fresh private engine cache per lease; byte/storage metadata reads suppress global discovery; other native CLI defaults; no annotations"
         : "byte reads suppress global discovery; other native CLI defaults, no annotations; external spec cache freshness is not fingerprinted",
     });
     return owner;
@@ -189,44 +191,16 @@ export class KunaFactOwner {
     return text;
   }
   async strings(input, signal) {
-    const capture = await this.#native(
-      "strings",
-      (path) => [
-        "strings",
-        path,
-        "--json",
-        "--encoding",
-        "all",
-        "--min-length",
-        "5",
-        "--termination",
-        "any",
-        "--no-xrefs",
-      ],
-      signal,
-    );
-    this.#strings ??= await parseStringFacts(
-      await this.#sourceText(capture.source.evidence_id),
-      capture.input,
-    );
-    return {
-      source: sourceSummary(capture.source),
-      ...selectStringFacts(this.#strings, input),
-    };
+    return this.#catalogs.strings(input, signal);
   }
   async functions(input, signal) {
-    const capture = await this.#native(
-      "functions",
-      (path) => ["functions", path, "--json"],
-      signal,
-    );
-    this.#functions ??= parseFunctionFacts(
-      await this.#sourceText(capture.source.evidence_id),
-    );
-    return {
-      source: sourceSummary(capture.source),
-      ...selectFunctionFacts(this.#functions, input),
-    };
+    return this.#catalogs.functions(input, signal);
+  }
+  async spaces(input, signal) {
+    return this.#catalogs.spaces(input, signal);
+  }
+  async registers(input, signal) {
+    return this.#catalogs.registers(input, signal);
   }
   async references(input, signal) {
     return readFactBatch(
@@ -493,8 +467,7 @@ export class KunaFactOwner {
     this.#sources.clear();
     this.#work.clear();
     this.#snapshots.clear();
-    this.#strings = undefined;
-    this.#functions = undefined;
+    this.#catalogs.clear();
     this.#evidence.clear();
   }
   cancel() {
