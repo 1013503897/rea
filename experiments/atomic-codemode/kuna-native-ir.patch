@@ -24,6 +24,361 @@ index 157e7bd2..6caa4604 100644
   "kuna-analysis",
   "kuna-base",
   "kuna-console",
+diff --git a/decompiler/crates/kuna-analysis/src/analyzers/noreturn_disc/flow_tests.rs b/decompiler/crates/kuna-analysis/src/analyzers/noreturn_disc/flow_tests.rs
+new file mode 100644
+index 00000000..34158718
+--- /dev/null
++++ b/decompiler/crates/kuna-analysis/src/analyzers/noreturn_disc/flow_tests.rs
+@@ -0,0 +1,115 @@
++use super::{call_site_has_no_fallthrough, discover_noreturn};
++use crate::listing::{DiscoveredFunction, FlowKind, FlowType, Insn, Listing};
++
++fn instruction(at: u64, kind: FlowKind, fall: Option<u64>, targets: &[u64]) -> Insn {
++    Insn {
++        addr: at,
++        len: 4,
++        fall_through: fall,
++        flow: FlowType {
++            kind,
++            is_call: kind == FlowKind::Call,
++            is_jump: matches!(
++                kind,
++                FlowKind::ConditionalBranch
++                    | FlowKind::UnconditionalBranch
++                    | FlowKind::ComputedJump
++            ),
++            is_terminal: kind == FlowKind::Return,
++            is_conditional: kind == FlowKind::ConditionalBranch,
++            is_computed: kind == FlowKind::ComputedJump,
++            is_indirect: kind == FlowKind::ComputedJump,
++            has_fallthrough: fall.is_some(),
++        },
++        flows: targets.to_vec(),
++        mnemonic: String::new(),
++        operands: String::new(),
++        pcode: None,
++    }
++}
++
++fn listing(insns: Vec<Insn>) -> Listing {
++    let funcs = [0x100, 0x200, 0x300]
++        .into_iter()
++        .map(|entry| DiscoveredFunction {
++            entry,
++            name: None,
++            from_symbol: true,
++            has_no_return: entry == 0x200,
++            call_fixup: None,
++        })
++        .collect();
++    Listing::from_model_for_test(insns, funcs, vec![], vec![(0x100, 0x400)])
++}
++
++fn concludes(listing: &Listing) -> bool {
++    discover_noreturn(listing, true)
++        .iter()
++        .any(|f| f.addr == 0x100)
++}
++
++#[test]
++fn returning_tail_and_fatal_alternative_do_not_make_a_noreturn_function() {
++    // OpenSSH warning shape: one branch restores LR/SP and tail-transfers to
++    // free, while an allocation-failure branch calls a known fatal wrapper.
++    let model = listing(vec![
++        instruction(0x100, FlowKind::ConditionalBranch, Some(0x104), &[0x110]),
++        instruction(0x104, FlowKind::UnconditionalBranch, None, &[0x300]),
++        instruction(0x110, FlowKind::Call, None, &[0x200]),
++    ]);
++    assert!(!concludes(&model));
++}
++
++#[test]
++fn unknown_exits_cannot_be_hidden_by_another_fatal_path() {
++    for other in [
++        instruction(0x104, FlowKind::ComputedJump, None, &[]),
++        instruction(0x104, FlowKind::Call, None, &[0x300]),
++        instruction(0x104, FlowKind::Fallthrough, Some(0x108), &[]),
++        instruction(0x104, FlowKind::UnconditionalBranch, None, &[0x500]),
++    ] {
++        let model = listing(vec![
++            instruction(0x100, FlowKind::ConditionalBranch, Some(0x104), &[0x110]),
++            other,
++            instruction(0x110, FlowKind::Call, None, &[0x200]),
++        ]);
++        assert!(!concludes(&model));
++    }
++}
++
++#[test]
++fn genuine_terminal_paths_and_dead_return_remain_discoverable() {
++    let both = listing(vec![
++        instruction(0x100, FlowKind::ConditionalBranch, Some(0x104), &[0x110]),
++        instruction(0x104, FlowKind::UnconditionalBranch, None, &[0x200]),
++        instruction(0x110, FlowKind::Call, None, &[0x200]),
++    ]);
++    assert!(concludes(&both));
++    let dead_return = listing(vec![
++        instruction(0x100, FlowKind::Call, Some(0x104), &[0x200]),
++        instruction(0x104, FlowKind::Return, None, &[]),
++    ]);
++    assert!(concludes(&dead_return));
++}
++
++#[test]
++fn wrapper_fixpoint_keeps_real_noreturn_transitive() {
++    let model = listing(vec![
++        instruction(0x100, FlowKind::Call, None, &[0x300]),
++        instruction(0x300, FlowKind::Call, None, &[0x200]),
++    ]);
++    assert!(concludes(&model));
++}
++
++#[test]
++fn missing_call_successor_is_unknown_rather_than_a_noreturn_vote() {
++    let model = listing(vec![instruction(0x100, FlowKind::Call, None, &[0x300])]);
++    assert!(!call_site_has_no_fallthrough(&model, 0x100, 0x300, true));
++    let positive = listing(vec![instruction(
++        0x100,
++        FlowKind::Call,
++        Some(0x200),
++        &[0x300],
++    )]);
++    assert!(call_site_has_no_fallthrough(&positive, 0x100, 0x300, true));
++}
+diff --git a/decompiler/crates/kuna-analysis/src/analyzers/noreturn_disc/kuna_discstrict.rs b/decompiler/crates/kuna-analysis/src/analyzers/noreturn_disc/kuna_discstrict.rs
+index f735bea7..78bee36d 100644
+--- a/decompiler/crates/kuna-analysis/src/analyzers/noreturn_disc/kuna_discstrict.rs
++++ b/decompiler/crates/kuna-analysis/src/analyzers/noreturn_disc/kuna_discstrict.rs
+@@ -39,9 +39,9 @@
+ //! - the successor is **another function's entry** — the compiler placed the next
+ //!   function immediately after the call, leaving the caller no tail at all.
+ //!
+-//! The terminal arm (a call with no fall-through VMA at all — a tail jump lowered
+-//! to a call) stays in the caller, ahead of this test: it is a property of the call
+-//! instruction, not of its successor.
++//! A call with no recorded successor contributes no new vote: a returning tail
++//! call also has no local continuation. The caller handles that unknown before
++//! this positive-successor test.
+ //!
+ //! Dropping the bare arm is what makes the data arm *live*. `is_data(fall)` implies
+ //! `!is_instruction_start(fall)`, so under the legacy order the data arm was
+diff --git a/decompiler/crates/kuna-analysis/src/analyzers/noreturn_disc/mod.rs b/decompiler/crates/kuna-analysis/src/analyzers/noreturn_disc/mod.rs
+index 52134fc3..d8107ba2 100644
+--- a/decompiler/crates/kuna-analysis/src/analyzers/noreturn_disc/mod.rs
++++ b/decompiler/crates/kuna-analysis/src/analyzers/noreturn_disc/mod.rs
+@@ -17,8 +17,9 @@
+ //! the `call` — the compiler knows control never comes back, so it does not emit a
+ //! sane fall-through there. When **≥3** call sites of a callee show this signal
+ //! (Ghidra's evidence threshold), the callee is concluded no-return. The result is
+-//! iterated to a fixpoint: a function whose last act is a call to an
+-//! already-discovered-no-return function is itself no-return.
++//! iterated to a fixpoint. Promotion requires every reachable path to end in
++//! known no-return code, using the same walk as structural propagation. A
++//! terminal alternative alone cannot erase another returning or unknown exit.
+ //!
+ //! This was **infeasible at the kuna-analysis tier until the Listing/xref tier**
+ //! (`docs/history/listing-tier-design.md`): it needs the program-wide disassembled Listing
+@@ -51,9 +52,8 @@
+ //!
+ //! # Faithful scope / LOSS
+ //!
+-//! - **Evidence threshold = 3**, matching Ghidra's `EVIDENCE_THRESHOLD`. Below the
+-//!   threshold a callee is left alone (a custom wrapper called only once or twice
+-//!   is not concluded no-return — the heuristic needs corroboration).
++//! - **Evidence threshold = 3** for the call-site heuristic. Below it, only
++//!   separate all-path promotion can prove a known-terminal wrapper no-return.
+ //! - The "no-valid-fall-through" predicate is the Listing-faithful subset Ghidra's
+ //!   `checkForNoReturn` reduces to at this tier: the fall-through VMA landed in
+ //!   data (`is_data` — outside every executable range), or it is another
+@@ -71,11 +71,15 @@
+
+ use std::collections::{BTreeMap, BTreeSet};
+
++use super::noreturn_propagate::known_noreturn_paths;
+ use crate::listing::{Listing, RefKind};
+ use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, NoReturnFact, Phase};
+
+ pub mod kuna_discstrict;
+
++#[cfg(test)]
++mod flow_tests;
++
+ /// Ghidra's `FindNoReturnFunctionsAnalyzer` evidence threshold: a callee is
+ /// concluded no-return once at least this many of its call sites show no valid
+ /// fall-through (`EVIDENCE_THRESHOLD` / the operand-vote count).
+@@ -117,14 +121,14 @@ impl AnalysisPass for NoReturnDiscoveredPass {
+ /// The instruction after the call (`call_vma + len`) has no valid fall-through
+ /// when it is not a decoded instruction start, OR it landed in data, OR it is the
+ /// entry of *another* function (the compiler placed the next function immediately
+-/// after the dead call). A call instruction with no recorded fall-through VMA
+-/// (terminal — e.g. a tail-call lowered to a jump) is itself evidence.
++/// after the dead call). A missing successor alone is unknown: tail calls to
++/// returning functions also have no local fall-through.
+ ///
+ /// With `strict` (`noreturn_discstrict`, GH-312) the bare "not a decoded
+ /// instruction start" arm is dropped: the Listing walk always attempts a call's
+ /// successor, so that arm is a decode-failure detector and votes a callee
+-/// no-return on kuna's own spec gaps. Only the terminal arm and the two positive
+-/// arms survive — see [`kuna_discstrict`].
++/// no-return on kuna's own spec gaps. Only the two positive
++/// successor arms survive — see [`kuna_discstrict`].
+ fn call_site_has_no_fallthrough(
+     listing: &Listing,
+     call_vma: u64,
+@@ -136,8 +140,10 @@ fn call_site_has_no_fallthrough(
+         return false;
+     };
+     let Some(fall) = insn.fall_through else {
+-        // A call with no fall-through at all (a lowered tail jump) is evidence.
+-        return true;
++        // No local successor is compatible with a returning tail call, an
++        // incomplete flow model, or a known no-return override. None can supply
++        // new evidence about a callee whose return behaviour is still unknown.
++        return false;
+     };
+     if strict {
+         return kuna_discstrict::successor_is_positive_evidence(listing, fall, callee);
+@@ -187,48 +193,6 @@ fn skip_callee(listing: &Listing, callee: u64, terminal: &BTreeSet<u64>) -> bool
+     }
+ }
+
+-/// Does function `entry` flow ONLY into an already-terminal (no-return) function
+-/// — the fixpoint promotion rule (a function whose every terminal path is a call
+-/// to an already-discovered-no-return function, with no returning path, is itself
+-/// no-return)?
+-///
+-/// Sound guard against false positives: we require BOTH (a) the function's
+-/// instruction span `[entry, next_entry)` contains a terminal call to a function
+-/// in `terminal` (a no-fall-through call to a no-return callee), AND (b) the
+-/// function contains NO `RETURN` instruction (no path returns). A function with a
+-/// `ret` somewhere returns on that path and must not be promoted by this rule
+-/// (the call-site evidence rule still applies to it independently). This is the
+-/// cheap, Listing-faithful form of Ghidra's worklist feedback (a newly no-return
+-/// function re-flags its tail-calling callers).
+-fn last_act_is_terminal_call(
+-    listing: &Listing,
+-    entry: u64,
+-    terminal: &BTreeSet<u64>,
+-    strict: bool,
+-) -> bool {
+-    let next = listing.next_function_after(entry).map(|f| f.entry);
+-    let mut has_terminal_call = false;
+-    for (&vma, insn) in listing.instructions_in_range(entry, next) {
+-        // (b) Any returning path disqualifies the function from this rule.
+-        if insn.flow.is_terminal {
+-            return false;
+-        }
+-        if !insn.flow.is_call {
+-            continue;
+-        }
+-        // (a) A call whose static callee is already terminal AND which itself has
+-        // no valid fall-through (the call is a terminal flow of this function).
+-        for &callee in &insn.flows {
+-            if terminal.contains(&callee)
+-                && call_site_has_no_fallthrough(listing, vma, callee, strict)
+-            {
+-                has_terminal_call = true;
+-            }
+-        }
+-    }
+-    has_terminal_call
+-}
+-
+ /// Run the evidence-tally + fixpoint over the Listing and return the discovered
+ /// no-return functions as [`NoReturnFact`]s (design §6 + Ghidra's
+ /// `FindNoReturnFunctionsAnalyzer`).
+@@ -236,9 +200,9 @@ fn last_act_is_terminal_call(
+ /// Two rules, iterated to a fixpoint:
+ /// 1. **Call-site evidence**: a callee with `>= EVIDENCE_THRESHOLD` (3) call sites
+ ///    showing no valid fall-through is no-return.
+-/// 2. **Last-act promotion** (the fixpoint feedback): a function whose terminal
+-///    instruction is a call to an already-discovered-no-return function is itself
+-///    no-return — so a wrapper-of-a-wrapper converges.
++/// 2. **Reachable-path promotion**: the shared propagation walk proves every
++///    reachable exit is to an already-no-return callee. Returning tails, missing
++///    successors, unresolved jumps and escaping branches remain unknown.
+ ///
+ /// The result is keyed by entry VMA (a `BTreeMap` so the emitted facts are
+ /// address-ordered and deduped). The `terminal` set seeds with the Known-list
+@@ -246,8 +210,8 @@ fn last_act_is_terminal_call(
+ fn discover_noreturn(listing: &Listing, strict: bool) -> Vec<NoReturnFact> {
+     let mut discovered: BTreeMap<u64, NoReturnFact> = BTreeMap::new();
+     // The "already no-return" anchor set: the Known-seeded functions plus
+-    // everything discovered so far. A call to one of these is a no-fall-through
+-    // site for its caller (rule 2 reads this).
++    // everything discovered so far. The shared path walk treats a transfer to
++    // one of these as ending that path (rule 2 reads this).
+     let mut terminal: BTreeSet<u64> = listing
+         .functions()
+         .filter(|(_, f)| f.has_no_return)
+@@ -272,9 +236,9 @@ fn discover_noreturn(listing: &Listing, strict: bool) -> Vec<NoReturnFact> {
+             if skip_callee(listing, entry, &terminal) {
+                 continue;
+             }
+-            // Rule 1: direct call-site evidence. Rule 2: terminal-call promotion.
++            // Rule 1: direct call-site evidence. Rule 2: shared all-path promotion.
+             let concluded = no_fallthrough_evidence(listing, entry, strict) >= EVIDENCE_THRESHOLD
+-                || last_act_is_terminal_call(listing, entry, &terminal, strict);
++                || known_noreturn_paths(listing, entry, &terminal);
+             if concluded {
+                 let name = listing
+                     .function_at(entry)
+@@ -294,12 +258,7 @@ fn discover_noreturn(listing: &Listing, strict: bool) -> Vec<NoReturnFact> {
+ mod tests {
+     use super::*;
+
+-    // The fixpoint convergence + threshold logic is exercised end-to-end by the
+-    // cross-crate `verify_noreturn_disc.rs` gate (a real x86-64 fixture with a
+-    // custom `die()` wrapper called >=3x). A unit test here would need a hand-built
+-    // `Listing`, whose private fields are not constructible outside the `listing`
+-    // module; the threshold/predicate are pinned by that e2e + the predicate
+-    // helpers below stay tiny and obviously-correct by inspection.
++    // Flow semantics and the actual fixpoint are exercised in flow_tests.
+
+     #[test]
+     fn threshold_is_three() {
+diff --git a/decompiler/crates/kuna-analysis/src/analyzers/noreturn_propagate/mod.rs b/decompiler/crates/kuna-analysis/src/analyzers/noreturn_propagate/mod.rs
+index f334a5a2..5b72c223 100644
+--- a/decompiler/crates/kuna-analysis/src/analyzers/noreturn_propagate/mod.rs
++++ b/decompiler/crates/kuna-analysis/src/analyzers/noreturn_propagate/mod.rs
+@@ -457,6 +457,18 @@ fn function_reaches_only_noreturn(
+     error_recog: &ErrorRecognizer,
+ ) -> bool {
+     let next = listing.next_function_after(entry).map(|f| f.entry);
++    // A terminal transfer is necessary. Most functions have none: avoid a
++    // per-function map allocation and CFG walk for them in both consumers.
++    let has_terminal_transfer = listing.instructions_in_range(entry, next).any(|(_, insn)| {
++        (insn.flow.is_call || insn.flow.is_jump)
++            && insn.flows.iter().any(|target| {
++                terminal.contains(target)
++                    || (insn.flow.is_call && error_recog.is_error(*target))
++            })
++    });
++    if !has_terminal_transfer {
++        return false;
++    }
+     // Address-indexed body for O(log n) successor lookup.
+     let body: BTreeMap<u64, &Insn> = listing
+         .instructions_in_range(entry, next)
+@@ -465,6 +477,18 @@ fn function_reaches_only_noreturn(
+     reaches_only_noreturn_walk(&body, entry, next, terminal, error_recog)
+ }
+
++/// Discovered-no-return promotion shares the conservative CFG owner. The
++/// discovery pass has no per-call error(status) recognition authority, so only
++/// its current known-terminal set can end a path. A tail transfer to anything
++/// else preserves the caller's continuation as possibly returning.
++pub(super) fn known_noreturn_paths(
++    listing: &Listing,
++    entry: u64,
++    terminal: &BTreeSet<u64>,
++) -> bool {
++    function_reaches_only_noreturn(listing, entry, terminal, &ErrorRecognizer::disabled())
++}
++
+ /// The reachability walk core (extracted for unit testing): from `entry`, walk the
+ /// instruction-level reachable graph of `body` (bounded `[entry, next)`), treating
+ /// a call/jump to a callee in `terminal` (or a value-conditional `error(nonzero,…)`
 diff --git a/decompiler/crates/kuna-analysis/src/listing/kuna_pc_relative.rs b/decompiler/crates/kuna-analysis/src/listing/kuna_pc_relative.rs
 new file mode 100644
 index 00000000..5385192d
