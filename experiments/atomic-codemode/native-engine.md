@@ -242,3 +242,22 @@ facet. A function that exceeds graph capacity also loses these call records,
 even if a selected call-target view could fit. This is a reason to explore
 independent fact facets; it must not be mistaken for proof of no calls or full
 coverage on large functions. No full provider parity claim is made.
+
+The current producer also passes fourteen native JSON-format tests. The initial
+command compiled unrelated integration targets and a non-embedded CLI build,
+which replaced Cargo's mutable `target/release/kuna`. Its 181.103 wall / 172.430
+CPU seconds, 651.6 MiB peak and OOM 0 describe that broader compilation, not just
+JSON test execution. Future focused commands should select `--bin kuna` and
+`--features embed-specs`. The original embedded build restores from Cargo cache
+and has the same `64c6b3f...` digest.
+
+The first model launch after those tests correctly fails at `open_binary` with
+`engine_profile_mismatch`; it produces no target Evidence and is not a completed
+answer. Its rejected-trial costs are retained in `trials.md`. The producing
+boundary is now fixed by preserving an independent executable copy in a directory
+named by the full SHA-256, outside Cargo outputs. The model harness checks the
+explicit experimental engine pin before copying credentials or launching a model,
+and verifies the same bytes after the task. Changed/missing engines reject the
+comparison while retaining costs. Other provider trials keep this field unknown.
+Three regression tests cover missing/malformed pins, replacement and removal;
+a real driver invocation with a wrong pin rejects before output/profile creation.

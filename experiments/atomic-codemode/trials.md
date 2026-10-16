@@ -73,21 +73,21 @@ Kuna provider and selects nine relevant production tools in the client:
 `analyze_function`. The production catalog remains complete. This is a favorable
 focused baseline, not the default full-catalog experience.
 
-| Measurement | Atomic direct v2 | Atomic + Code Mode v2 | Traditional v2 |
-| --- | ---: | ---: | ---: |
-| Outer MCP attempts, including failures | 27 | 12 | 9 |
-| Completed / failed outer attempts | 27 / 0 | 12 / 0 | 7 / 2 |
-| Internal Code Mode API reads | — | 21 | — |
-| Cumulative model input tokens | 590,872 | 453,734 | 344,105 |
-| Cached input tokens (included) | 496,512 | 401,664 | 297,344 |
-| Uncached input tokens | 94,360 | 52,070 | 46,761 |
-| Output tokens | 5,874 | 4,738 | 3,076 |
-| Reasoning tokens (included in output) | 2,228 | 1,716 | 832 |
-| Model runner wall seconds | 170.813 | 148.397 | 106.352 |
-| Bounded family elapsed seconds | 171.801 | 149.585 | 106.747 |
-| Bounded family CPU seconds | 11.898 | 22.129 | 20.666 |
-| Kernel process-family memory peak MiB | 578.2 | 544.3 | 843.4 |
-| OOM kills | 0 | 0 | 0 |
+| Measurement                            | Atomic direct v2 | Atomic + Code Mode v2 | Traditional v2 |
+| -------------------------------------- | ---------------: | --------------------: | -------------: |
+| Outer MCP attempts, including failures |               27 |                    12 |              9 |
+| Completed / failed outer attempts      |           27 / 0 |                12 / 0 |          7 / 2 |
+| Internal Code Mode API reads           |                — |                    21 |              — |
+| Cumulative model input tokens          |          590,872 |               453,734 |        344,105 |
+| Cached input tokens (included)         |          496,512 |               401,664 |        297,344 |
+| Uncached input tokens                  |           94,360 |                52,070 |         46,761 |
+| Output tokens                          |            5,874 |                 4,738 |          3,076 |
+| Reasoning tokens (included in output)  |            2,228 |                 1,716 |            832 |
+| Model runner wall seconds              |          170.813 |               148.397 |        106.352 |
+| Bounded family elapsed seconds         |          171.801 |               149.585 |        106.747 |
+| Bounded family CPU seconds             |           11.898 |                22.129 |         20.666 |
+| Kernel process-family memory peak MiB  |            578.2 |                 544.3 |          843.4 |
+| OOM kills                              |                0 |                     0 |              0 |
 
 The traditional trace includes a client approval-policy rejection for
 `binary_session` and a failed name lookup for `inflate`; the model recovered
@@ -131,19 +131,19 @@ runtime successor coverage. API/transport calls succeed, the runtime input diges
 is unchanged across the trial, the target digest is unchanged, the copied model
 profile is removed and observed payload cleanup succeeds.
 
-| Measurement | Native IR + Code Mode v3 |
-| --- | ---: |
-| Outer MCP attempts / failed | 15 / 0 |
-| Internal API reads | 24 |
-| Cumulative model input tokens | 600,857 |
-| Cached input tokens (included) | 534,784 |
-| Uncached input tokens | 66,073 |
-| Output / included reasoning tokens | 4,131 / 649 |
-| Model runner wall seconds | 117.773 |
-| Bounded family elapsed seconds | 119.211 |
-| Bounded family CPU seconds | 15.339 |
-| Kernel process-family memory peak MiB | 560.1 |
-| OOM kills | 0 |
+| Measurement                           | Native IR + Code Mode v3 |
+| ------------------------------------- | -----------------------: |
+| Outer MCP attempts / failed           |                   15 / 0 |
+| Internal API reads                    |                       24 |
+| Cumulative model input tokens         |                  600,857 |
+| Cached input tokens (included)        |                  534,784 |
+| Uncached input tokens                 |                   66,073 |
+| Output / included reasoning tokens    |              4,131 / 649 |
+| Model runner wall seconds             |                  117.773 |
+| Bounded family elapsed seconds        |                  119.211 |
+| Bounded family CPU seconds            |                   15.339 |
+| Kernel process-family memory peak MiB |                    560.1 |
+| OOM kills                             |                        0 |
 
 The capability gap is narrower, but this trial still does not beat the earlier
 traditional workflow on whole-task costs. The model performs four slices and
@@ -162,17 +162,17 @@ traditional client retains its nine selected tools. Both traces use the real
 Kuna engine, complete without API errors, preserve the target/runtime digests
 and verify profile/payload cleanup with no OOM kills.
 
-| Measurement | Native IR + Code Mode | Traditional |
-| --- | ---: | ---: |
-| Outer MCP attempts | 8 | 5 |
-| Cumulative model input tokens | 284,638 | 390,557 |
-| Included cached input tokens | 220,672 | 326,016 |
-| Uncached input tokens | 63,966 | 64,541 |
-| Output / included reasoning tokens | 2,601 / 309 | 2,614 / 531 |
-| Model runner wall seconds | 72.403 | 91.832 |
-| Bounded family elapsed seconds | 72.841 | 92.254 |
-| Bounded family CPU seconds | 11.896 | 20.866 |
-| Kernel process-family memory peak MiB | 461.6 | 846.0 |
+| Measurement                           | Native IR + Code Mode | Traditional |
+| ------------------------------------- | --------------------: | ----------: |
+| Outer MCP attempts                    |                     8 |           5 |
+| Cumulative model input tokens         |               284,638 |     390,557 |
+| Included cached input tokens          |               220,672 |     326,016 |
+| Uncached input tokens                 |                63,966 |      64,541 |
+| Output / included reasoning tokens    |           2,601 / 309 | 2,614 / 531 |
+| Model runner wall seconds             |                72.403 |      91.832 |
+| Bounded family elapsed seconds        |                72.841 |      92.254 |
+| Bounded family CPU seconds            |                11.896 |      20.866 |
+| Kernel process-family memory peak MiB |                 461.6 |       846.0 |
 
 Both answers recover the three accumulator alternatives, byte loads, shifts,
 additions, local bit-count conditions and unknown state. The native answer,
@@ -198,17 +198,17 @@ bytes and correctly distinguishes recovered predecessor 38 from the intervening
 equations, byte-order conditions and unknown invariants. These remain individual
 stochastic samples, not a general speedup guarantee.
 
-| Measurement | Code Mode value v2 | Traditional value v2 |
-| --- | ---: | ---: |
-| MCP attempts / failures | 7 / 0 | 6 / 1 |
-| Cumulative input tokens | 296,888 | 573,881 |
-| Included cached input | 252,160 | 512,128 |
-| Uncached input | 44,728 | 61,753 |
-| Output / included reasoning | 3,176 / 594 | 2,830 / 547 |
-| Model wall seconds | 96.662 | 124.754 |
-| Family wall seconds | 97.654 | 125.410 |
-| Family CPU seconds | 19.495 | 44.143 |
-| Kernel family peak MiB | 534.4 | 797.4 |
+| Measurement                 | Code Mode value v2 | Traditional value v2 |
+| --------------------------- | -----------------: | -------------------: |
+| MCP attempts / failures     |              7 / 0 |                6 / 1 |
+| Cumulative input tokens     |            296,888 |              573,881 |
+| Included cached input       |            252,160 |              512,128 |
+| Uncached input              |             44,728 |               61,753 |
+| Output / included reasoning |        3,176 / 594 |          2,830 / 547 |
+| Model wall seconds          |             96.662 |              124.754 |
+| Family wall seconds         |             97.654 |              125.410 |
+| Family CPU seconds          |             19.495 |               44.143 |
+| Kernel family peak MiB      |              534.4 |                797.4 |
 
 The traditional failure is the client policy rejection of `binary_session`.
 Its cost remains included. Both runtime/target digests stay unchanged, cleanup
@@ -219,16 +219,16 @@ single-sample qualifications retained.
 The initial SQLite diagnostic comparison, also at `4f13bd673`, exposes a further
 capability/comparison gap:
 
-| Measurement | Code Mode SQLite v1 | Traditional SQLite v1 |
-| --- | ---: | ---: |
-| MCP attempts / failures | 14 / 0 | 17 / 8 |
-| Cumulative input tokens | 601,445 | 934,237 |
-| Included cached input | 535,296 | 831,744 |
-| Uncached input | 66,149 | 102,493 |
-| Output / included reasoning | 4,790 / 1,668 | 3,878 / 1,121 |
-| Model wall seconds | 143.469 | 231.469 |
-| Family CPU seconds | 18.996 | 154.132 |
-| Kernel family peak MiB | 586.6 | 1,200.2 |
+| Measurement                 | Code Mode SQLite v1 | Traditional SQLite v1 |
+| --------------------------- | ------------------: | --------------------: |
+| MCP attempts / failures     |              14 / 0 |                17 / 8 |
+| Cumulative input tokens     |             601,445 |               934,237 |
+| Included cached input       |             535,296 |               831,744 |
+| Uncached input              |              66,149 |               102,493 |
+| Output / included reasoning |       4,790 / 1,668 |         3,878 / 1,121 |
+| Model wall seconds          |             143.469 |               231.469 |
+| Family CPU seconds          |              18.996 |               154.132 |
+| Kernel family peak MiB      |               586.6 |               1,200.2 |
 
 Both answers find the two malformed-message conditions and distinguish the
 depth-error, other-status and success paths. The traditional answer additionally
@@ -253,20 +253,20 @@ catalog replaces `binary_session` with `list_procedures`; exact-name discovery
 guidance is enabled. These instruction/catalog changes are recorded and are not
 retroactively applied to earlier trials.
 
-| Measurement | Code Mode v2 | Atomic direct v1 | Traditional cold v2 | Traditional reused-cache v1 |
-| --- | ---: | ---: | ---: | ---: |
-| MCP attempts / failures | 12 / 0 | 24 / 0 | 14 / 2 | 11 / 1 |
-| Unique model responses | 14 | 14 | 33 | 13 |
-| Client `exec` / `wait` calls | 13 / 0 | 13 / 0 | 15 / 17 | 12 / 0 |
-| Internal Code Mode API reads | 15 | — | — | — |
-| Cumulative input tokens | 454,914 | 464,979 | 1,093,061 | 432,446 |
-| Included cached input | 414,080 | 371,712 | 1,036,928 | 377,600 |
-| Uncached input | 40,834 | 93,267 | 56,133 | 54,846 |
-| Output / included reasoning | 3,636 / 1,129 | 4,591 / 1,482 | 4,056 / 787 | 2,889 / 488 |
-| Model wall seconds | 126.250 | 146.656 | 346.051 | 98.210 |
-| Family wall seconds | 127.171 | 147.151 | 346.491 | 98.690 |
-| Family CPU seconds | 16.199 | 18.445 | 219.655 | 15.601 |
-| Kernel family peak MiB | 598.2 | 565.0 | 1,128.7 | 779.2 |
+| Measurement                  |  Code Mode v2 | Atomic direct v1 | Traditional cold v2 | Traditional reused-cache v1 |
+| ---------------------------- | ------------: | ---------------: | ------------------: | --------------------------: |
+| MCP attempts / failures      |        12 / 0 |           24 / 0 |              14 / 2 |                      11 / 1 |
+| Unique model responses       |            14 |               14 |                  33 |                          13 |
+| Client `exec` / `wait` calls |        13 / 0 |           13 / 0 |             15 / 17 |                      12 / 0 |
+| Internal Code Mode API reads |            15 |                — |                   — |                           — |
+| Cumulative input tokens      |       454,914 |          464,979 |           1,093,061 |                     432,446 |
+| Included cached input        |       414,080 |          371,712 |           1,036,928 |                     377,600 |
+| Uncached input               |        40,834 |           93,267 |              56,133 |                      54,846 |
+| Output / included reasoning  | 3,636 / 1,129 |    4,591 / 1,482 |         4,056 / 787 |                 2,889 / 488 |
+| Model wall seconds           |       126.250 |          146.656 |             346.051 |                      98.210 |
+| Family wall seconds          |       127.171 |          147.151 |             346.491 |                      98.690 |
+| Family CPU seconds           |        16.199 |           18.445 |             219.655 |                      15.601 |
+| Kernel family peak MiB       |         598.2 |            565.0 |             1,128.7 |                       779.2 |
 
 All four answers cover the two malformed-message selectors, original expression
 argument, formatter implementation, free/`vmprintf`/pointer store, missing local
@@ -321,19 +321,19 @@ guidance, the same patched engine and model settings, and serial bounded trials.
 The fresh traditional project cache is reused only for its explicitly labeled
 fourth run. None of these trials uses the later opt-in envelope/stopping guidance.
 
-| Measurement | Code Mode VM v1 | Atomic direct VM v1 | Traditional cold VM v1 | Traditional reused-cache VM v1 |
-| --- | ---: | ---: | ---: | ---: |
-| MCP attempts / failures | 14 / 0 | 20 / 0 | 10 / 2 | 14 / 5 |
-| Unique model responses | 18 | 17 | 27 | 18 |
-| Client `exec` / `wait` calls | 15 / 2 | 13 / 3 | 12 / 14 | 17 / 0 |
-| Cumulative input tokens | 729,420 | 594,606 | 698,971 | 617,340 |
-| Included cached input | 664,960 | 526,720 | 625,152 | 543,616 |
-| Uncached input | 64,460 | 67,886 | 73,819 | 73,724 |
-| Output / included reasoning | 4,474 / 975 | 4,287 / 1,045 | 4,565 / 999 | 4,446 / 1,290 |
-| Model wall seconds | 243.082 | 218.541 | 342.966 | 185.580 |
-| Family wall seconds | 244.298 | 219.062 | 343.367 | 186.321 |
-| Family CPU seconds | 89.693 | 79.343 | 207.596 | 28.162 |
-| Kernel family peak MiB | 871.2 | 858.9 | 1,408.6 | 783.2 |
+| Measurement                  | Code Mode VM v1 | Atomic direct VM v1 | Traditional cold VM v1 | Traditional reused-cache VM v1 |
+| ---------------------------- | --------------: | ------------------: | ---------------------: | -----------------------------: |
+| MCP attempts / failures      |          14 / 0 |              20 / 0 |                 10 / 2 |                         14 / 5 |
+| Unique model responses       |              18 |                  17 |                     27 |                             18 |
+| Client `exec` / `wait` calls |          15 / 2 |              13 / 3 |                12 / 14 |                         17 / 0 |
+| Cumulative input tokens      |         729,420 |             594,606 |                698,971 |                        617,340 |
+| Included cached input        |         664,960 |             526,720 |                625,152 |                        543,616 |
+| Uncached input               |          64,460 |              67,886 |                 73,819 |                         73,724 |
+| Output / included reasoning  |     4,474 / 975 |       4,287 / 1,045 |            4,565 / 999 |                  4,446 / 1,290 |
+| Model wall seconds           |         243.082 |             218.541 |                342.966 |                        185.580 |
+| Family wall seconds          |         244.298 |             219.062 |                343.367 |                        186.321 |
+| Family CPU seconds           |          89.693 |              79.343 |                207.596 |                         28.162 |
+| Kernel family peak MiB       |           871.2 |               858.9 |                1,408.6 |                          783.2 |
 
 All four answers correctly distinguish selector zero plus signed positive
 `db+0xd8` for open, found name plus selector one plus the same positive counter
@@ -381,19 +381,19 @@ this is not a rerun with only one changed variable relative to older tasks.
 The question and independent instruction anchors were committed before the runs.
 No traditional cell was run for this new question.
 
-| Measurement | Code Mode Pragma v1 | Atomic direct Pragma v1 |
-| --- | ---: | ---: |
-| MCP attempts / failures | 11 / 0 | 14 / 0 |
-| Unique model responses | 13 | 12 |
-| Client `exec` / `wait` calls | 12 / 0 | 11 / 0 |
-| Cumulative input tokens | 370,307 | 353,364 |
-| Included cached input | 333,184 | 278,272 |
-| Uncached input | 37,123 | 75,092 |
-| Output / included reasoning | 3,612 / 803 | 2,830 / 326 |
-| Model wall seconds | 121.459 | 107.625 |
-| Family wall seconds | 122.256 | 108.066 |
-| Family CPU seconds | 20.003 | 20.261 |
-| Kernel family peak MiB | 590.1 | 560.6 |
+| Measurement                  | Code Mode Pragma v1 | Atomic direct Pragma v1 |
+| ---------------------------- | ------------------: | ----------------------: |
+| MCP attempts / failures      |              11 / 0 |                  14 / 0 |
+| Unique model responses       |                  13 |                      12 |
+| Client `exec` / `wait` calls |              12 / 0 |                  11 / 0 |
+| Cumulative input tokens      |             370,307 |                 353,364 |
+| Included cached input        |             333,184 |                 278,272 |
+| Uncached input               |              37,123 |                  75,092 |
+| Output / included reasoning  |         3,612 / 803 |             2,830 / 326 |
+| Model wall seconds           |             121.459 |                 107.625 |
+| Family wall seconds          |             122.256 |                 108.066 |
+| Family CPU seconds           |              20.003 |                  20.261 |
+| Kernel family peak MiB       |               590.1 |                   560.6 |
 
 Both answers match the machine oracle: null value pointer reads without the
 state check; a supplied value plus zero `D+0x65` selects the diagnostic before
@@ -418,19 +418,19 @@ Mode; both use common envelope/stopping guidance, fresh analysis leases and
 isolated empty model profiles. Independent machine instructions and direct file
 table reads were committed as the oracle before model execution.
 
-| Measurement | Atomic direct table v1 | Code Mode table v1 |
-| --- | ---: | ---: |
-| MCP attempts / failures | 8 / 0 | 7 / 0 |
-| Unique model responses | 10 | 9 |
-| Client `exec` / `wait` calls | 9 / 0 | 8 / 0 |
-| Cumulative input tokens | 244,235 | 225,673 |
-| Included cached input | 200,704 | 190,848 |
-| Uncached input | 43,531 | 34,825 |
-| Output / included reasoning | 3,055 / 1,024 | 2,765 / 355 |
-| Model wall seconds | 108.774 | 101.033 |
-| Family wall seconds | 109.281 | 101.523 |
-| Family CPU seconds | 9.683 | 9.606 |
-| Kernel family peak MiB | 490.5 | 495.3 |
+| Measurement                  | Atomic direct table v1 | Code Mode table v1 |
+| ---------------------------- | ---------------------: | -----------------: |
+| MCP attempts / failures      |                  8 / 0 |              7 / 0 |
+| Unique model responses       |                     10 |                  9 |
+| Client `exec` / `wait` calls |                  9 / 0 |              8 / 0 |
+| Cumulative input tokens      |                244,235 |            225,673 |
+| Included cached input        |                200,704 |            190,848 |
+| Uncached input               |                 43,531 |             34,825 |
+| Output / included reasoning  |          3,055 / 1,024 |        2,765 / 355 |
+| Model wall seconds           |                108.774 |            101.033 |
+| Family wall seconds          |                109.281 |            101.523 |
+| Family CPU seconds           |                  9.683 |              9.606 |
+| Kernel family peak MiB       |                  490.5 |              495.3 |
 
 Both models actually read the class and relative-jump tables through `bytes`.
 All six class values and destinations match the independent artifact oracle,
@@ -448,3 +448,22 @@ sample, with uncontrolled prompt/OS caches and no traditional cell. It establish
 neither a general cost ranking nor complex-program completeness. Target/runtime
 identities stay unchanged, cleanup verifies and OOM kills are zero. The private
 ledger is `round-73db4fa-ledger.json`.
+
+## Cross-function call task: preserved rejected launch
+
+Question/oracle and fourteen shared fact methods were fixed at `33c4282b8`.
+The initial `sqlite-call-codemode-v1` model sees `engine_profile_mismatch` at
+`open_binary`, then closes and reports that analysis is unavailable. Cargo's
+non-embedded test build had overwritten the selected mutable executable; the
+engine digest guard correctly rejects it. No target digest or Evidence is
+returned. This is an experimental setup failure, not a completed analysis or an
+accuracy/speed win. Runtime JS and target bytes remain unchanged.
+
+Actual requested `gpt-6.1-sol/high` usage is 107,489 input (81,280 cached,
+26,209 uncached), 565 output including 101 reasoning tokens; five observed model
+responses, four client exec calls and three MCP requests. MCP transport requests
+complete, but the open API result is a failure. Model wall time is 40.205 seconds,
+family CPU 3.619 seconds and memory peak 436.6 MiB. Cleanup is verified, OOM 0.
+The failed sample and raw receipts remain under `.cache/atomic-codemode/` and
+are excluded from correctness-equal paired costs. Subsequent attempts use an
+independent preserved executable and explicit pre/post engine validation.

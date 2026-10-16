@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import signal
@@ -20,6 +21,30 @@ def file_digest(path):
         for chunk in iter(lambda: data.read(1024 * 1024), b''):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def pinned_experimental_engine(settings):
+    expected = settings.get('REA_ATOMIC_NATIVE_IR_ENGINE_SHA256')
+    if expected is None:
+        return None
+    if not re.fullmatch(r'[0-9a-f]{64}', expected):
+        raise ValueError('Experimental native engine pin must be a SHA-256')
+    path = Path(settings.get('REA_KUNA_COMMAND', ''))
+    if not path.is_absolute() or not path.is_file() or not os.access(path, os.X_OK):
+        raise ValueError('Pinned experimental engine requires an absolute executable file')
+    actual = file_digest(path)
+    if actual != expected:
+        raise ValueError('Experimental engine digest differs from its pin; use a preserved build artifact')
+    return {'path': str(path), 'sha256': actual}
+
+
+def experimental_engine_unchanged(receipt):
+    if receipt is None:
+        return None
+    try:
+        return file_digest(Path(receipt['path'])) == receipt['sha256']
+    except OSError:
+        return False
 
 
 def runtime_fingerprint(root, entrypoint=None):
@@ -114,6 +139,9 @@ def main():
     if undeclared:
         raise ValueError('Declare inherited provider settings explicitly in --providers: '
                          + ', '.join(undeclared) + '. Values are not logged.')
+    # Fail before copying credentials or spending model tokens. Cargo test/build
+    # can replace a mutable target/release path with a different feature build.
+    experimental_engine = pinned_experimental_engine(provider_env)
     source_auth_home = (Path(os.environ['CODEX_HOME']) if 'CODEX_HOME' in os.environ
                         else Path.home() / '.codex')
     source_auth = source_auth_home / 'auth.json'
@@ -288,6 +316,7 @@ def main():
             'question_template_sha256': template_digest,
             'provider_settings_sha256': hashlib.sha256(
                 json.dumps(provider_env, sort_keys=True).encode()).hexdigest(),
+            'experimental_engine': experimental_engine,
             'provider_search_path_sha256': hashlib.sha256(
                 provider_env.get('PATH', os.environ.get('PATH', '')).encode()).hexdigest(),
             'provider_environment_policy_sha256': hashlib.sha256(
@@ -341,6 +370,8 @@ def main():
             'mode': args.mode, 'requested_model': args.model, 'reasoning': args.reasoning,
             'runtime_revision': args.revision,
             'runtime_inputs_unchanged': runtime_fingerprint(repository, args.mcp_entrypoint)[1] == runtime_digest,
+            'experimental_engine': experimental_engine,
+            'experimental_engine_unchanged': experimental_engine_unchanged(experimental_engine),
             'capture_tool_context_requested': args.capture_tool_context,
             'selected_artifact_sha256_before': target_digest,
             'selected_artifact_sha256_after': final_target_digest,
@@ -357,6 +388,8 @@ def main():
         print(json.dumps(summary))
         if not summary['runtime_inputs_unchanged']:
             raise RuntimeError('Runtime inputs changed during the trial; retain costs but reject the comparison')
+        if summary['experimental_engine_unchanged'] is False:
+            raise RuntimeError('Experimental engine changed during the trial; retain costs but reject the comparison')
     finally:
         try:
             if args.capture_tool_context:

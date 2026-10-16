@@ -83,6 +83,8 @@ def summarize(directory):
         'trial': directory.name,
         'runtime_revision': summary['runtime_revision'],
         'runtime_inputs_unchanged': summary.get('runtime_inputs_unchanged'),
+        'experimental_engine': summary.get('experimental_engine'),
+        'experimental_engine_unchanged': summary.get('experimental_engine_unchanged'),
         'requested_model': summary['requested_model'],
         'reasoning': summary['reasoning'],
         'usage': dict(usage),
