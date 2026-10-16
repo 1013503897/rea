@@ -47,6 +47,34 @@ def client_observations(directory, declared_usage):
     }
 
 
+def trace_observations(path):
+    """Transport completion is separate from a failed analysis/API response."""
+    if not path.exists():
+        return {'availability': 'unavailable', 'code_mode_calls': None,
+                'code_mode_failures': None, 'direct_fact_calls': None,
+                'api_failures': None, 'code_mode_evidence_count': None}
+    methods, direct = collections.Counter(), collections.Counter()
+    inner_failures, failures, source_ids = [], [], set()
+    for line in path.read_text().splitlines():
+        entry = json.loads(line)
+        result, tool = entry['result'], entry['tool']
+        if tool == 'execute_javascript':
+            for call in result.get('calls', []):
+                methods[call['method']] += 1
+                if call['status'] != 'ok':
+                    inner_failures.append(call)
+                    failures.append({'tool': tool, 'scope': 'inner-api', **call})
+            source_ids.update(result.get('evidence_ids', []))
+        elif tool.startswith('facts_'):
+            direct[tool] += 1
+        if result.get('ok') is False:
+            failures.append({'tool': tool, 'scope': 'mcp-result',
+                             'error': result.get('error')})
+    return {'availability': 'captured', 'code_mode_calls': dict(methods),
+            'code_mode_failures': inner_failures, 'direct_fact_calls': dict(direct),
+            'api_failures': failures, 'code_mode_evidence_count': len(source_ids)}
+
+
 def summarize(directory):
     summary = json.loads((directory / 'summary.json').read_text())
     resource_records = [json.loads(line) for line in directory.with_suffix('.log').read_text().splitlines()
@@ -63,20 +91,7 @@ def summarize(directory):
     client = client_observations(directory, usage)
     calls = summary['completed_mcp_calls']  # This runner key also retains failed attempts.
     statuses = collections.Counter(call['status'] for call in calls)
-    methods = collections.Counter()
-    source_ids = set()
-    api_failures = []
-    trace_path = directory.with_suffix('.trace.jsonl')
-    if trace_path.exists():
-        for line in trace_path.read_text().splitlines():
-            entry = json.loads(line)
-            result = entry['result']
-            if entry['tool'] == 'execute_javascript':
-                for call in result.get('calls', []):
-                    methods[call['method']] += 1
-                    if call['status'] != 'ok':
-                        api_failures.append(call)
-                source_ids.update(result.get('evidence_ids', []))
+    trace = trace_observations(directory.with_suffix('.trace.jsonl'))
     usage['uncached_input_tokens'] = usage['input_tokens'] - usage['cached_input_tokens']
     cleanup = json.loads((directory / 'cleanup.json').read_text())
     return {
@@ -94,9 +109,12 @@ def summarize(directory):
         'outer_statuses': dict(statuses),
         'outer_failures': [{k: call[k] for k in ('tool', 'status', 'error')}
                            for call in calls if call['status'] != 'completed'],
-        'inner_code_mode_calls': dict(methods),
-        'inner_api_failures': api_failures,
-        'code_mode_evidence_count': len(source_ids),
+        'trace_availability': trace['availability'],
+        'inner_code_mode_calls': trace['code_mode_calls'],
+        'inner_api_failures': trace['code_mode_failures'],
+        'direct_fact_calls': trace['direct_fact_calls'],
+        'api_failures': trace['api_failures'],
+        'code_mode_evidence_count': trace['code_mode_evidence_count'],
         'model_wall_seconds': summary['wall_seconds'],
         'family_wall_seconds': resources['elapsed_seconds'],
         'family_cpu_seconds': observation['cpu_stat']['usage_usec'] / 1_000_000,

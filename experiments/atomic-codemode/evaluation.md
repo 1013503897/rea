@@ -214,3 +214,16 @@ an adapter comparison. Stock external-spec freshness is still outside the engine
 binary digest. Full repository typechecking remains resource-limited as recorded
 in `native-engine.md`; source build, focused tests, changed-test typing and full
 lint/module checks pass.
+
+The bounded call-rooted definition projection now supports a local VM PHI task
+that full-graph capacity previously prevented. Four real-model answers over two
+revisions correctly recover both PHIs, all four alternatives and machine
+transfers, with source identities and global partial coverage retained. This is
+selected static-task coverage, not general complex-software superiority.
+
+The discovery correction removes an observed name-list miss and fixes defaulted
+input schemas, but the second pair does not show stable cost improvement. Direct
+has a 120-second native timeout before a successful retry; Code Mode changes its
+query strategy and costs more than its first run. The complete costs and failure
+remain in [the ledger](trials.md#phi-alternatives-after-named-discovery-correction).
+Fairness requires sufficient facts, correct discovery and honest retry reporting.

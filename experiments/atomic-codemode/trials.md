@@ -821,3 +821,59 @@ pair costs 771,383 input tokens (660,096 cached, 111,287 uncached), 7,768 output
 scripted checks, development conversation, resolved server model build, remote
 compute and money remain outside these model-pair totals. There is no new
 traditional-provider cell, universal RE basis or broad superiority claim.
+
+## PHI alternatives after named discovery correction
+
+Both runs use `14bc2bca2`, the identical PHI question/oracle, preserved engine,
+model request and per-lane guidance as v1. Code Mode runs first. Runtime/engine/
+target fingerprints, usage reconciliation, cleanup and OOM-zero receipts verify.
+
+| Measurement                            | Atomic direct projection v2 | Code Mode projection v2 |
+| -------------------------------------- | --------------------------: | ----------------------: |
+| MCP requests / transport failures      |                      16 / 0 |                  12 / 0 |
+| Analysis API failures                  |                   1 timeout |                       0 |
+| Observed model responses               |                          26 |                      16 |
+| Client exec / wait calls               |                     13 / 12 |                  12 / 3 |
+| Model wall seconds                     |                     289.080 |                 144.924 |
+| Family wall seconds                    |                     290.263 |                 145.386 |
+| Family CPU seconds                     |                     150.551 |                  45.887 |
+| Family memory peak MiB                 |                       842.2 |                   854.9 |
+| Cumulative input tokens                |                     577,633 |                 457,492 |
+| Cached input tokens                    |                     548,864 |                 413,056 |
+| Uncached input tokens                  |                      28,769 |                  44,436 |
+| Output tokens, including reasoning     |                       4,663 |                   4,216 |
+| Reasoning tokens, included in output   |                         973 |                     769 |
+| Largest observed response input tokens |                      33,545 |                  41,702 |
+
+Both complete answers pass the unchanged oracle and cite nine verified sources.
+Every retained source hash/context and selected instruction/data byte verifies
+against the independent ELF file mapping. Successful native function records
+equal both v1 records. Code Mode retains ten sources; direct retains twelve,
+including two small instruction probes between analysis attempts. The direct
+first snapshot returns `provider_timeout` after 120 seconds with no output;
+retry succeeds in 53.124 seconds. Code Mode's snapshot succeeds in 37.226 seconds.
+The timeout cause remains unknown. The ledger now distinguishes a completed MCP
+transport from a failed direct API result; it previously counted only inner
+Code Mode failures. A regression preserves both error representations.
+
+Named discovery no longer returns zero or requires an all-reference retry.
+Direct's seven fact contracts match; session tools `open_binary`/`close_binary`
+are explicitly unmatched because they are outside the fact API. Code Mode first
+asks for capture topics, then nine named contracts. Its v2 answer composes
+definition/operation reads instead of invoking `slice`.
+
+These observations do not isolate an adapter speedup. Direct includes a genuine
+analysis timeout/retry; removing it would misstate whole-task cost. Direct's
+uncached input decreases while cumulative input/time increase. Code Mode's input,
+uncached input and time all increase from v1. Stochastic choices, prompt caching,
+uncontrolled OS state and one sample per cell remain confounders. Discovery and
+schemas are more correct; stable whole-task savings are not established.
+
+Ledger: `.cache/atomic-codemode/ledger-projection-discovery-round-14bc2bc.json`;
+manual/source review: `projection-answer-review-v2.json` beside it. Pair totals:
+1,035,125 input (961,920 cached, 73,205 uncached), 8,879 output (1,742 included
+reasoning), 434.004 model wall seconds. All four PHI launches cost 1,806,508 input
+(1,622,016 cached, 184,492 uncached), 16,647 output (3,023 included reasoning),
+706.159 model wall seconds. These totals exclude builds/scripted verification,
+development conversation, remote compute and money. Memory is the kernel cgroup
+peak including charged file cache, not RSS; resolved model build is unknown.

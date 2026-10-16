@@ -13,6 +13,31 @@ spec.loader.exec_module(ledger)
 
 
 class ClientObservations(unittest.TestCase):
+    def test_transport_success_preserves_direct_timeout_and_code_mode_failure(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / 'trace.jsonl'
+            self.assertIsNone(ledger.trace_observations(path)['api_failures'])
+            entries = [
+                {'tool': 'facts_snapshot', 'result': {
+                    'ok': False, 'error': {'code': 'provider_timeout'}}},
+                {'tool': 'facts_snapshot', 'result': {'ok': True, 'data': {}}},
+                {'tool': 'execute_javascript', 'result': {
+                    'ok': True, 'evidence_ids': ['ev_a'], 'calls': [
+                        {'method': 'snapshot', 'status': 'error',
+                         'error': {'code': 'provider_timeout'}}]}},
+                {'tool': 'execute_javascript', 'result': {
+                    'ok': False, 'error': {'code': 'output_budget'},
+                    'calls': [], 'evidence_ids': ['ev_a']}},
+            ]
+            path.write_text('\n'.join(json.dumps(e) for e in entries))
+            result = ledger.trace_observations(path)
+            self.assertEqual(result['direct_fact_calls'], {'facts_snapshot': 2})
+            self.assertEqual(result['code_mode_calls'], {'snapshot': 1})
+            self.assertEqual(len(result['api_failures']), 3)
+            self.assertEqual(result['api_failures'][0]['error']['code'], 'provider_timeout')
+            self.assertEqual(len(result['code_mode_failures']), 1)
+            self.assertEqual(result['code_mode_evidence_count'], 1)
+
     def test_distinct_responses_and_dispatch_calls_deduplicate_by_identity(self):
         usage = {'input_tokens': 12, 'cached_input_tokens': 8, 'output_tokens': 2}
         events = [

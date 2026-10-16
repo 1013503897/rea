@@ -565,9 +565,10 @@ The shared suite passes 55 tests. `verify-discovery.mjs` checks both real SDK
 catalogs and reference responses without opening a target, compiles every catalog
 and all fourteen reference schemas with Ajv2020, and validates the same
 omitted-default requests against named reference/direct contracts. It proves the
-six-name query matches all requested contracts without a miss. The corrected
-verifier takes 1.628 family wall / 1.449 CPU seconds, 128.9 MiB kernel peak,
-cleanup verified and OOM 0. Its original 1.730 / 1.487 seconds, 128.1 MiB failed
+six-name query matches all requested contracts without a miss. The all-schema
+verifier takes 1.936 family wall / 1.760 CPU seconds, 138.8 MiB kernel peak,
+cleanup verified and OOM 0. The earlier six-schema probe takes 1.628 / 1.449
+seconds, 128.9 MiB. Its original 1.730 / 1.487 seconds, 128.1 MiB failed
 omitted-default check remains recorded. Six contracts occupy 10,835 Code Mode /
 10,360 direct bytes, versus 21,746 / 20,699 for all fourteen. Bytes do not prove
 token or time savings. The same PHI question/oracle are retained for the next
