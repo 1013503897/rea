@@ -107,6 +107,87 @@ events and verified payload cleanup.
 The [question](storage-boundary-question.txt) and [oracle](storage-boundary-oracle.md)
 extend the earlier native prototype task with exact storage-name and space
 metadata requirements. Both complete actual catalogs are available. Model
-results will be recorded only after the real isolated Codex/MCP runs and full
-answer/source checks. This capability checkpoint does not establish a Code
-Mode advantage or broad complex-software superiority.
+runtime is frozen at `577ca5a0ae84d61a00f576feed7306b6cf54949c`; both isolated
+Codex 0.161.0 runs request gpt-6.1-sol/high, in Direct → Code order. Neither
+client feature flag establishes the available client tools: both lanes actually
+have the common client JavaScript executor. This compares the MCP calling
+adapters inside that common client surface.
+
+Both complete answers pass the frozen oracle. They identify the owner/caller,
+report all fourteen native prototype entries, native model/lock/return/error
+flags, the 3/44 raw inputs and exact parameter matches, and preserve missing
+matches without inferring original arity. Both use the native catalog for
+CX versus RCX, R9D and the return RAX, distinguish R15 value storage from RDI
+passing storage, and leave stack tuples without fabricated register names.
+Code/register/stack descriptors remain separate metadata observations. Both
+retain snapshot-local SSA identities, machine corroboration, unknowns and close.
+
+Scripted checks verify every cited source against the delivered trace, retained
+digest, target/engine identity, complete previous function records, prototypes
+and exact input matches: ten Direct sources and twelve Code sources. Each lane
+cites one native catalog and one capture per selected function. Additional
+input-space counts, selected call argument/value/passing tuples and nine
+independent ELF instruction sites agree; relative call/LEA destinations are
+decoded from file-backed ELF segments. This source/fidelity check is separate
+from reviewing the complete natural-language answer against the oracle; both
+were performed. It does not prove all native recovery is machine-equivalent.
+
+| Whole completed task                         | Direct    | Code Mode |
+| -------------------------------------------- | --------- | --------- |
+| Required answer                              | pass      | pass      |
+| Cumulative input tokens                      | 415,450   | 307,888   |
+| Cached input, included above                 | 359,936   | 273,664   |
+| Uncached input                               | 55,514    | 34,224    |
+| Output tokens                                | 7,170     | 6,575     |
+| Reasoning tokens, included in output         | 1,802     | 1,226     |
+| Actual unique model responses                | 13        | 12        |
+| Client executor / wait calls                 | 12 / 0    | 11 / 0    |
+| MCP attempts, including discovery/open/close | 28        | 12        |
+| Direct fact reads / Code inner API reads     | 25        | 32        |
+| Spaces / registers reads                     | 1 / 2     | 1 / 2     |
+| Parameters reads                             | 2         | 4         |
+| API / transport failures                     | 0 / 0     | 0 / 0     |
+| Model wall seconds                           | 158.116   | 142.153   |
+| Family wall seconds                          | 158.992   | 142.658   |
+| Local family CPU seconds                     | 18.232034 | 20.391465 |
+| Kernel family peak MiB                       | 672.0     | 636.9     |
+
+All attempts are retained and charged; there are no failed model attempts or
+retries in this pair. Summed unique per-response usage matches the runner totals.
+Both use fresh leases/private native caches, preserve target/engine/runtime
+fingerprints, remove isolated profiles and verify payload cleanup with zero OOM
+events. Native catalog reuse is warm within the lease; remote model/OS caches,
+resolved model build, remote compute and host contention remain uncontrolled
+or unmeasured. The native caller capture itself took 4.432 s Direct / 5.859 s
+Code; whole CPU differences cannot be attributed solely to adapter overhead.
+
+In this one pair, Code uses 25.9% less cumulative input, 38.4% less uncached
+input and 10.1% less model wall time, while local family CPU is 11.8% higher.
+It performs more fact reads, including repeated cached prototypes and joins,
+and only one fewer model response despite sixteen fewer MCP requests. The
+earlier studies retain their mixed results. This new task adds metadata
+requirements, so old question timings are not an equivalent before/after test.
+No stable Code Mode advantage, traditional-provider superiority or general
+complex-software effectiveness follows from this sample.
+
+Local raw records are `ssh-storage-{direct,codemode}-v1/`, sibling `.log`,
+`.trace.jsonl`, `.providers.json`, `.tools.json` and `-evidence/` under
+`.cache/atomic-codemode/`. Derived checks are `storage-model-costs.json`,
+`storage-answer-checks.json` and `storage-answer-review.json`. Final answer
+SHA-256 values are Direct
+`d5b64cfec3236cae4357160148578b597e7fe8115b62e57bc77fee7eb027d022`, Code
+`0d2937dc1054e3e8405a4bbd428a3f753d2ab07c6a839d7ee798bfe7f642f69f`.
+These hashes identify the reviewed answers, not an automated correctness proof.
+
+## Resource-limited repository gate
+
+The separate full `npm run check:fast` did not finish. The guarded run stopped
+at the 3 GiB early threshold after 44.290 s; a serial retry using the installed
+Turbo 2.11.7 documented `--concurrency=1` option also stopped there after
+26.823 s during typecheck. Last sampled memory.events have zero OOM/kill/max
+events. Payload-exit/final counters are unavailable for these aborted runs;
+neither is reported as a passing full gate. The guards remained enabled and
+the model trials ran after these checks terminated. Changed-module lint and
+format checks, all 87 experimental JS tests and the real-provider checks above
+pass. Production-wide type checking remains unverified within this resource
+budget; no unrelated main code was changed to bypass it.

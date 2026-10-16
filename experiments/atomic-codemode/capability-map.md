@@ -92,3 +92,8 @@ and exact varnode_xref names without function decompilation. Width-qualified
 coordinates compose with prototype/value/passing-storage facts. Real x86-64
 and AArch64 OpenSSH catalog checks do not establish big-endian, alias, runtime
 or full provider parity coverage.
+
+Both real models complete the extended native storage/prototype/call task.
+Code Mode reduces cumulative/uncached input and wall time in that pair but uses
+more local CPU and more inner fact reads. The shared metadata capability is
+verified separately from this adapter observation; earlier mixed pairs remain.

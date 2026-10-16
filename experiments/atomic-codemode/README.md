@@ -22,7 +22,10 @@ adapter comparisons.
 The [architecture storage study](storage-study.md) adds exact native register-name
 and address-space queries, sharing one bounded immutable capture per lease.
 It separates coordinates, widths and native map misses from hardware absence,
-SSA equality or alias claims.
+SSA equality or alias claims. Both real SSH models complete the extended task;
+Code Mode uses 307,888 versus 415,450 cumulative input tokens and 142.2 versus
+158.1 seconds, but more local CPU. This single pair does not establish a stable
+advantage; the full typecheck gate remains resource-limited.
 
 The [function-boundary study](function-boundary-study.md) adds independent native
 prototype entries and return descriptors, separated from raw input varnodes.
