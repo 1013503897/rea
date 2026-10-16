@@ -34,6 +34,11 @@ summaries; all full contracts and advertised tools remain available. Contracts
 and session admission have separate owners, with native loading deferred to open.
 Its repeat uses the same frozen control question and retains the earlier results.
 
+That completed repeat again answers correctly in both lanes. The smaller index
+does not establish an overall task improvement: actual help use adds a Code Mode
+call, and cumulative/uncached tokens, local resources and end-to-end time have
+mixed changes. A large observed inter-call gap remains charged and unexplained.
+
 The [exact-value query study](value-query-study.md) adds location-to-value and
 value-to-operand-use queries, including inputs/constants without defining operations.
 Real stripped OpenSSH checks preserve all 250 SSA versions / 369 occurrences at

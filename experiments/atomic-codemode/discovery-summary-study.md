@@ -84,3 +84,81 @@ isolated leases/private caches; OS/model caches and host contention remain
 uncontrolled. Review complete answers and paths before comparing whole-task
 usage, CPU and family memory. Module loading and model choices also change, so
 the result cannot isolate a pure byte-count effect.
+
+## Completed real-model repeat
+
+Runtime was frozen at `65b701df5`; the question/oracle remain byte-unchanged from
+`8d13c67e7`. Both complete answers again pass the frozen source/oracle review:
+ownership, PHI/call binding, both controller levels, four guards and widths,
+exact shared/distinct SSA identities, valid avoidance witnesses, selected machine
+checks and explicit unknowns. Both use one retained VM capture and close the
+lease. Direct factors a longer common path suffix; every expanded edge is valid.
+Code Mode gives the shorter witnesses. Each cites ten observed source IDs with
+matching target/engine identity; both complete native function records equal the
+prior golden. The cost summarizer does not perform natural-language grading.
+
+| Whole-task measure             | Direct atomic v2 | Code Mode v2 |
+| ------------------------------ | ---------------: | -----------: |
+| Cumulative input tokens        |          834,800 |      546,797 |
+| Included cached input          |          768,000 |      482,560 |
+| Uncached input                 |           66,800 |       64,237 |
+| Output tokens                  |            7,782 |        7,917 |
+| Included reasoning output      |            1,002 |        1,322 |
+| Observed model responses       |               25 |           19 |
+| Client executions / waits      |           23 / 1 |       17 / 1 |
+| MCP attempts                   |               38 |           18 |
+| Rejected MCP / inner API reads |            0 / 0 |        0 / 0 |
+| Successful atomic fact reads   |               35 |           32 |
+| Model wall seconds             |          251.325 |      422.804 |
+| Family wall seconds            |          251.925 |      423.457 |
+| Family CPU seconds             |           51.979 |       54.169 |
+| Kernel process-family peak MiB |            922.7 |        937.3 |
+| Native source-capture wall s   |           37.061 |       36.472 |
+
+Both request `gpt-6.1-sol/high` through Codex 0.161.0 with the unchanged complete
+18/4-tool manifests and common guidance. Both actually use client JavaScript
+`exec`/`wait`; feature flags do not establish absence of that surface. Per-response
+usage sums agree. Cached input is included in input, reasoning in output.
+Runtime, engine and artifact fingerprints remain unchanged. Both profiles and
+payloads have verified cleanup, OOM/kill 0 and no resource abort under the same
+bounds. Resolved service build, remote compute and OS/model cache effects remain
+unknown. These are fresh leases/private native caches, not warm task results.
+
+Actual help use matters. Direct v2 skips the index and reads selected complete
+contracts once (24,238 bytes), versus two calls/24,733 bytes in v1. Code Mode v2
+uses the 2,849-byte index, then two contract calls: three help calls/30,520 bytes
+total, versus two/36,504 in v1. Thus the complete Code Mode help path shrinks by
+about 16%, with one extra call; the index's 71% byte reduction is not a 71%
+whole-task token reduction.
+
+Compared with its own v1 run, Code Mode v2 has slightly lower uncached input
+(66,377 to 64,237), but higher cumulative input (503,113 to 546,797), output and
+elapsed time. Direct v2 has lower cumulative input but higher uncached input and
+elapsed time than direct v1. Neither before/after pair proves a consistent overall
+benefit. Different model choices, module loading, reversed order and uncontrolled
+service/host/cache behavior prevent attributing changes solely to summaries.
+
+Captured client call/output timestamps locate a 189.366-second Code Mode gap
+between two executions that both report `Script completed`; the executions
+themselves last approximately 0.171/0.154 seconds. Matched client-tool interval
+unions are 45.909 seconds direct and 50.383 Code Mode. Such intervals are not pure
+native work, network or model latency, and gaps after yielded calls can overlap
+background work. Here the large gap follows a completed call/PHI read. Its cause
+is not established; stderr has no retry/reconnect/timeout diagnostic. The gap
+remains charged in the reported wall time. Similar native-capture times and local
+CPU do not establish a cause for the end-to-end latency difference.
+
+Both models avoid the C tool. They still read numerous CFG neighborhoods to
+construct a few path witnesses; Code Mode again searches an internally collected
+successor inventory. This recurring composition cost motivates testing a shared,
+bounded recovered-path query next. It is not implemented by this metadata change.
+Availability behavior under a stock/unconfigured provider is not newly established
+by this native-IR model pair. No broad complex-software superiority or stable
+Code Mode advantage is claimed.
+
+The earlier [v1 results](control-query-study.md) are retained rather than replaced.
+Local v2 records are `sqlite-controller-{direct,codemode}-v2*`,
+`controller-summary-repeat-costs.json`, `discovery-summary-answer-source-checks.json`
+and `discovery-summary-client-timing.json`. Kernel peaks include charged file
+cache, not RSS; startup/final generation outside the first/last client call is
+not covered by the interval union. All whole-task costs remain in the main table.
