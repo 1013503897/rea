@@ -23,7 +23,10 @@ The [control-query study](control-query-study.md) verifies every derived control
 triple on the real SQLite VM, fixes unknown CFG seeds and reuses a lazy
 postdominator index. Its [two-level investigation](controller-oracle.md) is
 frozen before model runs and separates alternative path predicates, SSA identity
-and finite recovered-edge witnesses from runtime claims.
+and finite recovered-edge witnesses from runtime claims. Both real-model answers
+now pass: Code Mode reduces cumulative input but increases uncached input, time,
+CPU and memory in this pair. Correct facts support both calling strategies;
+the query-cache improvement is separate from those mixed whole-task costs.
 
 The [exact-value query study](value-query-study.md) adds location-to-value and
 value-to-operand-use queries, including inputs/constants without defining operations.

@@ -35,6 +35,14 @@ combines them. A query can be fine-grained even when its fresh native capture
 still computes a whole function. Same-lease reuse is measured separately from
 that work and does not establish a cross-session cache or native acceleration.
 
+The [control-query study](control-query-study.md) independently verifies all
+2,845 control-dependence triples in the real SQLite VM through both MCP adapters.
+Two real models also complete a two-level controller/SSA/path-witness task and
+distinguish alternative predicates from conjunction. Unknown CFG seeds are
+explicit, and the snapshot owner reuses a bounded lazy postdominator index.
+Code Mode has lower cumulative input but higher uncached input and runtime costs
+in that pair; precise derived facts do not imply a preferred calling adapter.
+
 The [OpenSSH value-query study](value-query-study.md) adds exact location lookup
 and inverse operand occurrences for value identities, including inputs/constants
 without definitions. It checks every retained selected version/use against the
