@@ -20,6 +20,7 @@ import {
   indexOperationFacts,
   createOperationViews,
   coverageIssues,
+  isNativeOperationRelation,
 } from "./native-operation-views.mjs";
 import {
   indexProjection,
@@ -151,7 +152,7 @@ function createViews(facts, code, indexes) {
     incoming: (id) => incoming.get(id) ?? [],
     blocks: (input) => readIdentities(blocks, input),
     edges: (input) => {
-      if (["definitions", "uses", "operands"].includes(input.kind))
+      if (isNativeOperationRelation(input.kind))
         return core.operationRelations(input);
       if (input.kind === "controllers") {
         const controls = controlDependencies(facts.blocks, {
@@ -323,7 +324,7 @@ export function parseNativeIR(text, entry, expectedInput) {
       ["block", "incoming", "blocks"].map((name) => [name, unavailableGraph]),
     ),
     edges: (input) =>
-      ["definitions", "uses"].includes(input.kind)
+      isNativeOperationRelation(input.kind)
         ? unavailableOperations()
         : unavailableGraph(),
   };

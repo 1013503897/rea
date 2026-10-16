@@ -4,6 +4,7 @@ import {
   indexOperationFacts,
   createOperationViews,
   coverageIssues,
+  isNativeOperationRelation,
 } from "./native-operation-views.mjs";
 
 export function indexProjection(facts) {
@@ -78,7 +79,7 @@ export function createProjectionViews(facts, code, indexes, unavailableGraph) {
     incoming: unavailableGraph,
     blocks: unavailableGraph,
     edges: (input) =>
-      ["definitions", "uses", "operands"].includes(input.kind)
+      isNativeOperationRelation(input.kind)
         ? core.operationRelations(input)
         : unavailableGraph(),
   });

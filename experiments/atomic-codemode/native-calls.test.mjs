@@ -274,6 +274,22 @@ test("graph capacity failure retains calls, boundary values and explicit unreada
   assert.deepEqual(values.missing, ["missing"]);
   assert.match(values.coverage.value_scope, /only/);
   assert.equal(values.coverage.scope, values.coverage.value_scope);
+  const retained = values.items[1];
+  const located = model.values({
+    locations: [
+      {
+        space: retained.space,
+        offset: retained.offset,
+        size_bytes: retained.size_bytes,
+      },
+    ],
+  });
+  assert.deepEqual(located.items, [retained]);
+  assert.equal(located.coverage.scope, values.coverage.scope);
+  assert.throws(
+    () => model.edges({ kind: "value_uses", seeds: [retained.id] }),
+    (e) => e.code === "capability_unavailable",
+  );
   assert.throws(
     () => model.select({}),
     (e) => e.code === "capability_unavailable",

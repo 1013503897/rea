@@ -114,6 +114,23 @@ for (const direct of [false, true]) {
       ],
       ["values", { snapshot: "snap_other", ids: ["v1"] }, { entry: "0xea6d0" }],
       [
+        "values",
+        {
+          snapshot: "snap_other",
+          locations: [{ space: "ram", offset: "0x1144c8", size_bytes: 4 }],
+          fields: [],
+        },
+        {
+          snapshot: "snap_other",
+          locations: [{ space: null, offset: "0x1144c8", size_bytes: 4 }],
+        },
+      ],
+      [
+        "relations",
+        { snapshot: "snap_other", kind: "value_uses", seeds: ["v1"] },
+        { snapshot: "snap_other", kind: "value_uses", seeds: [1] },
+      ],
+      [
         "relations",
         {
           snapshot: "snap_other",

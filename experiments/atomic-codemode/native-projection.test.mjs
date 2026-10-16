@@ -244,6 +244,29 @@ test("partial definition facts compose through phi operands without implying a C
   assert.equal(uses.items.length, 1);
   assert.deepEqual(uses.unretained_seeds, ["0x9000:0"]);
   assert.match(uses.relation_coverage.scope, /selected-operations-only/);
+  const inputUses = model.edges({ kind: "value_uses", seeds: ["v7"] });
+  assert.ok(
+    inputUses.items.some(
+      (row) =>
+        row.operation === "0x1100:1" &&
+        row.input_index === 2 &&
+        row.definition === null,
+    ),
+  );
+  assert.match(inputUses.relation_coverage.scope, /selected-operations-only/);
+  const inputValue = model.values({ ids: ["v7"] }).items[0];
+  const located = model.values({
+    ids: ["v7"],
+    locations: [
+      {
+        space: inputValue.space,
+        offset: inputValue.offset,
+        size_bytes: inputValue.size_bytes,
+      },
+    ],
+  });
+  assert.deepEqual(located.items, [inputValue]);
+  assert.equal(located.coverage.value_scope, model.coverage.value_scope);
   for (const read of [
     () => model.blocks({}),
     () => model.edges({ kind: "controllers", seeds: [9] }),

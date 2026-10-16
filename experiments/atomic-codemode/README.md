@@ -14,6 +14,12 @@ The [capability map](capability-map.md) distinguishes verified task coverage,
 experimental exporter requirements and remaining unknowns before interpreting
 adapter comparisons.
 
+The [exact-value query study](value-query-study.md) adds location-to-value and
+value-to-operand-use queries, including undefined function inputs and constants.
+Real stripped OpenSSH checks preserve all 250 SSA versions / 369 occurrences at
+one selected policy location while reducing an equivalent core read task from
+244 queries to six. Whole-agent token and latency effects remain to be measured.
+
 The reference is [Hex-Rays IDA MCP](https://github.com/HexRaysSA/ida-mcp/blob/df6de7985b534a964c125d5a86e41b26b17b14f6/ida_mcp/mcp.py):
 an on-demand `reference` lookup and an execution entrypoint over a richer analysis
 API. This experiment uses JavaScript and a QuickJS WASM environment rather than

@@ -7,6 +7,11 @@ import { createReference } from "./reference.mjs";
 
 const hex = z.string().regex(/^0x(?:0|[1-9a-f][0-9a-f]{0,15})$/u);
 const snapshot = z.string().startsWith("snap_");
+const valueLocation = z.strictObject({
+  space: z.string(),
+  offset: hex,
+  size_bytes: z.number().int().positive(),
+});
 const byteWindow = z.strictObject({
   address: hex,
   length: z.number().int().min(1).max(MAX_BYTE_BATCH_BYTES).default(256),
@@ -48,12 +53,12 @@ const definition = (description, input, method, example) => ({
   method,
   example,
 });
-const operationSeeds = z.array(z.string()).min(1).max(128);
+const identitySeeds = z.array(z.string()).min(1).max(128);
 const relationInput = z.discriminatedUnion("kind", [
   z.strictObject({
     snapshot,
     kind: z.literal("cases"),
-    seeds: operationSeeds,
+    seeds: identitySeeds,
     case_values: z.array(hex).max(128).optional(),
     case_indices: z.array(z.number().int().nonnegative()).max(128).optional(),
     ...page,
@@ -61,14 +66,14 @@ const relationInput = z.discriminatedUnion("kind", [
   z.strictObject({
     snapshot,
     kind: z.literal("operands"),
-    seeds: operationSeeds,
+    seeds: identitySeeds,
     input_indices: z.array(z.number().int().nonnegative()).max(128).optional(),
     ...page,
   }),
   z.strictObject({
     snapshot,
-    kind: z.enum(["definitions", "uses"]),
-    seeds: operationSeeds,
+    kind: z.enum(["definitions", "uses", "value_uses"]),
+    seeds: identitySeeds,
     ...page,
   }),
   z.strictObject({
@@ -178,18 +183,19 @@ export const methods = {
   ),
   relations: {
     description:
-      "Read native operands, definitions/uses or case rows for operation IDs; incoming/outgoing CFG edges or derived controllers for block IDs. cases pages one relation per case/out-edge, with a stable case_id; an unmapped case has one explicit unknown-edge row. total counts relations, not table rows. cases filters optional case_values (native labels tagged value) and case_indices (original row ordinals); both filters intersect and paging spans deduplicated seeds in caller order. Rows preserve missing/no-label status, original recovered target, and separate recovered edges. Partial/unavailable tables and unmapped rows are explicit; no runtime feasibility claim. operands pages every selected input slot, including constants, function inputs and null slots; input_indices optionally selects slots in caller order. Identity is snapshot + operation + input_index; value_id/definition and exact phi predecessor/edge bindings remain separate. Out-of-range slots of retained operations are absent; unretained_seeds remain unknown. A bounded call-rooted projection supports operands/definitions/uses but no CFG; uses cover retained selected operations only. Diagnostic SSA lacks native operands and has partial CFG/printed occurrences. controllers requires a complete recovered graph and concerns finite paths to recovered exits, not runtime feasibility.",
+      "Read native operand occurrences, operation definitions/uses, value_uses or case rows. value_uses takes value-ID seeds and returns exact operation/input-slot occurrences, including function inputs and constants without defining operations; null definition stays explicit, not a missing use. Uses cover retained operations, not runtime or memory aliases. Other data-flow/case seeds are operation IDs; incoming/outgoing CFG edges or derived controllers for block IDs. cases pages one relation per case/out-edge, with a stable case_id; an unmapped case has one explicit unknown-edge row. total counts relations, not table rows. cases filters optional case_values (native labels tagged value) and case_indices (original row ordinals); both filters intersect and paging spans deduplicated seeds in caller order. Rows preserve missing/no-label status, original recovered target, and separate recovered edges. Partial/unavailable tables and unmapped rows are explicit; no runtime feasibility claim. operands pages every selected input slot, including constants, function inputs and null slots; input_indices optionally selects slots in caller order. Identity is snapshot + operation + input_index; value_id/definition and exact phi predecessor/edge bindings remain separate. Out-of-range slots of retained operations are absent; unretained_seeds remain unknown. A bounded call-rooted projection supports operands/definitions/uses but no CFG; uses cover retained selected operations only. Diagnostic SSA lacks native operands and has partial CFG/printed occurrences. controllers requires a complete recovered graph and concerns finite paths to recovered exits, not runtime feasibility.",
     input: relationInput,
     method: "relations",
     example:
       'await rea.relations({snapshot:s,kind:"operands",seeds:[op.id],input_indices:[0,2]})',
   },
   values: definition(
-    "Read identified native SSA values in a batch; scope may be a full graph, bounded call-rooted definition projection, or call-boundary values only; is_input filters retained operand/output values, not an original source signature. Offset is an address-space offset, not a computed arbitrary-width value. Width, constants, function inputs, annotation status and defining operation are separate facts. Requires the pinned native exporter.",
+    "Read native SSA values by IDs or exact locations [{space,offset,size_bytes}], with width required. Locations match retained metadata, including const/unique spaces, not pointee contents, aliases or live memory. Filters intersect; IDs retain caller order, otherwise locations retain caller order and values retain native order per location. Empty IDs/locations select none. Null-space values cannot resolve a location and stay explicit in location_coverage; unretained_locations means no known retained coordinate match, not absent machine storage. Scope may be a full graph, bounded call-rooted definition projection, or call-boundary values only; is_input filters retained operand/output values, not an original source signature. Offset is an address-space offset, not a computed arbitrary-width value. Width, constants, function inputs, annotation status and defining operation are separate facts. Requires the pinned native exporter.",
     {
       snapshot,
       ids: z.array(z.string()).max(128).optional(),
       is_input: z.boolean().optional(),
+      locations: z.array(valueLocation).max(128).optional(),
       fields: z
         .array(
           z.enum([

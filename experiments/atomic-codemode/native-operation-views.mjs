@@ -5,7 +5,7 @@ import { requireFact } from "./native-contract.mjs";
 import {
   uniqueNative as unique,
   nativePage as page,
-  readNativeIdentities as readIdentities,
+  createNativeValueReader,
 } from "./native-reads.mjs";
 export const DEFAULT_NATIVE_OPERATION_FIELDS = Object.freeze([
   "kind",
@@ -15,6 +15,8 @@ export const DEFAULT_NATIVE_OPERATION_FIELDS = Object.freeze([
   "definition_count",
   "constant_count",
 ]);
+export const isNativeOperationRelation = (kind) =>
+  ["definitions", "uses", "operands", "value_uses"].includes(kind);
 export const coverageIssues = (issues) => ({
   issues: issues.slice(0, 8).map((message) => message.slice(0, 160)),
   issue_count: issues.length,
@@ -157,6 +159,7 @@ export function createOperationViews(
   frontierReasons = new Map(),
 ) {
   const { values, users, constants, normalized } = indexes;
+  let valueUses;
   const model = {
     coverage,
     operation: (id) => normalized.get(id) ?? null,
@@ -167,26 +170,37 @@ export function createOperationViews(
         ...input,
         fields: input.fields ?? DEFAULT_NATIVE_OPERATION_FIELDS,
       }),
-    values: (input) => ({
-      ...readIdentities(
-        values,
-        input,
-        (value) =>
-          input.is_input === undefined || value.is_input === input.is_input,
-      ),
-      coverage,
-    }),
-    operationRelations: (input) =>
-      readOperationRelations(indexes, coverage, input),
+    values: createNativeValueReader(values, coverage),
+    operationRelations: (input) => {
+      if (input.kind === "value_uses" && !valueUses) {
+        valueUses = new Map();
+        for (const op of normalized.values())
+          for (const row of op.inputs)
+            if (row.value_id !== null)
+              index(
+                valueUses,
+                row.value_id,
+                freeze(operandRow(op.id, row, values)),
+              );
+      }
+      return readOperationRelations(indexes, coverage, input, valueUses);
+    },
     slice: (input) => sliceValues(model, values, input, frontierReasons),
   };
   return Object.freeze(model);
 }
 
-function readOperationRelations(indexes, coverage, input) {
+const operandRow = (operation, row, values) => ({
+  operation,
+  ...row,
+  definition: values.get(row.value_id)?.definition ?? null,
+});
+
+function readOperationRelations(indexes, coverage, input, valueUses) {
   const { normalized, values, users } = indexes;
   const seeds = [...new Set(input.seeds)];
   const operands = input.kind === "operands";
+  const byValue = input.kind === "value_uses";
   const indices = input.input_indices && [...new Set(input.input_indices)];
   const groups = seeds.map((seed) => {
     const op = normalized.get(seed);
@@ -194,9 +208,11 @@ function readOperationRelations(indexes, coverage, input) {
       ? indices
         ? indices.flatMap((index) => op?.inputs[index] ?? [])
         : (op?.inputs ?? [])
-      : input.kind === "definitions"
-        ? (op?.definitions ?? [])
-        : (users.get(seed) ?? []);
+      : byValue
+        ? (valueUses.get(seed) ?? [])
+        : input.kind === "definitions"
+          ? (op?.definitions ?? [])
+          : (users.get(seed) ?? []);
     return { seed, rows };
   });
   const offset = input.offset ?? 0,
@@ -209,15 +225,7 @@ function readOperationRelations(indexes, coverage, input) {
     const end = Math.min(rows.length, offset + limit - total);
     for (let i = start; i < end; i++) {
       const row = rows[i];
-      items.push(
-        operands
-          ? {
-              operation: seed,
-              ...row,
-              definition: values.get(row.value_id)?.definition ?? null,
-            }
-          : row,
-      );
+      items.push(operands ? operandRow(seed, row, values) : row);
     }
     total += rows.length;
   }
@@ -225,11 +233,13 @@ function readOperationRelations(indexes, coverage, input) {
     items,
     total,
     next_offset: offset + limit < total ? offset + limit : null,
-    unretained_seeds: seeds.filter((id) => !normalized.has(id)),
+    unretained_seeds: seeds.filter(
+      (id) => !(byValue ? values : normalized).has(id),
+    ),
     relation_coverage: {
       scope: operands
         ? "all selected native input slots of retained operations; null values remain explicit"
-        : input.kind === "uses"
+        : input.kind === "uses" || byValue
           ? (coverage.uses_scope ??
             "complete-for-retained-recovered-operations")
           : "definitions of retained operands; missing defining bodies remain unknown",

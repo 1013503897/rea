@@ -1,6 +1,10 @@
 import { callCoverage } from "./native-calls.mjs";
 import { requireFact, requireSameNativeValue } from "./native-contract.mjs";
-import { uniqueNative, readNativeIdentities } from "./native-reads.mjs";
+import {
+  uniqueNative,
+  readNativeIdentities,
+  createNativeValueReader,
+} from "./native-reads.mjs";
 import { freezeFacts } from "./fact-reads.mjs";
 
 export function indexCallFacet(facts) {
@@ -148,14 +152,7 @@ export function createCallViews(facts, indexes) {
       ),
       coverage,
     }),
-    values: (input) => ({
-      ...readNativeIdentities(
-        values,
-        input,
-        (r) => input.is_input === undefined || r.is_input === input.is_input,
-      ),
-      coverage: valueCoverage,
-    }),
+    values: createNativeValueReader(values, valueCoverage),
     summary: summarizeCalls(calls, coverage),
     value_count: values.size,
   };

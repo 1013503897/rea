@@ -381,7 +381,7 @@ export class KunaFactOwner {
     }));
   }
   async relations(input) {
-    if (["controllers", "operands", "cases"].includes(input.kind))
+    if (["controllers", "operands", "value_uses", "cases"].includes(input.kind))
       this.#requireNativeIR(input.snapshot);
     return this.#query(input, (model) => ({
       coverage: model.coverage,
