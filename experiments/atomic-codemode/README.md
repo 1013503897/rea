@@ -294,4 +294,8 @@ orchestration. Source fidelity is not machine equivalence, provider parity or a
 general speedup. The [native switch experiment](switch-study.md) now exports and independently checks
 182 labels over those 149 targets, exposes selected case-to-edge relations and
 keeps them readable when a 2 MiB native output budget omits the full graph.
-New real-model case/default verification is pending.
+Both real models now answer the selected-case/default question correctly using
+one retained capture and focused case/byte reads. Code Mode uses fewer tokens
+in this pair, but unequal native capture time and extra client polling confound
+the comparison. Whole-task costs and limits are in the same study; a general
+efficiency advantage remains unproved.
