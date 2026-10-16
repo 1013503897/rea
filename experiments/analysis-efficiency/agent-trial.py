@@ -99,6 +99,8 @@ def main():
                         help='Opt-in exact-name discovery guidance for selected REA tools')
     parser.add_argument('--normalize-mcp-guidance', action='store_true',
                         help='Opt-in common envelope/stopping guidance, identical across protocol lanes')
+    parser.add_argument('--guide-long-waits', action='store_true',
+                        help='Opt-in common client wait guidance; does not change analysis contracts or deadlines')
     args = parser.parse_args()
     if args.guide_enabled_tools and args.enabled_tools is None:
         parser.error('--guide-enabled-tools requires --enabled-tools')
@@ -235,6 +237,15 @@ def main():
             'return only their metadata. Preserve the original analyst question, '
             'dependency order and source Evidence.'
         )
+    if args.guide_long_waits:
+        instruction += (
+            ' When the client executor reports a running cell during a long analysis, '
+            'resume that same cell with wait and yield_time_ms:30000, within the '
+            'advertised tool schema, rather than repeated one-second polls. '
+            'The wait may return early when the result is ready. Do not sleep or '
+            'start duplicate analysis calls just to check completion. Keep the '
+            'original analysis dependencies, evidence and stopping requirements.'
+        )
     quote = json.dumps
     config = '\n'.join([
         'approval_policy = "never"', 'sandbox_mode = "read-only"',
@@ -290,6 +301,7 @@ def main():
             'capture_tool_context': args.capture_tool_context,
             'guide_enabled_tools': args.guide_enabled_tools,
             'normalize_mcp_guidance': args.normalize_mcp_guidance,
+            'guide_long_waits': args.guide_long_waits,
             'driver_commit': subprocess.check_output(
                 ['git', 'rev-parse', 'HEAD'], cwd=driver_repository, text=True).strip(),
             'runtime_revision': args.revision,
