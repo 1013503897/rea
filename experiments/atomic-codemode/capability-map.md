@@ -104,6 +104,13 @@ SSH checks verify both warning owners, callers, selected machine words and
 77 GOT-slot reads. Coverage stays bounded and does not propagate live GOT
 contents. Traditional C/assembly preflight can answer the same new behavior-level
 question, avoiding a baseline missing necessary facts. All three real models
-complete it, while token/time/resource tradeoffs remain mixed. All preserve the
-recovered no-return disagreement and use machine facts for the post-call path;
-a native BTI/veneer identity split is a concrete next investigation.
+complete it, while token/time/resource tradeoffs remain mixed. That pinned run
+preserves the recovered no-return disagreement and uses machine facts for the
+post-call path.
+
+The [return-coverage study](aarch64-return-study.md) fixes the BTI entry split
+and a separate false no-return promotion through the native owners. The fresh
+three-way task passes with the strict call restored in both atomic captures;
+their complete selected function documents agree. Direct has lower input,
+time and CPU than Code Mode in this sample. Memory, analysis-profile differences,
+the common client executor and n=1 sampling prevent a universal adapter claim.

@@ -26,8 +26,15 @@ evidence; the shared bounded producer preserves space/width and uncertainty.
 All three real models now complete the behavior-level task. Code Mode takes
 151.3 seconds / 388,365 cumulative input tokens, Direct 164.9 / 515,929 and
 traditional 345.7 / 681,613. Code has more uncached input than traditional and
-more memory than Direct. A native BTI/PLT identity/no-return boundary remains
-under investigation.
+more memory than Direct. These are the earlier pinned measurements.
+
+The [return-coverage study](aarch64-return-study.md) subsequently fixes two
+independent producer defects: BTI import-entry identity and false no-return
+promotion that erased the post-warning path. All three fresh model answers pass
+the same selected task. Direct uses 351,157 cumulative input tokens / 139.0
+seconds, Code Mode 371,571 / 166.8, and traditional 662,683 / 263.1. Code Mode
+reduces MCP requests but adds model responses in this sample; correct primitives
+and fewer RPCs do not establish a stable adapter advantage.
 
 The [architecture storage study](storage-study.md) adds exact native register-name
 and address-space queries, sharing one bounded immutable capture per lease.
