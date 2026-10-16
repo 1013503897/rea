@@ -158,3 +158,30 @@ independent disassembly pair set, and remain available when the full IR facet
 exceeds capacity. The next pre-pinned model question measures this use directly. Keeping those costs
 and coverage distinctions explicit is more useful than treating a smaller tool
 catalog as proof of better analysis.
+
+The shallow-reference question now completes through both real-model adapters.
+Each composes 396 VM reference rows into 171 exact destinations and 16 calls to
+the selected PLT address, then distinguishes a real stack-check call absent from
+optimized IR. Both keep unresolved indirect/discovery/runtime limits. Native
+reference pairs from both model sessions match the complete independent set of
+396 direct immediate machine calls; the separate 21 indirect instructions are
+not silently included in those known-target totals.
+
+In this one pair, Code Mode takes 93.837 seconds and 264,680 cumulative input
+versus direct's 106.183 and 285,086. Their maximum observed response input
+contexts are almost equal. This is useful positive evidence for selected facts
+plus local aggregation, while prior completed tasks show mixed adapter costs.
+It supports continuing the experiment, not a universal speed/token/provider
+superiority claim. Tool coverage and representation semantics were prerequisites
+for this comparison: a recovered-call-only view would have missed a real call,
+and VM full-IR capacity cannot establish that its shallow references are absent.
+
+An additional shared CLI/API run with the unpatched stock Kuna 1.833 executable
+also returns the same 396/171/16 VM aggregates, with fresh owned HOME/cache. The
+outgoing-reference capability uses native support, independently of the opt-in
+IR exporter. It takes 3.044 family wall / 2.695 CPU seconds and 182.6 MiB peak,
+with cleanup verified and OOM 0; these scripted costs are not model-token data or
+an adapter comparison. Stock external-spec freshness is still outside the engine
+binary digest. Full repository typechecking remains resource-limited as recorded
+in `native-engine.md`; source build, focused tests, changed-test typing and full
+lint/module checks pass.

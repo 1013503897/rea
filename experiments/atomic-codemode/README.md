@@ -152,3 +152,11 @@ failure/cancellation/identity tests, and equivalent completed-task measurements
 including discovery/retries, actual model usage, cold/warm analysis, CPU and
 process-family peak memory. Negative cases such as the small SQLite function
 must remain in the comparison.
+
+The outgoing-reference real-model pair now completes with identical required
+facts and explicit coverage limits. In its single sample, Code Mode uses 264,680
+cumulative input / 93.837 seconds versus direct's 285,086 / 106.183. The shared
+CLI/API also verifies the VM aggregates on unpatched stock Kuna 1.833. These are
+scoped positive results alongside the earlier mixed adapter comparisons, not
+proof of general superiority. Details and retained failed/partial attempts are
+in [trials.md](trials.md).

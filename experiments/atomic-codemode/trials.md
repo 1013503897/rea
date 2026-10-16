@@ -568,3 +568,67 @@ largest-response metric is the maximum observed per-response input usage,
 including cached tokens, rather than an estimate from serialized bytes. Memory
 is the kernel cgroup process-family peak, including charged file cache. Remote
 model CPU/memory, resolved server model build and monetary cost are unmeasured.
+
+## Shallow reference aggregation: real-model pair
+
+Both runs use `3aa685db3`, the pre-pinned reference question/oracle, the same
+preserved `64c6b3f...` engine and fourteen fact methods. Code Mode runs first;
+all other model/effort and common-guidance settings match. Each lease/native
+cache is fresh; OS/page and remote prompt caches remain uncontrolled. Both have
+unchanged runtime, engine and target bytes; per-response token totals match the
+runner. Source capture, process/profile cleanup and OOM-zero receipts verify.
+
+| Measurement                            | Code Mode references v1 | Atomic direct references v1 |
+| -------------------------------------- | ----------------------: | --------------------------: |
+| MCP requests / transport failures      |                   8 / 0 |                      20 / 0 |
+| Observed model responses               |                      10 |                          11 |
+| Client exec calls                      |                       9 |                          10 |
+| Model wall seconds                     |                  93.837 |                     106.183 |
+| Family wall seconds                    |                  94.371 |                     106.799 |
+| Family CPU seconds                     |                  12.504 |                      15.934 |
+| Family memory peak MiB                 |                   518.7 |                       523.5 |
+| Cumulative input tokens                |                 264,680 |                     285,086 |
+| Cached input tokens                    |                 238,720 |                     247,424 |
+| Uncached input tokens                  |                  25,960 |                      37,662 |
+| Output tokens, including reasoning     |                   2,766 |                       3,204 |
+| Reasoning tokens, included in output   |                     420 |                         533 |
+| Largest observed response input tokens |                  33,716 |                      33,798 |
+
+Both answers satisfy all question requirements: parser implementation rather than
+same-name PLT entry; nine lifted references versus eight IR calls; verified
+`0x6534b -> 0x29370` stack-canary failure call and guard; VM aggregates
+396/171/16; and verified `0xf238b -> 0x296c0`. Both compose all four VM pages
+locally with no full VM decompilation or instruction/source report. Both preserve
+unknown indirect/discovery coverage, static symbol-binding limits and the
+non-equivalence of optimized IR to the executable.
+
+Each answer cites six source IDs. Every retained source digest, target digest
+and selected engine digest verifies. The VM reference pairs in both real-model
+captures exactly match all independent GNU objdump direct-call pairs. Both
+reference pages cover source rows 0–395 with a terminal null continuation. Raw
+Evidence remains in the explicit capture directory after the API lease closes;
+its IDs are not live handles in a newly opened lease.
+
+This is one positive aggregation sample: Code Mode uses about 7.2% fewer
+cumulative input tokens and 11.6% less wall time. Uncached input, output and CPU
+are also lower here; observed peak input context and memory are close. Reducing
+MCP requests 60% yields only one fewer observed model response. The client's own
+JavaScript dispatcher lets direct calls aggregate locally too. With one
+stochastic sample per lane and no reset of remote/file caches, these numbers do
+not establish a general causal advantage. Earlier cross-function pairs remain
+mixed; the questions have different required work and must not be treated as a
+before/after speedup comparison.
+
+Ledger: `.cache/atomic-codemode/ledger-reference-round-3aa685d.json`; manual
+answer/source review: `reference-answer-review-v1.json` in the same cache root.
+The measured artifact belongs to Debian `libsqlite3-0:amd64` version
+`3.40.1-2+deb12u2`. Remote model CPU/memory, resolved server model build, pricing
+and development/parent-conversation token costs remain unmeasured here.
+
+Across this continuation's seven model launches (one setup rejection, two
+initial partial-oracle answers, four completed answers), cumulative usage is
+2,883,911 input, including 2,515,072 cached and 368,839 uncached; output is 25,719,
+including 5,009 reasoning. Summed model wall time is 869.125 seconds. This
+research-attempt cost is separate from the successful paired tables and excludes
+native builds, scripted verifiers and development conversation. Failed/partial
+attempts are retained rather than hidden in a selected success result.
