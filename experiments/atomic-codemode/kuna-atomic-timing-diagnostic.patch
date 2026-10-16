@@ -1,0 +1,86 @@
+--- a/decompiler/crates/kuna-console/src/project.rs
++++ b/decompiler/crates/kuna-console/src/project.rs
+@@ -693,6 +693,17 @@
+         flow_ovr.extend(seed.flow_overrides.iter().cloned());
+         let replay = crate::assertions::has_symbol_scoped(prog, &name, single_target);
+         prog.arch_mut().kuna_record_names = replay;
++        let mut profile_clock = (want_atomic_facts
++            && std::env::var_os("KUNA_EXPERIMENT_ATOMIC_TIMING").as_deref()
++                == Some(std::ffi::OsStr::new("1")))
++            .then(std::time::Instant::now);
++        let mut profile_phase = |phase: &str| {
++            if let Some(clock) = profile_clock.as_mut() {
++                let now = std::time::Instant::now();
++                eprintln!("{{\"kind\":\"rea_atomic_phase\",\"address\":\"0x{byte_address:x}\",\"phase\":\"{phase}\",\"wall_ns\":{}}}", now.duration_since(*clock).as_nanos());
++                *clock = std::time::Instant::now();
++            }
++        };
+         let step = crate::decompile_step::decompile_one(
+             prog.arch_mut(),
+             &name,
+@@ -751,6 +762,7 @@
+             }
+             other => other,
+         };
++        profile_phase("decompile_drive");
+         match result {
+             Ok(mut fd) => {
+                 // (kuna `--assert`) The flow overrides the follower REFUSED are only
+@@ -813,6 +825,7 @@
+                 kuna_decomp::kuna_elemptr::record(prog.arch_mut(), &fd);
+                 prog.arch_mut().print_mut().set_record_pointer_arguments(want_pointer_arguments);
+                 let rendered = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
++                    profile_phase("pre_render_metadata");
+                     // Trim the surrounding newlines the same way `kuna decompile`
+                     // does (`decompile.rs::trim_newlines`), so the per-function
+                     // `code` is byte-identical to the single-shot path.
+@@ -826,6 +839,7 @@
+                     };
+                     let pointerargs = prog.arch_mut().print_mut().take_pointer_arguments(&untrimmed);
+                     let code = untrimmed.trim_matches('\n').to_string();
++                    profile_phase("render_c");
+                     let globals = kuna_decomp::decompile_drive::extract_global_objects(prog.arch());
+                     let field_calls = kuna_decomp::kuna_calltargettype::field_declarations(prog.arch(), &fd);
+                     let mut variables =
+@@ -848,15 +862,20 @@
+                             prog, &fd, &var_refs, &raw_tokens, &untrimmed, &code, &variables,
+                         ))
+                     });
++                    profile_phase("metadata_extract");
+                     if want_atomic_facts {
+                         let detail = detail.get_or_insert_with(Default::default);
+                         let membership = kuna_decomp::atomic_membership::inspect(&fd);
++                        profile_phase("membership");
+                         detail.atomic_calls = Some(membership.as_ref().map_err(Clone::clone)
+                             .and_then(|m| kuna_decomp::atomic_calls::collect_all(&fd, m)));
++                        profile_phase("calls");
+                         detail.atomic_facts = Some(membership.as_ref().map_err(Clone::clone)
+                             .and_then(|m| kuna_decomp::atomic_facts::collect(prog.arch(), &fd, m)));
++                        profile_phase("full_graph");
+                         detail.atomic_projection = Some(membership.as_ref().map_err(Clone::clone)
+                             .and_then(|m| kuna_decomp::atomic_projection::collect(prog.arch(), &fd, m)));
++                        profile_phase("projection");
+                     }
+                     for variable in &mut variables {
+                         for address in &mut variable.addresses {
+@@ -881,6 +900,7 @@
+                         .as_ref()
+                         .map(|ctx| ctx.scan(&fd, byte_address))
+                         .unwrap_or_default();
++                    profile_phase("metadata_tail");
+                     (code, variables, types, (globals, field_calls), proto, line_mappings, callee_hints, detail, pointerargs, stack_objects)
+                 }));
+                 match rendered {
+--- a/docs/spec/00-overview.md
++++ b/docs/spec/00-overview.md
+@@ -3496,3 +3496,10 @@
+ runtime reachability. Collection uses the same live function after C rendering;
+ no second decompilation is performed. Complete source Evidence keeps the native
+ frontier while callers may select a compact summary and individual facts.
++
++An experiment-only timing overlay recognizes `KUNA_EXPERIMENT_ATOMIC_TIMING=1`
++only with atomic capture enabled. It records sequential per-function wall times
++to stderr for the decompile drive, pre-render metadata, C rendering, metadata
++extraction, membership, calls, full graph, projection and metadata tail. It does
++not change analysis parameters or JSON facts. Loading, setup and final JSON
++encoding are outside these phase intervals; phase CPU costs are not measured.

@@ -665,10 +665,12 @@ arbitrary definitions outside the retained call-rooted projection cannot be
 expanded by a fact read. Provider parity and general complex-software superiority
 remain unestablished.
 
-Pipeline, C rendering, metadata and fact-export phase costs have not been
-separately profiled. Their source order and C size do not prove which dominates
-runtime. A phase-timing experiment is needed before choosing compute/cache
-changes; suppressing C or retaining a live function must preserve explicit
-capability/lifetime and Evidence semantics. Current model comparisons share the
-same computation and fact owners, avoiding a capability difference between the
-two adapters.
+At that checkpoint, pipeline/render/metadata/export costs were not separately
+profiled. The [subsequent native computation study](native-compute-study.md) now
+measures them: VM drive about 34 seconds, C rendering 0.22 seconds and projection
+0.03 seconds. Skipping C is a small opportunity for this workload. An offline
+lossless encoding probe also puts the earlier full 17.8 MB diagnostic record
+inside the unchanged 8 MiB transport. That codec is not implemented in the public
+engine; allocation/inflation bounds, shared decoding, Evidence and real-model
+behavior still need testing. Current model comparisons share the same
+computation/fact owners, avoiding a capability difference between adapters.

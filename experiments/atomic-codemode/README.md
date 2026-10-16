@@ -272,3 +272,11 @@ Code Mode. All four wide-operand answers pass, with no retry or OOM. Costs remai
 mixed. A selected-slot read still incurs whole-function native decompilation on
 a fresh lease; phase profiling is the next computation question, separate from
 the now finer fact/query boundary.
+
+The [native phase study](native-compute-study.md) now measures the VM drive at
+about 34 seconds, C rendering at 0.22 seconds and projection at 0.03 seconds.
+Repeated new native processes do not gain the API owner's warm result reuse.
+It also demonstrates offline lossless encoding of all VM facts below the existing
+transport budget; native codec/decoder bounds and model verification remain
+pending. This may close full-graph/definition coverage without another analysis
+or a live-function lifecycle, but is not yet a callable capability.
