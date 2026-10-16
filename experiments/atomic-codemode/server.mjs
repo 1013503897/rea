@@ -7,9 +7,18 @@ import { executeJavaScript } from "./executor.mjs";
 import { TARGET_CONTENT_RESULT_META } from "../../dist/server/toolResultEncoding.js";
 import { appendFile } from "node:fs/promises";
 
+const DIRECT_REFERENCE_LANGUAGE =
+  "Direct MCP calls: use the displayed facts_* tools with the same JSON arguments; results have {ok,context,data}.";
 const session = new AtomicSession();
 const createServer = () => {
   const server = new McpServer({ name: "rea-codemode", version: "0.1.0" });
+  const direct = process.env.REA_ATOMIC_ADAPTER === "direct";
+  const apiNames = Object.fromEntries(
+    Object.keys(methods).map((name) => [
+      name,
+      direct ? `facts_${name}` : `rea.${name}`,
+    ]),
+  );
   const encode = (value) => ({
     content: [{ type: "text", text: JSON.stringify(value) }],
     _meta: TARGET_CONTENT_RESULT_META,
@@ -64,26 +73,19 @@ const createServer = () => {
   );
   register(
     "reference",
-    "Look up the rea JavaScript API by method name or analyst concept before writing Code Mode calls. Empty query returns the complete API reference.",
+    "Look up analysis contracts by exact displayed method names or canonical method IDs, separated by spaces or commas, or search one analyst concept. Request only needed methods; empty query returns all contracts.",
     z.strictObject({ query: z.string().default("") }),
-    (input) => {
-      const docs = reference(input.query);
-      if (process.env.REA_ATOMIC_ADAPTER === "direct") {
-        docs.language =
-          "Direct MCP calls: use facts_<method> with the same JSON arguments; results have {ok,context,data}.";
-        docs.methods = docs.methods.map((method) => ({
-          ...method,
-          name: method.name.replace("rea.", "facts_"),
-          example: undefined,
-        }));
-      }
-      return docs;
-    },
+    (input) =>
+      reference(input.query, {
+        names: apiNames,
+        includeExamples: !direct,
+        language: direct ? DIRECT_REFERENCE_LANGUAGE : undefined,
+      }),
   );
-  if (process.env.REA_ATOMIC_ADAPTER === "direct") {
+  if (direct) {
     for (const [name, contract] of Object.entries(methods))
       register(
-        `facts_${name}`,
+        apiNames[name],
         contract.description,
         contract.input,
         (input, signal) => session.call(name, input, signal),

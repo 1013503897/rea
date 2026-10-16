@@ -214,3 +214,12 @@ The trace reveals two format sources at each shared call, verified against byte
 and machine evidence. [Costs and source review](trials.md) also record a direct
 documentation-lookup miss; named discovery needs fixing before rerunning the
 same task. No general adapter speedup follows from that first pair.
+
+Named reference lookup now accepts canonical IDs or exact displayed names,
+including space/comma-separated lists. One presentation map supplies direct
+registration and documentation names; unmatched terms remain explicit. Selected
+schemas come from named contracts, use input semantics (defaulted fields stay
+optional), and are cached immutably by Zod schema identity for the process.
+Validation stays in the API registry; documentation has its own module. Both
+actual MCP catalogs and all fourteen reference schemas validate. The unchanged
+PHI question/oracle will be rerun after this discovery correction.

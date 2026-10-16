@@ -542,3 +542,33 @@ stages and workspace gates remain unexecuted; the patch is not upstream-ready.
 No whole-repository typecheck pass is claimed beyond the previously recorded
 resource limitation. The [PHI-format task/oracle](projection-oracle.md) are fixed
 before real-model launches. No model benefit is assumed from these smaller facts.
+
+## Named reference discovery and input schemas
+
+The first PHI model pair completes correctly but exposes a documentation boundary:
+direct help displays `facts_*` names while lookup only recognizes raw method
+substrings. A multi-name query returns no matches and causes a full-reference
+fallback. Registration and help now share one explicit name map, with canonical
+identity separate from presentation. Exact lists preserve caller order,
+deduplicate names and retain unmatched terms. Topic/all-contract lookup remain;
+ambiguous labels fail instead of choosing by catalog position.
+
+The real client verifier also catches that plain `z.toJSONSchema` defaults to
+output semantics, making defaulted `offset`/`limit` falsely required in advertised
+input schemas. Reference generation now explicitly selects `io:input`. Converted
+schemas are frozen and weakly cached by schema identity; a replacement schema
+invalidates the conversion, while description/presentation is read separately.
+The documentation module removes the adapter rename pass. No target analysis,
+live-result caching or native-engine change is involved.
+
+The shared suite passes 55 tests. `verify-discovery.mjs` checks both real SDK
+catalogs and reference responses without opening a target, compiles every catalog
+and all fourteen reference schemas with Ajv2020, and validates the same
+omitted-default requests against named reference/direct contracts. It proves the
+six-name query matches all requested contracts without a miss. The corrected
+verifier takes 1.628 family wall / 1.449 CPU seconds, 128.9 MiB kernel peak,
+cleanup verified and OOM 0. Its original 1.730 / 1.487 seconds, 128.1 MiB failed
+omitted-default check remains recorded. Six contracts occupy 10,835 Code Mode /
+10,360 direct bytes, versus 21,746 / 20,699 for all fourteen. Bytes do not prove
+token or time savings. The same PHI question/oracle are retained for the next
+actual model pair.
