@@ -53,6 +53,7 @@ for (const direct of [false, true]) {
     const ids = [
       "switches",
       "path",
+      "parameters",
       "snapshot",
       "operations",
       "relations",
@@ -67,7 +68,7 @@ for (const direct of [false, true]) {
       ids,
     );
     assert.deepEqual(selected.unmatched_queries, []);
-    assert.equal(selected.coverage.declared_methods, 16);
+    assert.equal(selected.coverage.declared_methods, 17);
     const ajv = new Ajv2020({ strict: false });
     for (const tool of catalog.tools) ajv.compile(tool.inputSchema);
     assert.equal(Object.hasOwn(selected, "limits"), !direct);
@@ -170,6 +171,15 @@ for (const direct of [false, true]) {
         },
       ],
       [
+        "parameters",
+        {
+          snapshot: "snap_other",
+          indices: [0, 1],
+          fields: ["storage", "is_void"],
+        },
+        { snapshot: "snap_other", indices: ["0"] },
+      ],
+      [
         "evidence",
         { evidence_id: "ev_example", component: "recovered_ir" },
         { evidence_id: "ev_example", component: "unknown" },
@@ -206,7 +216,7 @@ for (const direct of [false, true]) {
     );
     assert.deepEqual(missing.unmatched_queries, ["unknown"]);
     const all = await call("");
-    assert.equal(all.methods.length, 16);
+    assert.equal(all.methods.length, 17);
     for (const method of all.methods) {
       ajv.compile(method.input_schema);
       assert.equal(method.description, methods[method.method].description);

@@ -292,6 +292,7 @@ export class KunaFactOwner {
           availability: "available",
           scope: "diagnostic-printed-SSA",
         },
+        parameters: missingNativeFacet(),
         calls: missingNativeFacet(),
         values: missingNativeFacet(),
       },
@@ -421,31 +422,33 @@ export class KunaFactOwner {
           : {},
       );
   }
-  async values(input) {
+  #queryNative(input, read) {
     this.#requireNativeIR(input.snapshot);
-    return this.#query(input, (model) => model.values(input));
+    return this.#query(input, read);
+  }
+  async values(input) {
+    return this.#queryNative(input, (model) => model.values(input));
   }
   async calls(input) {
-    this.#requireNativeIR(input.snapshot);
-    return this.#query(input, (model) => model.calls(input));
+    return this.#queryNative(input, (model) => model.calls(input));
   }
   async switches(input) {
-    this.#requireNativeIR(input.snapshot);
-    return this.#query(input, (model) => model.switches(input));
+    return this.#queryNative(input, (model) => model.switches(input));
   }
   async blocks(input) {
-    this.#requireNativeIR(input.snapshot);
-    return this.#query(input, (model) => ({
+    return this.#queryNative(input, (model) => ({
       ...model.blocks(input),
       coverage: model.coverage,
     }));
   }
   async path(input) {
-    this.#requireNativeIR(input.snapshot);
-    return this.#query(input, (model) => ({
+    return this.#queryNative(input, (model) => ({
       ...model.path(input),
       coverage: model.coverage,
     }));
+  }
+  async parameters(input) {
+    return this.#queryNative(input, (model) => model.parameters(input));
   }
   async code(input) {
     const descriptor = this.#snapshots.get(input.snapshot);

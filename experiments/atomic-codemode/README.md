@@ -19,6 +19,11 @@ The [capability map](capability-map.md) distinguishes verified task coverage,
 experimental exporter requirements and remaining unknowns before interpreting
 adapter comparisons.
 
+The [function-boundary study](function-boundary-study.md) adds independent native
+prototype entries and return descriptors, separated from raw input varnodes.
+Initial real SSH checks expose different inventories; final native and model
+verification is recorded there as it completes.
+
 The [path-query study](path-query-study.md) adds a shared, bounded recovered-CFG
 witness query with exclusions and paging. Both actual MCP adapters verify the
 same four real SQLite witnesses without requiring the model to fetch the entire
@@ -147,7 +152,7 @@ the ledger now records actual model responses and client dispatch/wait calls.
 owner. Recovered operations use `origin_address` and blocks `origin_start`;
 these locations cannot be substituted for machine branch destinations. The
 value-origin trial demonstrates why this boundary matters. The experiment
-now has sixteen fact methods, still behind the same four-tool Code Mode
+now has seventeen fact methods, still behind the same four-tool Code Mode
 catalog.
 
 `calls` connects recovered call operations to native target specifications and

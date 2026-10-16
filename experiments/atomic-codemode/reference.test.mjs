@@ -35,7 +35,7 @@ test("reference index discovers named methods without constructing unrequested s
     /Unknown reference view/,
   );
   const all = reference("", { view: "index" });
-  assert.equal(all.methods.length, 16);
+  assert.equal(all.methods.length, 17);
   assert.ok(
     all.methods.some(
       (m) => m.method === "relations" && m.description.includes("operands"),
@@ -75,7 +75,7 @@ test("named reference lists preserve caller order and exact schemas across prese
     ["facts_values", "facts_snapshot"],
   );
   assert.deepEqual(result.unmatched_queries, ["unknown"]);
-  assert.equal(result.coverage.declared_methods, 16);
+  assert.equal(result.coverage.declared_methods, 17);
   assert.equal(result.coverage.matched_methods, 2);
   assert.equal(result.coverage.selection, "named");
   const javascript = reference("rea.values snapshot");
@@ -104,7 +104,7 @@ test("named reference lists preserve caller order and exact schemas across prese
 });
 
 test("topic/all reference selection and shared schema ownership remain explicit", () => {
-  assert.equal(reference().methods.length, 16);
+  assert.equal(reference().methods.length, 17);
   assert.equal(reference("no-such-topic").coverage.matched_methods, 0);
   assert.ok(
     reference("memory aliases").methods.some((m) => m.method === "slice"),

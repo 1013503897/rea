@@ -2,10 +2,7 @@
 import { z } from "zod";
 
 import { hex, ordinal, valueId, operationId } from "./native-contract.mjs";
-const location = z.strictObject({ space: z.string().min(1), offset: hex });
-const storage = location.extend({
-  size_bytes: z.number().int().positive().max(0x7fffffff),
-});
+import { nativeLocation, nativeStorage } from "./native-storage.mjs";
 export const nativeCall = z.strictObject({
   id: operationId,
   origin_address: hex,
@@ -14,13 +11,13 @@ export const nativeCall = z.strictObject({
   is_dead: z.boolean(),
   target_value_id: valueId.nullable(),
   spec_available: z.boolean(),
-  target: location.nullable(),
+  target: nativeLocation.nullable(),
   target_name: z.string().min(1).nullable(),
   arguments: z.array(
     z.strictObject({
       input_index: z.number().int().positive().max(0x7fffffff),
       value_id: valueId.nullable(),
-      storage: storage.nullable(),
+      storage: nativeStorage.nullable(),
       storage_authority: z
         .enum(["final-input-storage", "locked-prototype"])
         .nullable(),

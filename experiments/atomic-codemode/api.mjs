@@ -236,7 +236,7 @@ export const methods = {
       summary:
         "Select SSA values by ID or exact space/offset/width; keep versions, inputs and constants distinct, without alias inference.",
       description:
-        "Read native SSA values by IDs or exact locations [{space,offset,size_bytes}], with width required. Locations match retained metadata, including const/unique spaces, not pointee contents, aliases or live memory. Filters intersect; IDs retain caller order, otherwise locations retain caller order and values retain native order per location. Empty IDs/locations select none. Null-space values cannot resolve a location and stay explicit in location_coverage; unretained_locations means no known retained coordinate match, not absent machine storage. Scope may be a full graph, bounded call-rooted definition projection, or call-boundary values only; is_input filters retained operand/output values, not an original source signature. Offset is an address-space offset, not a computed arbitrary-width value. Width, constants, function inputs, annotation status and defining operation are separate facts. Requires the pinned native exporter.",
+        "Read native SSA values by IDs or exact locations [{space,offset,size_bytes}], with width required. Locations match retained metadata, including const/unique spaces, not pointee contents, aliases or live memory. Filters intersect; IDs retain caller order, otherwise locations retain caller order and values retain native order per location. Empty IDs/locations select none. Null-space values cannot resolve a location and stay explicit in location_coverage; unretained_locations means no known retained coordinate match, not absent machine storage. Scope may be a full graph, bounded call-rooted definition projection, or call-boundary values only; is_input filters the raw native input flag, which can also mark globals or stack values; it is not formal-parameter membership. Use parameters for the separate native recovered prototype, which also does not prove an original source signature. Offset is an address-space offset, not a computed arbitrary-width value. Width, constants, function inputs, annotation status and defining operation are separate facts. Requires the pinned native exporter.",
     },
     {
       snapshot,
@@ -311,6 +311,38 @@ export const methods = {
     },
     "blocks",
     "await rea.blocks({snapshot:s,ids:[op.block]})",
+  ),
+  parameters: definition(
+    {
+      summary:
+        "Select native recovered formal parameter and return storage, convention and recovery flags; raw input varnodes are not formals.",
+      description:
+        "Read the captured native function prototype: paged parameter entries, return descriptor, native convention label, locks, variadic and recovery-error flags. IDs/indices belong to this snapshot's recovered prototype, not proven source parameter ordinals or original signature. Native is_input also marks stack/global input varnodes; it is not formal membership. Select indices in caller order and optional fields; defaults omit display names/type strings. Output uses the same field selection. Null storage/type stays unknown; explicit is_void is independent of storage absence. Storage matches across snapshots require exact artifact/callee identity and ABI reasoning; stack rebasing, aliases, split/join storage, runtime binding and source signatures remain unproved. Requires a captured parameters facet, independently of full CFG/calls. Older experimental captures explicitly report not-captured; no synthetic empty signature.",
+    },
+    {
+      snapshot,
+      indices: z.array(z.number().int().nonnegative()).max(128).optional(),
+      fields: z
+        .array(
+          z.enum([
+            "name",
+            "type_name",
+            "size_bytes",
+            "is_void",
+            "storage",
+            "type_locked",
+            "name_locked",
+            "size_locked",
+            "this_pointer",
+            "indirect_storage",
+            "hidden_return",
+          ]),
+        )
+        .optional(),
+      ...page,
+    },
+    "parameters",
+    'await rea.parameters({snapshot:s,indices:[0],fields:["storage","size_bytes","is_void","type_name"]})',
   ),
   path: definition(
     {

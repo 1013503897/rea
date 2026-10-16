@@ -1,7 +1,7 @@
 # Capability and comparison scope
 
-The experiment has sixteen fact methods behind a shared SDK/CLI owner, exposed
-as nineteen direct MCP tools or four Code Mode tools. The structured IR/call/
+The experiment has seventeen fact methods behind a shared SDK/CLI owner, exposed
+as twenty direct MCP tools or four Code Mode tools. The structured IR/call/
 projection/switch facts require the explicitly pinned experimental Kuna patch;
 they are not capabilities added to stock Kuna or integrated REA by registration
 alone. Other providers are not wired to this experimental service.

@@ -10,6 +10,7 @@ import {
 import { parseNativeFunction } from "./native-ir-contract.mjs";
 import { createControlDependenceIndex } from "./control-dependence.mjs";
 import { createGraphPathReader } from "./cfg-path.mjs";
+import { createParameterViews } from "./native-parameters.mjs";
 import { freezeFacts as freeze } from "./fact-reads.mjs";
 import {
   indexCallFacet,
@@ -200,9 +201,14 @@ const captureFacets = ({
   callError,
   switches,
   switchError,
+  parameters,
+  parameterError,
 }) =>
   freeze({
     code: { availability: "available" },
+    parameters: parameters
+      ? { availability: "available", count: parameters.count }
+      : { availability: "unavailable", error: parameterError },
     recovered_ir: graph
       ? { availability: "available" }
       : { availability: "unavailable", error: graphError },
@@ -270,6 +276,9 @@ const unavailable =
   };
 export function parseNativeIR(text, entry, expectedInput) {
   const capture = parseNativeFunction(text, entry, expectedInput);
+  const parameters = loadFacet(capture.parameters, (facts) => ({
+    view: createParameterViews(facts),
+  }));
   const graph = loadFacet(capture.facts, (facts) => {
     freeze(facts);
     const index = indexNative(facts);
@@ -337,6 +346,9 @@ export function parseNativeIR(text, entry, expectedInput) {
   return Object.freeze({
     ...(graph.view ?? projection.view ?? fallback),
     path: graph.view?.path ?? unavailableGraph,
+    parameters:
+      parameters.view?.parameters ??
+      unavailable("parameters", parameters.error),
     edges: (input) =>
       input.kind === "cases"
         ? (switches.view?.cases ?? unavailableSwitches)(input)
@@ -358,6 +370,8 @@ export function parseNativeIR(text, entry, expectedInput) {
       callError: calls.error,
       switches: switches.view,
       switchError: switches.error,
+      parameters: parameters.view,
+      parameterError: parameters.error,
     }),
   });
 }

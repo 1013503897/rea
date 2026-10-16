@@ -167,10 +167,10 @@ index 00000000..48631d39
 +}
 diff --git a/decompiler/crates/kuna-cli/src/atomic_json.rs b/decompiler/crates/kuna-cli/src/atomic_json.rs
 new file mode 100644
-index 00000000..6005472b
+index 00000000..08deb2e5
 --- /dev/null
 +++ b/decompiler/crates/kuna-cli/src/atomic_json.rs
-@@ -0,0 +1,456 @@
+@@ -0,0 +1,497 @@
 +//! Opt-in atomic documents share the ordinary record producer and JSON writer.
 +//! A graph that cannot fit must not discard otherwise readable reconstructed C.
 +
@@ -179,10 +179,11 @@ index 00000000..6005472b
 +// Ownership is moved out while trying bounded alternatives, never cloned.
 +struct RemovedFacet {
 +    function: usize,
-+    field: usize,
 +    value: (String, Json),
 +    added_error: bool,
 +}
++// JSON object member order is not facet identity. Restore owned entries by key,
++// never by an ordinal invalidated when another independent facet was removed.
 +#[derive(Clone, Copy)]
 +enum Omission {
 +    Capacity,
@@ -218,7 +219,6 @@ index 00000000..6005472b
 +                    }
 +                    removed.push(RemovedFacet {
 +                        function,
-+                        field,
 +                        value,
 +                        added_error,
 +                    });
@@ -236,7 +236,7 @@ index 00000000..6005472b
 +                    let error = format!("{}_error", facet.value.0);
 +                    fields.retain(|(key, _)| key != &error);
 +                }
-+                fields.insert(facet.field, facet.value);
++                fields.push(facet.value);
 +            }
 +        }
 +    }
@@ -293,27 +293,24 @@ index 00000000..6005472b
 +}
 +// Reclaim a saved independent facet when other omissions have made room.
 +// Only bounded encoded strings coexist here, never cloned graph/facet trees.
-+fn bounded_reclaiming(
-+    document: &mut Json,
-+    budget: usize,
-+    name: &str,
-+    saved: &mut Vec<RemovedFacet>,
-+) -> Option<String> {
-+    let base = bounded(document, budget)?;
-+    if saved.is_empty() {
-+        return Some(base);
-+    }
++fn reclaim(document: &mut Json, budget: usize, name: &str, saved: &mut Vec<RemovedFacet>, base: String) -> String {
++    if saved.is_empty() { return base; }
 +    restore_facet(document, std::mem::take(saved));
-+    if let Some(complete) = bounded(document, budget) {
-+        return Some(complete);
-+    }
++    if let Some(complete) = bounded(document, budget) { return complete; }
 +    *saved = take_facet(document, name, budget + 1, Omission::Capacity);
-+    Some(base)
++    base
++}
++fn bounded_reclaiming(document: &mut Json, budget: usize, name: &str, saved: &mut Vec<RemovedFacet>) -> Option<String> {
++    let base = bounded(document, budget)?;
++    Some(reclaim(document, budget, name, saved, base))
 +}
 +pub(crate) fn render(mut document: Json, limit: usize) -> Result<String, String> {
 +    let budget = limit
 +        .checked_sub(1)
 +        .ok_or("atomic JSON output budget is zero")?;
++    // A newly added independent facet must not displace established graph/call
++    // coverage. Reclaim it only after the existing owner selects a fitting result.
++    let mut parameters = take_facet(&mut document, "atomic_parameters", limit, Omission::Capacity);
 +    // A full graph already owns these operation/value facts. Keep its bounded
 +    // projection aside in case encoded size later makes that graph unavailable.
 +    let projection = take_facet(
@@ -323,14 +320,14 @@ index 00000000..6005472b
 +        Omission::RedundantWithGraph,
 +    );
 +    if let Some(text) = bounded(&document, budget) {
-+        return Ok(text);
++        return Ok(reclaim(&mut document, budget, "atomic_parameters", &mut parameters, text));
 +    }
 +    let originals = compress_graphs(&mut document, budget);
 +    let mut alternatives = if originals.is_empty() {
 +        Vec::new()
 +    } else {
 +        if let Some(text) = bounded(&document, budget) {
-+            return Ok(text);
++            return Ok(reclaim(&mut document, budget, "atomic_parameters", &mut parameters, text));
 +        }
 +        exchange_graphs(&mut document, originals)
 +    };
@@ -339,12 +336,12 @@ index 00000000..6005472b
 +    let mut switches = take_facet(&mut document, "atomic_switches", limit, Omission::Capacity);
 +    if !switches.is_empty() {
 +        if let Some(text) = bounded(&document, budget) {
-+            return Ok(text);
++            return Ok(reclaim(&mut document, budget, "atomic_parameters", &mut parameters, text));
 +        }
 +        if !alternatives.is_empty() {
 +            let originals = exchange_graphs(&mut document, alternatives);
 +            if let Some(text) = bounded(&document, budget) {
-+                return Ok(text);
++                return Ok(reclaim(&mut document, budget, "atomic_parameters", &mut parameters, text));
 +            }
 +            alternatives = exchange_graphs(&mut document, originals);
 +        }
@@ -354,14 +351,14 @@ index 00000000..6005472b
 +        if let Some(text) =
 +            bounded_reclaiming(&mut document, budget, "atomic_switches", &mut switches)
 +        {
-+            return Ok(text);
++            return Ok(reclaim(&mut document, budget, "atomic_parameters", &mut parameters, text));
 +        }
 +        if !alternatives.is_empty() {
 +            drop(exchange_graphs(&mut document, alternatives));
 +            if let Some(text) =
 +                bounded_reclaiming(&mut document, budget, "atomic_switches", &mut switches)
 +            {
-+                return Ok(text);
++                return Ok(reclaim(&mut document, budget, "atomic_parameters", &mut parameters, text));
 +            }
 +        }
 +    }
@@ -370,12 +367,12 @@ index 00000000..6005472b
 +    restore_facet(&mut document, projection);
 +    restore_facet(&mut document, std::mem::take(&mut switches));
 +    if let Some(text) = bounded(&document, budget) {
-+        return Ok(text);
++        return Ok(reclaim(&mut document, budget, "atomic_parameters", &mut parameters, text));
 +    }
 +    switches = take_facet(&mut document, "atomic_switches", limit, Omission::Capacity);
 +    if !switches.is_empty() {
 +        if let Some(text) = bounded(&document, budget) {
-+            return Ok(text);
++            return Ok(reclaim(&mut document, budget, "atomic_parameters", &mut parameters, text));
 +        }
 +    }
 +    // Independent calls retain priority when the combined fallback is too big.
@@ -387,13 +384,13 @@ index 00000000..6005472b
 +    );
 +    if let Some(text) = bounded_reclaiming(&mut document, budget, "atomic_switches", &mut switches)
 +    {
-+        return Ok(text);
++        return Ok(reclaim(&mut document, budget, "atomic_parameters", &mut parameters, text));
 +    }
 +    restore_facet(&mut document, projection);
 +    take_facet(&mut document, "atomic_calls", limit, Omission::Capacity);
 +    if let Some(text) = bounded_reclaiming(&mut document, budget, "atomic_switches", &mut switches)
 +    {
-+        return Ok(text);
++        return Ok(reclaim(&mut document, budget, "atomic_parameters", &mut parameters, text));
 +    }
 +    take_facet(
 +        &mut document,
@@ -401,7 +398,8 @@ index 00000000..6005472b
 +        limit,
 +        Omission::Capacity,
 +    );
-+    bounded_reclaiming(&mut document, budget, "atomic_switches", &mut switches).ok_or_else(|| {
++    bounded_reclaiming(&mut document, budget, "atomic_switches", &mut switches)
++        .map(|text| reclaim(&mut document, budget, "atomic_parameters", &mut parameters, text)).ok_or_else(|| {
 +        format!("atomic JSON exceeds {limit} byte capacity even without recovered facets")
 +    })
 +}
@@ -627,6 +625,49 @@ index 00000000..6005472b
 +        }
 +    }
 +}
++
++#[cfg(test)]
++mod parameter_facet_tests {
++    use super::*;
++    fn document(graph: usize, calls: usize, parameters: usize) -> Json {
++        Json::Object(vec![("functions".into(),Json::Array(vec![Json::Object(vec![
++            ("code".into(),Json::Str("readable C".into())),
++            ("atomic_facts".into(),Json::Str("g".repeat(graph))),
++            ("atomic_calls".into(),Json::Str("c".repeat(calls))),
++            ("atomic_parameters".into(),Json::Str("p".repeat(parameters))),
++        ])]))])
++    }
++    #[test]
++    fn oversized_parameters_do_not_displace_existing_graph_and_calls() {
++        let text=render(document(400,20,3000),900).unwrap();
++        let value:serde_json::Value=serde_json::from_str(&text).unwrap();let f=&value["functions"][0];
++        assert_eq!(f["atomic_facts"].as_str().unwrap().len(),400);
++        assert_eq!(f["atomic_calls"].as_str().unwrap().len(),20);
++        assert!(f.get("atomic_parameters").is_none());
++        assert!(f["atomic_parameters_error"].is_string());
++    }
++    #[test]
++    fn independent_small_parameters_survive_when_graph_and_calls_do_not_fit() {
++        let text=render(document(3000,3000,12),900).unwrap();
++        assert!(text.len()<=900);
++        let value:serde_json::Value=serde_json::from_str(&text).unwrap();let f=&value["functions"][0];
++        assert_eq!(f["code"],"readable C");
++        assert_eq!(f["atomic_parameters"].as_str().unwrap().len(),12);
++        assert!(f.get("atomic_parameters_error").is_none());
++    }
++    #[test]
++    fn restore_is_owned_by_field_identity_after_other_fields_are_removed() {
++        let mut doc=document(10,10,10);
++        let parameters=take_facet(&mut doc,"atomic_parameters",1000,Omission::Capacity);
++        take_facet(&mut doc,"atomic_facts",1000,Omission::Capacity);
++        take_facet(&mut doc,"atomic_calls",1000,Omission::Capacity);
++        restore_facet(&mut doc,parameters);
++        let text=bounded(&doc,1000).unwrap();
++        let value:serde_json::Value=serde_json::from_str(&text).unwrap();
++        assert_eq!(value["functions"][0]["atomic_parameters"],"p".repeat(10));
++        assert!(value["functions"][0].get("atomic_parameters_error").is_none());
++    }
++}
 diff --git a/decompiler/crates/kuna-cli/src/decompile.rs b/decompiler/crates/kuna-cli/src/decompile.rs
 index ad249b04..62074996 100644
 --- a/decompiler/crates/kuna-cli/src/decompile.rs
@@ -765,7 +806,7 @@ index ad249b04..62074996 100644
          failure = Some(format!("--assert directive rejected in {}", args.binary));
      }
 diff --git a/decompiler/crates/kuna-cli/src/decompile_all.rs b/decompiler/crates/kuna-cli/src/decompile_all.rs
-index 698c7243..21147ba5 100644
+index 698c7243..c1dceab2 100644
 --- a/decompiler/crates/kuna-cli/src/decompile_all.rs
 +++ b/decompiler/crates/kuna-cli/src/decompile_all.rs
 @@ -744,6 +744,7 @@ fn run_jobs_worker(args: &Args) -> Result<(), String> {
@@ -821,20 +862,21 @@ index 698c7243..21147ba5 100644
  /// [`render_result_json`] plus the inventory `total` a NARROWED whole-binary run
  /// answers with.
  ///
-@@ -2152,6 +2168,12 @@ fn result_json(
+@@ -2152,6 +2168,13 @@ fn result_json(
                      // Always present, `[]` unless the option is on.
                      ("types".into(), types),
                  ];
 +                if let Some(detail) = f.detail.as_ref() {
 +                    append_atomic_facet(&mut record, "atomic_facts", detail.atomic_facts.as_ref());
 +                    append_atomic_facet(&mut record, "atomic_calls", detail.atomic_calls.as_ref());
++                    append_atomic_facet(&mut record, "atomic_parameters", detail.atomic_parameters.as_ref());
 +                    append_atomic_facet(&mut record, "atomic_switches", detail.atomic_switches.as_ref());
 +                    append_atomic_facet(&mut record, "atomic_projection", detail.atomic_projection.as_ref());
 +                }
                  if !f.stack_objects.is_empty() {
                      record.push(("stack_objects".into(), Json::Array(
                          f.stack_objects.iter().map(stack_object_json).collect(),
-@@ -3519,3 +3541,16 @@ mod triage_tests {
+@@ -3519,3 +3542,16 @@ mod triage_tests {
      }
  
  }
@@ -1151,21 +1193,22 @@ index e40b18c9..b8cae233 100644
      };
  
 diff --git a/decompiler/crates/kuna-console/src/inspect.rs b/decompiler/crates/kuna-console/src/inspect.rs
-index 74024b10..a41465a6 100644
+index 74024b10..9e36d55f 100644
 --- a/decompiler/crates/kuna-console/src/inspect.rs
 +++ b/decompiler/crates/kuna-console/src/inspect.rs
-@@ -24,6 +24,10 @@ pub const FUNCTION_ROW_CAP: usize = 4096;
+@@ -24,6 +24,11 @@ pub const FUNCTION_ROW_CAP: usize = 4096;
  pub struct FuncDetail {
      pub tokens: Vec<CodeToken>,
      pub tokens_error: Option<String>,
 +    pub atomic_facts: Option<Result<kuna_decomp::atomic_facts::FunctionFacts, String>>,
 +    pub atomic_calls: Option<Result<kuna_decomp::atomic_calls::CallFacts, String>>,
++    pub atomic_parameters: Option<Result<kuna_decomp::atomic_parameters::Parameters, String>>,
 +    pub atomic_switches: Option<Result<kuna_decomp::atomic_switches::SwitchFacts, String>>,
 +    pub atomic_projection: Option<Result<kuna_decomp::atomic_projection::Projection, String>>,
  }
  
  impl FuncDetail {
-@@ -40,13 +44,13 @@ impl FuncDetail {
+@@ -40,13 +45,13 @@ impl FuncDetail {
      ) -> Self {
          let mut tokens = kuna_srcmap::resolve(fd, var_refs, raw, untrimmed, variables);
          if let Err(error) = kuna_srcmap::verify(&tokens, code) {
@@ -1182,7 +1225,7 @@ index 74024b10..a41465a6 100644
  }
  
 diff --git a/decompiler/crates/kuna-console/src/project.rs b/decompiler/crates/kuna-console/src/project.rs
-index bc401db2..7b7c7c24 100644
+index bc401db2..2ef18e27 100644
 --- a/decompiler/crates/kuna-console/src/project.rs
 +++ b/decompiler/crates/kuna-console/src/project.rs
 @@ -245,6 +245,8 @@ pub struct DecompileOptions {
@@ -1218,7 +1261,7 @@ index bc401db2..7b7c7c24 100644
          want_pointer_arguments,
          ..
      } = *opts;
-@@ -838,11 +843,23 @@ pub fn decompile_pulled(
+@@ -838,11 +843,24 @@ pub fn decompile_pulled(
                          }
                      }
                      let var_refs = provenance.apply_to_variables_with_refs(&fd, &mut variables);
@@ -1230,6 +1273,7 @@ index bc401db2..7b7c7c24 100644
                      });
 +                    if want_atomic_facts {
 +                        let detail = detail.get_or_insert_with(Default::default);
++                        detail.atomic_parameters = Some(kuna_decomp::atomic_parameters::collect(fd.get_func_proto()));
 +                        let membership = kuna_decomp::atomic_membership::inspect(&fd);
 +                        detail.atomic_calls = Some(membership.as_ref().map_err(Clone::clone)
 +                            .and_then(|m| kuna_decomp::atomic_calls::collect_all(&fd, m)));
@@ -1315,19 +1359,19 @@ index 8aad0172..2f69df2d 100644
 +}
 diff --git a/decompiler/crates/kuna-decomp/src/substrate/atomic_calls.rs b/decompiler/crates/kuna-decomp/src/substrate/atomic_calls.rs
 new file mode 100644
-index 00000000..2b7ced64
+index 00000000..fa04cafc
 --- /dev/null
 +++ b/decompiler/crates/kuna-decomp/src/substrate/atomic_calls.rs
-@@ -0,0 +1,216 @@
+@@ -0,0 +1,189 @@
 +//! Recovered call relations. Argument values and passing storage are separate.
 +use crate::{
 +    atomic_membership::{Membership, MAX_CALLS},
 +    atomic_values::{self, operation_id, value_id, ValueFact},
 +    context::OpId,
++    atomic_storage::{location, storage, Location, Storage},
 +    fspec::{FuncCallSpecs, OFFSET_UNKNOWN},
 +    funcdata::Funcdata,
 +};
-+use kuna_base::address::Address;
 +use serde::Serialize;
 +use std::collections::{BTreeSet, HashMap};
 +
@@ -1408,17 +1452,6 @@ index 00000000..2b7ced64
 +}
 +
 +#[derive(Debug, Clone, Serialize)]
-+pub struct Location {
-+    pub space: String,
-+    pub offset: String,
-+}
-+#[derive(Debug, Clone, Serialize)]
-+pub struct Storage {
-+    #[serde(flatten)]
-+    pub location: Location,
-+    pub size_bytes: i32,
-+}
-+#[derive(Debug, Clone, Serialize)]
 +pub struct Argument {
 +    pub input_index: i32,
 +    pub value_id: Option<String>,
@@ -1449,22 +1482,6 @@ index 00000000..2b7ced64
 +    pub prototype: Option<Prototype>,
 +    pub stack_offset: Option<String>,
 +}
-+fn location(address: &Address) -> Option<Location> {
-+    address.get_space().map(|space| Location {
-+        space: space.get_name().to_string(),
-+        offset: format!("0x{:x}", address.get_offset()),
-+    })
-+}
-+fn storage(address: &Address, size_bytes: i32) -> Option<Storage> {
-+    if size_bytes <= 0 {
-+        return None;
-+    }
-+    location(address).map(|location| Storage {
-+        location,
-+        size_bytes,
-+    })
-+}
-+
 +fn collect(fd: &Funcdata, key: OpId, spec: Option<&FuncCallSpecs>) -> Result<CallFact, String> {
 +    let op = fd.obank().get(key).ok_or("stale call operation")?;
 +    let arguments = (1..op.num_input())
@@ -1904,6 +1921,167 @@ index 00000000..30d6be39
 +        atomic_values::collect(fd, std::mem::take(&mut self.keys), &mut self.text)
 +    }
 +}
+diff --git a/decompiler/crates/kuna-decomp/src/substrate/atomic_parameters.rs b/decompiler/crates/kuna-decomp/src/substrate/atomic_parameters.rs
+new file mode 100644
+index 00000000..82a34a49
+--- /dev/null
++++ b/decompiler/crates/kuna-decomp/src/substrate/atomic_parameters.rs
+@@ -0,0 +1,155 @@
++//! Native function prototype facts, independent of raw input varnodes/call count.
++use crate::{
++    atomic_storage::{storage, Storage},
++    atomic_values::TextBudget,
++    dtype::type_metatype,
++    fspec::{FuncProto, ProtoParameter},
++};
++use serde::Serialize;
++
++// Bound row expansion independently of the encoded document/text budgets.
++pub const MAX_PARAMETERS: usize = 12_000;
++#[derive(Debug, Clone, Serialize)]
++pub struct Parameter {
++    pub id: String,
++    pub native_index: Option<i32>,
++    pub name: String,
++    pub type_name: Option<String>,
++    pub size_bytes: i32,
++    pub is_void: Option<bool>,
++    pub storage: Option<Storage>,
++    pub type_locked: bool,
++    pub name_locked: bool,
++    pub size_locked: bool,
++    pub this_pointer: bool,
++    pub indirect_storage: bool,
++    pub hidden_return: bool,
++}
++#[derive(Debug, Clone, Serialize)]
++pub struct Parameters {
++    pub schema_version: u32,
++    pub model: Option<String>,
++    pub model_unknown: Option<bool>,
++    pub inputs_locked: bool,
++    pub output_locked: bool,
++    pub variadic: bool,
++    pub input_errors: bool,
++    pub output_errors: bool,
++    pub items: Vec<Parameter>,
++    pub output: Parameter,
++}
++fn parameter(
++    p: &dyn ProtoParameter,
++    index: Option<i32>,
++    text: &mut TextBudget,
++) -> Result<Parameter, String> {
++    text.charge(p.get_name().len())?;
++    if let Some(t) = p.get_type() {
++        text.charge(t.get_name().len())?;
++    }
++    Ok(Parameter {
++        id: index.map_or_else(|| "return".into(), |i| format!("parameter:{i}")),
++        native_index: index,
++        name: p.get_name().into(),
++        type_name: p.get_type().map(|t| t.get_name().into()),
++        size_bytes: p.get_size(),
++        is_void: p
++            .get_type()
++            .map(|t| t.get_metatype() == type_metatype::TYPE_VOID),
++        storage: storage(&p.get_address(), p.get_size()),
++        type_locked: p.is_type_locked(),
++        name_locked: p.is_name_locked(),
++        size_locked: p.is_size_type_locked(),
++        this_pointer: p.is_this_pointer(),
++        indirect_storage: p.is_indirect_storage(),
++        hidden_return: p.is_hidden_return(),
++    })
++}
++pub fn collect(proto: &FuncProto) -> Result<Parameters, String> {
++    if !proto.has_store() {
++        return Err("native function prototype store is unavailable".into());
++    }
++    let count =
++        usize::try_from(proto.num_params()).map_err(|_| "invalid native parameter count")?;
++    if count > MAX_PARAMETERS {
++        return Err("atomic parameter row capacity exceeded".into());
++    }
++    let mut text = TextBudget::new(2 * 1024 * 1024);
++    if proto.has_model() {
++        text.charge(proto.get_model_name().len())?;
++    }
++    let mut items = Vec::with_capacity(count);
++    for i in 0..count {
++        let p = proto
++            .get_param(i as i32)
++            .ok_or("missing native parameter slot")?;
++        items.push(parameter(p, Some(i as i32), &mut text)?);
++    }
++    Ok(Parameters {
++        schema_version: 1,
++        model: proto.has_model().then(|| proto.get_model_name().into()),
++        model_unknown: proto.has_model().then(|| proto.is_model_unknown()),
++        inputs_locked: proto.is_input_locked(),
++        output_locked: proto.is_output_locked(),
++        variadic: proto.is_dotdotdot(),
++        input_errors: proto.has_input_errors(),
++        output_errors: proto.has_output_errors(),
++        items,
++        output: parameter(proto.get_output(), None, &mut text)?,
++    })
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use crate::{dtype::Datatype, fspec::ParameterPieces};
++    use kuna_base::{
++        address::Address,
++        space::{spacetype, AddrSpace},
++    };
++    use std::rc::Rc;
++    #[test]
++    fn absent_store_is_unknown_not_an_empty_signature() {
++        assert!(collect(&FuncProto::new())
++            .unwrap_err()
++            .contains("unavailable"));
++    }
++    #[test]
++    fn native_slots_return_storage_void_and_locks_remain_distinct() {
++        let mut proto = FuncProto::new();
++        proto.attach_internal_store(Rc::new(Datatype::new(0, type_metatype::TYPE_VOID)));
++        let empty = collect(&proto).unwrap();
++        assert!(empty.items.is_empty());
++        assert_eq!(empty.output.is_void, Some(true));
++        assert!(empty.output.storage.is_none());
++        let reg = Rc::new(AddrSpace::new(
++            spacetype::IPTR_PROCESSOR,
++            "register",
++            false,
++            8,
++            1,
++            3,
++            0,
++            0,
++            0,
++        ));
++        let pieces = ParameterPieces {
++            addr: Address::new(reg, 0x38),
++            type_: Some(Rc::new(Datatype::new(8, type_metatype::TYPE_UNKNOWN))),
++            flags: 0,
++        };
++        proto.set_param(0, "display name", &pieces);
++        proto.set_input_lock(true);
++        proto.set_output(&pieces);
++        let facts = collect(&proto).unwrap();
++        assert_eq!(facts.items.len(), 1);
++        assert_eq!(facts.items[0].id, "parameter:0");
++        assert_eq!(facts.items[0].native_index, Some(0));
++        assert!(facts.inputs_locked && facts.items[0].type_locked);
++        assert_eq!(facts.output.is_void, Some(false));
++        let storage = facts.output.storage.unwrap();
++        assert_eq!(storage.location.space, "register");
++        assert_eq!(storage.location.offset, "0x38");
++        assert_eq!(storage.size_bytes, 8);
++    }
++}
 diff --git a/decompiler/crates/kuna-decomp/src/substrate/atomic_projection.rs b/decompiler/crates/kuna-decomp/src/substrate/atomic_projection.rs
 new file mode 100644
 index 00000000..097b153a
@@ -2025,6 +2203,42 @@ index 00000000..097b153a
 +            issues: budget.issues,
 +            machine_semantic_equivalence: "unknown",
 +        },
++    })
++}
+diff --git a/decompiler/crates/kuna-decomp/src/substrate/atomic_storage.rs b/decompiler/crates/kuna-decomp/src/substrate/atomic_storage.rs
+new file mode 100644
+index 00000000..9d64d4c2
+--- /dev/null
++++ b/decompiler/crates/kuna-decomp/src/substrate/atomic_storage.rs
+@@ -0,0 +1,30 @@
++//! Shared native storage representation; ABI/frame interpretation is not inferred.
++use kuna_base::address::Address;
++use serde::Serialize;
++
++#[derive(Debug, Clone, Serialize)]
++pub struct Location {
++    pub space: String,
++    pub offset: String,
++}
++#[derive(Debug, Clone, Serialize)]
++pub struct Storage {
++    #[serde(flatten)]
++    pub location: Location,
++    pub size_bytes: i32,
++}
++pub(crate) fn location(address: &Address) -> Option<Location> {
++    address.get_space().map(|space| Location {
++        space: space.get_name().to_string(),
++        offset: format!("0x{:x}", address.get_offset()),
++    })
++}
++pub(crate) fn storage(address: &Address, size_bytes: i32) -> Option<Storage> {
++    if size_bytes <= 0 {
++        return None;
++    }
++    location(address).map(|location| Storage {
++        location,
++        size_bytes,
 +    })
 +}
 diff --git a/decompiler/crates/kuna-decomp/src/substrate/atomic_switches.rs b/decompiler/crates/kuna-decomp/src/substrate/atomic_switches.rs
@@ -2331,14 +2545,16 @@ index 39927ceb..844950a6 100644
      let num_input = fd.obank().get(op).ok_or_else(|| "render_op: stale op".to_string())?.num_input();
      let in_at = |i: int4| -> Option<VarnodeId> { fd.obank().get(op).and_then(|o| o.get_in(i)) };
 diff --git a/decompiler/crates/kuna-decomp/src/substrate/mod.rs b/decompiler/crates/kuna-decomp/src/substrate/mod.rs
-index 00528cb5..d3f422ee 100644
+index 00528cb5..4330ff1c 100644
 --- a/decompiler/crates/kuna-decomp/src/substrate/mod.rs
 +++ b/decompiler/crates/kuna-decomp/src/substrate/mod.rs
-@@ -11,6 +11,13 @@ pub mod funcdata_block;
+@@ -11,6 +11,15 @@ pub mod funcdata_block;
  pub mod funcdata_encode;
  pub mod funcdata_op;
  pub mod funcdata_printraw;
 +pub mod atomic_facts;
++pub mod atomic_parameters;
++pub mod atomic_storage;
 +pub mod atomic_calls;
 +pub mod atomic_membership;
 +pub mod atomic_operations;
