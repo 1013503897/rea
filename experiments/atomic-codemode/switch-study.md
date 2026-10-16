@@ -203,4 +203,6 @@ on its third. A slower capture can therefore add model responses and token
 usage as well as wall time. Those costs remain in the table; subtracting them
 would not produce a controlled comparison. The next diagnostic should test
 the same longer-wait guidance in both lanes without changing the question,
-analysis facts or completeness requirements.
+analysis facts or completeness requirements. That
+[executed repeat](client-wait-study.md#executed-repeat) now completes correctly
+in both lanes with one wait each, while whole-task costs remain mixed.

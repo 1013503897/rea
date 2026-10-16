@@ -96,7 +96,7 @@ the ledger now records actual model responses and client dispatch/wait calls.
 owner. Recovered operations use `origin_address` and blocks `origin_start`;
 these locations cannot be substituted for machine branch destinations. The
 value-origin trial demonstrates why this boundary matters. The experiment
-now has fourteen fact methods, still behind the same four-tool Code Mode
+now has fifteen fact methods, still behind the same four-tool Code Mode
 catalog.
 
 `calls` connects recovered call operations to native target specifications and
@@ -298,4 +298,8 @@ Both real models now answer the selected-case/default question correctly using
 one retained capture and focused case/byte reads. Code Mode uses fewer tokens
 in this pair, but unequal native capture time and extra client polling confound
 the comparison. Whole-task costs and limits are in the same study; a general
-efficiency advantage remains unproved.
+efficiency advantage remains unproved. A common
+[long-wait repeat](client-wait-study.md) reduces polling to one wait per lane;
+both answers remain correct, but direct wins cumulative input and wall time
+while Code Mode uses less uncached input. Runtime correctness, discovery,
+composition choices and waiting all matter to the completed task.
