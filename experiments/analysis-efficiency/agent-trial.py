@@ -54,7 +54,7 @@ def main():
     parser.add_argument('--mcp-entrypoint', type=Path,
                         help='Caller-selected experimental stdio MCP entrypoint; leaves production dispatcher unchanged')
     parser.add_argument('--server-name', default='rea')
-    parser.add_argument('--protocol-profile', choices=['canonical', 'atomic'], default='canonical')
+    parser.add_argument('--protocol-profile', choices=['canonical', 'atomic', 'atomic-direct'], default='canonical')
     parser.add_argument('--profile-parent', type=Path,
                         help='Absolute parent outside the repository for the isolated model workspace')
     parser.add_argument('--revision', required=True)
@@ -158,7 +158,7 @@ def main():
         'Prefer summary/focused views where appropriate. Do not invent successful facts '
         'after a tool error. No other agents. Stop once the requested facts are supported.'
     )
-    if args.protocol_profile == 'atomic':
+    if args.protocol_profile in {'atomic', 'atomic-direct'}:
         instruction = (
             'Use the registered ' + args.server_name + ' MCP server for this static binary investigation. '
             'Call reference to inspect API contracts, then compose the supported analysis calls. '
@@ -170,6 +170,11 @@ def main():
             'Do not return complete inventories or source reports when a focused answer suffices. '
             'Close the binary when finished. No precomputed answer is available to you.'
         )
+        if args.protocol_profile == 'atomic-direct':
+            instruction = instruction.replace(
+                'execute_javascript returns the script value, with script-derived authority. ',
+                'Call the registered facts_* tools directly; no JavaScript execution tool is registered. '
+            )
     if args.authority == 'browser':
         instruction = (
             'Use the registered REA tools for the explicitly selected public browser scenario. '
