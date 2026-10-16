@@ -70,3 +70,28 @@ whether a model can use those available facts plus selected physical instruction
 windows without inventing a recovered graph. Its local status `5` must not be
 silently promoted to an unconditional final function return: shared error
 processing can still change behavior. No target execution is authorized here.
+
+The post-serialization-fix Pragma task is fixed in `sqlite-pragma-question.txt`.
+It tests a previously inaccessible code facet rather than treating a byte-limit
+failure as a fast completed answer. The two experimental calling modes use the
+same twelve methods and new engine digest `2290e8b1…`, with common normalization
+guidance enabled in both. There is no new traditional cost cell for this task.
+For the same pinned SQLite artifact, independent GNU instruction checks establish:
+
+- `sqlite3Pragma` entry `0xb90e0`; value-pointer test `0xbae56` / branch `0xbae5c`
+  distinguishes the read path from change handling at `0xb9b8c`.
+- `0xb9b90` tests connection byte `+0x65`; zero branches at `0xb9b94` to diagnostic
+  selection at `0xbc58a`. This precedes the additional selector-one bypass at
+  `0xb9b9a` / `0xb9b9f`, so their ordering must be preserved.
+- Allowed local update computes `(value+1)&7`, substitutes one for zero, and
+  stores the selected record's byte `+0x10` at `0xb9bdc`; byte `+0x11` becomes one
+  at `0xb9be3`. The input interpretation and source member names are derivations.
+- The actual diagnostic call is `0xbc596` through `sqlite3ErrorMsg@plt` at
+  `0x2a1e0`; `0xbc59b` jumps to common cleanup `0xb9293`.
+- Cleanup releases both temporary strings, checks the stack canary, and returns
+  at `0xb92d9`. Do not invent a fixed numeric return from this reconstructed
+  void routine. No SQL-level runtime trigger is demonstrated.
+
+Pragma's complete retained code and mappings are checked equal before/after the
+serialization fix. Its recovered graph remains explicitly unavailable at the
+encoded-byte capacity; that is a coverage limitation in both experimental lanes.

@@ -1,0 +1,9 @@
+Analyze {{artifact_path}} statically. Find where the diagnostic
+"Safety level may not be changed inside a transaction" is selected.
+Explain the local conditions, distinguishing reading the setting from attempting
+to change it. Identify the nearby state-byte updates when a change is allowed,
+the diagnostic call, and the cleanup/return behavior. Do not assume source-level
+field names or a numeric function return code without evidence.
+Give supporting function/instruction addresses and real Evidence references.
+Keep the answer focused on this diagnostic. Preserve unavailable-facet reasons
+and distinguish local static conditions from demonstrated runtime feasibility.
