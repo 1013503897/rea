@@ -1,0 +1,10 @@
+Analyze {{artifact_path}} statically. In sqlite3GetToken, recover the initial
+byte-classification lookup and the first indirect dispatch it controls.
+For first bytes 0x2d, 0x2f, 0x27, 0x22, 0x3f and 0x80, report the actual stored
+class value and the initial machine dispatch destination. Read the artifact's
+data tables; do not assume the byte value itself is a switch-case number.
+Explain table bases, indexing, displacement width/signedness and target-base
+calculation with supporting instruction addresses and real Evidence references.
+Keep this about initial dispatch, not complete token recognition. Distinguish
+static loaded-image observations from demonstrated runtime feasibility, and do
+not infer final token types or consumed lengths from initial classes alone.

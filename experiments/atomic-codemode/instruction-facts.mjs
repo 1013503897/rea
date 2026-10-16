@@ -1,6 +1,7 @@
 // The machine-decoding boundary is separate from optimized recovered IR.
 import { z } from "zod";
 import { FactFailure } from "./fact-error.mjs";
+import { NATIVE_OUTPUT_BYTES } from "./limits.mjs";
 
 const hex = z.string().regex(/^0x(?:0|[1-9a-f][0-9a-f]{0,15})$/u);
 const rowSchema = z.object({
@@ -33,7 +34,7 @@ export function parseInstructions(
 ) {
   try {
     requireFact(
-      Buffer.byteLength(text) <= 8 * 1024 * 1024,
+      Buffer.byteLength(text) <= NATIVE_OUTPUT_BYTES,
       "Instruction source exceeds transport capacity",
     );
     const raw = JSON.parse(text);

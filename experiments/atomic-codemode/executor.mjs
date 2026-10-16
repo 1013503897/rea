@@ -1,8 +1,8 @@
 import { getQuickJS } from "quickjs-emscripten";
 import { methods } from "./api.mjs";
+import { MAX_BRIDGE_BYTES as MAX_BRIDGE } from "./limits.mjs";
 
 const MAX_OUTPUT = 32768;
-const MAX_BRIDGE = 2 * 1024 * 1024;
 const failure = (code, message) => ({ ok: false, error: { code, message } });
 export const executeJavaScript = async (
   session,

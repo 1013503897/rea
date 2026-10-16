@@ -9,7 +9,8 @@ import { parseKunaIncomingReferenceFacts } from "../../dist/kuna/KunaReferenceFi
 import { PrivateRuntimeRoot } from "../../dist/process/PrivateRuntimeRoot.js";
 import { parseNativeIR } from "./native-ir.mjs";
 import { FactFailure, requireResult } from "./fact-error.mjs";
-import { parseInstructions } from "./instruction-facts.mjs";
+import { windowReaders } from "./window-readers.mjs";
+import { NATIVE_OUTPUT_BYTES } from "./limits.mjs";
 import {
   sourceSummary,
   pageFacts,
@@ -24,7 +25,6 @@ import {
 } from "../atomic-re-tools/kuna-ssa.mjs";
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
-const NATIVE_OUTPUT_BYTES = 8 * 1024 * 1024;
 export class KunaFactOwner {
   #lifetime = new AbortController();
   #sources = new Map();
@@ -95,8 +95,8 @@ export class KunaFactOwner {
         ? "experimental-native-ir-v1"
         : "diagnostic-ssa-1.833",
       profile: owner.#nativeIR
-        ? "pinned engine with embedded specs; fresh private engine cache per lease; native CLI defaults; no annotations"
-        : "native CLI defaults, no annotations; external spec cache freshness is not fingerprinted",
+        ? "pinned engine with embedded specs; fresh private engine cache per lease; byte reads suppress global discovery; other native CLI defaults; no annotations"
+        : "byte reads suppress global discovery; other native CLI defaults, no annotations; external spec cache freshness is not fingerprinted",
     });
     return owner;
   }
@@ -293,26 +293,23 @@ export class KunaFactOwner {
     };
   }
   async instructions(input, signal) {
+    return this.#readWindows("instructions", input, signal);
+  }
+  async bytes(input, signal) {
+    return this.#readWindows("bytes", input, signal);
+  }
+  async #readWindows(name, input, signal) {
+    const reader = windowReaders[name];
     return readFactBatch(
       input.windows,
       (request) =>
         this.#native(
-          `instructions:${request.address}:${request.count}`,
-          (path) => [
-            "disassemble",
-            path,
-            request.address,
-            "--addr",
-            "--as",
-            "code",
-            "--count",
-            String(request.count),
-            "--json",
-          ],
+          `${name}:${reader.key(request)}`,
+          (path) => reader.arguments(path, request),
           signal,
         ),
       async (capture, request) =>
-        parseInstructions(
+        reader.parse(
           await this.#sourceText(capture.source.evidence_id),
           capture.input,
           request,
@@ -329,7 +326,9 @@ export class KunaFactOwner {
       );
     if (!this.#loaded.has(id)) {
       const { source } = this.#sources.get(descriptor.evidence_id);
-      if (source.bytes > (this.#nativeIR ? 8 : 2) * 1024 * 1024)
+      if (
+        source.bytes > (this.#nativeIR ? NATIVE_OUTPUT_BYTES : 2 * 1024 * 1024)
+      )
         throw new FactFailure(
           "capacity",
           "Source exceeds this format's indexing budget; at most two resident models are retained; full source remains readable",

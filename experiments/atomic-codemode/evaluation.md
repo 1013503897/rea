@@ -95,3 +95,31 @@ For the same pinned SQLite artifact, independent GNU instruction checks establis
 Pragma's complete retained code and mappings are checked equal before/after the
 serialization fix. Its recovered graph remains explicitly unavailable at the
 encoded-byte capacity; that is a coverage limitation in both experimental lanes.
+
+The next seeded table-composition task is fixed in `sqlite-table-question.txt`.
+Both experimental modes have the same thirteen methods including `bytes`; a
+traditional comparison is not claimed because its selected catalog/available
+Kuna byte capability has not been established for this task. GNU disassembly of
+the pinned artifact shows `sqlite3GetToken` at `0xe1480`: unsigned input byte load
+at `0xe1480`, class-table base `0x12bcc0` at `0xe1484`, bound `0x1e` at `0xe1492`,
+class reload `0xe1498`, jump-table base `0x12b600` at `0xe149c`, sign-extending
+32-bit table load at `0xe14a3`, base addition `0xe14a7`, indirect jump `0xe14aa`.
+The out-of-range path begins `0xe14f8`.
+
+Independent direct file reads are valid here because `readelf -lW` binds this
+artifact's selected addresses to the same file offsets in its read-only LOAD
+segment (`0x11a000..0x154bfc`). A Python `struct.unpack_from('<i', ...)` check of
+the actual table bytes gives these initial dispatch facts, before model trials:
+
+| Input byte | Class | Signed displacement | Initial machine destination |
+| --- | ---: | ---: | --- |
+| `0x2d` | 11 | -302928 | `0xe16b0` |
+| `0x2f` | 16 | -302144 | `0xe19c0` |
+| `0x27` | 8 | -302480 | `0xe1870` |
+| `0x22` | 8 | -302480 | `0xe1870` |
+| `0x3f` | 6 | -302272 | `0xe1940` |
+| `0x80` | 27 | -303440 | `0xe14b0` |
+
+This oracle establishes static table/dispatch arithmetic, not final token
+semantics, future runtime table contents or a feasible SQL input. Models must
+retain those boundaries. This document is not supplied to measured models.

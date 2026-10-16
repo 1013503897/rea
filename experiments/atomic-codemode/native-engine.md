@@ -166,3 +166,20 @@ pass in the release test binary; the shared JS tests (38), SDK ownership probe,
 lint and patch apply/reverse checks pass. Full upstream corpus/stages/workspace
 gates still have not run. The first MCP launch used a stale pre-format-build hash
 and was correctly refused; the retained successful retry uses the digest above.
+
+The `bytes` primitive reuses Kuna's existing `read --as data --json` protocol.
+Unlike instruction decoding, it asks for an exact byte range. It disables the
+global `listing` / `fast_funcdisc` passes for this data-only query; instructions
+retain their existing profile. A native probe returns exactly equal JSON with
+and without those flags. Its 484 / 290 ms timings share a workspace and run in
+that order, so they do not establish an isolated speedup. Native/source ownership,
+freshness, decoded-window admission and partial batches remain shared.
+
+Real public MCP checks pass in native Code Mode, native direct and stock 1.833
+Code Mode: a known 53-byte string, a 4-of-16-byte read at a mapped-image boundary,
+an unmapped address, same-source cache reuse and the 64 KiB maximum. Both adapter
+catalogs validate after SDK conversion. The byte parser rejects wrong subjects,
+contradictory duplicated hex, invalid extents and rows, and preserves exact u64
+addresses. Completeness follows examined byte coverage rather than the native
+truncation flag. It never claims these loaded-image bytes are live memory or
+proves an original-file mapping. Targeted JS tests now total 41.

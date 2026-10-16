@@ -2,6 +2,7 @@
 import { z } from "zod";
 import { FactFailure } from "./fact-error.mjs";
 import { ok, err } from "../../dist/domain/result.js";
+import { NATIVE_OUTPUT_BYTES } from "./limits.mjs";
 const requireFact = (condition, reason) => {
   if (!condition) throw new FactFailure("invalid_provider_output", reason);
 };
@@ -207,7 +208,7 @@ const readGraph = (fn) => {
 export function parseNativeFunction(text, entry, expectedInput) {
   try {
     requireFact(
-      Buffer.byteLength(text) <= 8 * 1024 * 1024,
+      Buffer.byteLength(text) <= NATIVE_OUTPUT_BYTES,
       "Native JSON source exceeds transport budget",
     );
     const raw = JSON.parse(text);

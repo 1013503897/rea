@@ -83,8 +83,15 @@ the ledger now records actual model responses and client dispatch/wait calls.
 owner. Recovered operations use `origin_address` and blocks `origin_start`;
 these locations cannot be substituted for machine branch destinations. The
 value-origin trial demonstrates why this boundary matters. The experiment
-currently has twelve fact methods, still behind the same four-tool Code Mode
+now has thirteen fact methods, still behind the same four-tool Code Mode
 catalog.
+
+`bytes` reads explicit virtual-address ranges as native loaded-image hex without
+decoding them as instructions. Batched reads preserve short reads and individual
+failures, with 64 KiB aggregate selected-byte capacity to bound hex/bridge growth.
+Complete hexdumps remain in Evidence. The original-file-offset mapping and live
+runtime memory remain unknown. This closes a direct byte-reading contract gap
+for data tables; it does not establish arbitrary memory-alias analysis.
 
 `functions` provides selected name/alias/entry reads. Native snapshots report
 code and recovered-IR facets separately, preserving readable code when graph
