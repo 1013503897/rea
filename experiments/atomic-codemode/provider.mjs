@@ -5,7 +5,6 @@ import { join } from "node:path";
 import { parseBinaryTarget } from "../../dist/application/BinaryTargetResolver.js";
 import { inspectKunaInstallation } from "../../dist/kuna/KunaInstallation.js";
 import { KunaTargetCommands } from "../../dist/kuna/KunaTargetCommands.js";
-import { parseKunaStringInventory } from "../../dist/kuna/KunaStringInventory.js";
 import { parseKunaIncomingReferenceFacts } from "../../dist/kuna/KunaReferenceFiles.js";
 import { PrivateRuntimeRoot } from "../../dist/process/PrivateRuntimeRoot.js";
 import { parseNativeIR } from "./native-ir.mjs";
@@ -16,15 +15,16 @@ import {
   pageFacts,
   projectFact,
   readFactBatch,
-  freezeFacts,
 } from "./fact-reads.mjs";
 import { parseFunctionFacts, selectFunctionFacts } from "./function-facts.mjs";
+import { parseStringFacts, selectStringFacts } from "./string-facts.mjs";
 import {
   parseKunaSsaDump,
   backwardSlice,
 } from "../atomic-re-tools/kuna-ssa.mjs";
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
+const NATIVE_OUTPUT_BYTES = 8 * 1024 * 1024;
 export class KunaFactOwner {
   #lifetime = new AbortController();
   #sources = new Map();
@@ -123,7 +123,7 @@ export class KunaFactOwner {
         installation: this.#installation,
         operation: "experiment:atomic-facts",
         arguments: arguments_,
-        outputBytes: 8 * 1024 * 1024,
+        outputBytes: NATIVE_OUTPUT_BYTES,
         timeoutMs: 120000,
         signal: AbortSignal.any([signal, this.#lifetime.signal]),
       }),
@@ -196,32 +196,13 @@ export class KunaFactOwner {
       ],
       signal,
     );
-    this.#strings ??= freezeFacts(
-      requireResult(
-        parseKunaStringInventory(
-          await this.#sourceText(capture.source.evidence_id),
-          capture.input,
-        ),
-        "invalid_provider_output",
-      ),
-    );
-    const inventory = this.#strings;
-    const rows = inventory.items.filter((row) =>
-      row.value.includes(input.query),
+    this.#strings ??= parseStringFacts(
+      await this.#sourceText(capture.source.evidence_id),
+      capture.input,
     );
     return {
       source: sourceSummary(capture.source),
-      items: rows.slice(input.offset, input.offset + input.limit),
-      total: rows.length,
-      next_offset:
-        input.offset + input.limit < rows.length
-          ? input.offset + input.limit
-          : null,
-      coverage: {
-        scope: "native string inventory, minimum 5",
-        artifact_discovery: "unknown",
-        reference_attribution: "not-computed",
-      },
+      ...selectStringFacts(this.#strings, input),
     };
   }
   async functions(input, signal) {
@@ -274,7 +255,14 @@ export class KunaFactOwner {
         path,
         input.entry,
         "--addr",
-        ...(this.#nativeIR ? ["--json", "--atomic-facts"] : ["--raw"]),
+        ...(this.#nativeIR
+          ? [
+              "--json",
+              "--atomic-facts",
+              "--atomic-output-bytes",
+              String(NATIVE_OUTPUT_BYTES),
+            ]
+          : ["--raw"]),
         "--max-fn-memory",
         "1024",
       ],

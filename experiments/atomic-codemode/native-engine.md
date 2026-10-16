@@ -125,3 +125,44 @@ cumulative kernel memory peak is 275.1 MiB for both phases; the warm number is a
 upper bound on its isolated phase peak. This is an API-only measurement, with no
 model token result or cross-session cache claim. Targeted tests now total 38,
 including late cancellation retaining partial facts and their provenance.
+
+A subsequent real boundary sweep found a different loss of usable facts:
+`sqlite3Pragma` (`0xb90e0`) and `sqlite3Parser` (`0xb3d00`) stay below the row
+limits but overflow the provider's 8 MiB stdout budget. Both public snapshots
+fail, losing C as well as IR. A separate diagnostic capture with a stated 32 MiB
+observer limit establishes the exact producer sizes; it is not relabeled as a
+successful public-provider workflow. The old engine is preserved locally by its
+`7d357e75…` digest for historical reproduction.
+
+| Function | Previous pretty JSON bytes | Revised source bytes | C characters | Revised graph |
+| --- | ---: | ---: | ---: | --- |
+| `sqlite3Parser` | 8,492,810 | 4,526,811 | 50,508 | All 5,164 operations retained |
+| `sqlite3Pragma` | 16,728,407 | 136,501 | 67,300 | Explicitly unavailable at encoded-byte capacity |
+
+The structural fix is at the producing serialization boundary. Atomic output
+uses the existing record producer and shared compact ASCII-safe writer.
+`--atomic-output-bytes` takes an explicit encoded-document budget (default 8 MiB);
+the provider passes the same bound it supervises. The writer checks each encoded
+write before growing its bounded buffer, accounting for escaping and newline.
+If necessary, the document drops only the graph and records an exact facet
+failure. C, line mappings and metadata survive under the same Evidence. If even
+the base document cannot fit, the command fails rather than clipping it or
+repeating the analysis. Ordinary non-atomic JSON keeps its previous formatting.
+Row limits alone never promise that the whole encoded graph fits.
+
+The rebuilt local engine is SHA-256
+`2290e8b13caabe30aab6832ab163d92925b2e652eebf7fc0cdbe65b889cb251b`
+(same pinned source/release profile plus the revised patch). Real Code Mode MCP
+verification succeeds for both functions. The preserved C and line mappings are
+identical to the earlier full diagnostic captures; the Parser graph is also
+deep-equal, and retained source hashes verify. Pragma's unknown graph counts and
+failed graph reads retain the correct source ID. No limit was increased.
+
+The first successful revised MCP check took 13.721 family wall seconds, 13.461
+CPU seconds and 326.9 MiB kernel family peak, with verified cleanup and no OOM.
+This is a two-function API regression, not a model-cost comparison or a claimed
+analysis speedup. Native writer/escaping checks (14) and graph-only fallback (1)
+pass in the release test binary; the shared JS tests (38), SDK ownership probe,
+lint and patch apply/reverse checks pass. Full upstream corpus/stages/workspace
+gates still have not run. The first MCP launch used a stale pre-format-build hash
+and was correctly refused; the retained successful retry uses the digest above.

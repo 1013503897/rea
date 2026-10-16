@@ -107,6 +107,13 @@ source digest. The fixed probe passes under the bounded runner (1.328 seconds,
 1.144 family CPU seconds, 110.6 MiB kernel family peak, zero OOM kills and verified
 payload cleanup); it is a correctness check, not a model-cost measurement.
 
+Encoded size is another real coverage boundary: two SQLite functions initially
+lose even their C because pretty JSON exceeds transport capacity. The native
+patch now uses bounded compact serialization and a graph-only failure when
+needed. Parser's full graph fits; Pragma retains identical C with an explicit
+missing graph. The 8 MiB bound remains. See the exact sizes, rebuilt engine digest
+and verification scope in [native-engine.md](native-engine.md).
+
 Completion requires actual model Code Mode use, independently checked task
 answers, shared atomic/direct/Code Mode semantics, needed relation coverage,
 failure/cancellation/identity tests, and equivalent completed-task measurements

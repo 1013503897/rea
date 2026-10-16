@@ -1,26 +1,114 @@
+diff --git a/decompiler/crates/kuna-cli/src/atomic_json.rs b/decompiler/crates/kuna-cli/src/atomic_json.rs
+new file mode 100644
+index 00000000..c2f6f1ad
+--- /dev/null
++++ b/decompiler/crates/kuna-cli/src/atomic_json.rs
+@@ -0,0 +1,71 @@
++//! Opt-in atomic documents share the ordinary record producer and JSON writer.
++//! A graph that cannot fit must not discard otherwise readable reconstructed C.
++
++use crate::jsonfmt::{dumps_compact_bounded, Json};
++
++pub(crate) fn render(mut document: Json, limit: usize) -> Result<String, String> {
++    let budget = limit
++        .checked_sub(1)
++        .ok_or("atomic JSON output budget is zero")?;
++    if let Some(mut text) = dumps_compact_bounded(&document, budget) {
++        text.push('\n');
++        return Ok(text);
++    }
++    if let Json::Object(fields) = &mut document {
++        if let Some(Json::Array(functions)) = fields
++            .iter_mut()
++            .find_map(|(key, value)| (key == "functions").then_some(value))
++        {
++            for function in functions {
++                if let Json::Object(record) = function {
++                    let before = record.len();
++                    record.retain(|(key, _)| key != "atomic_facts");
++                    if record.len() != before {
++                        record.push((
++                            "atomic_facts_error".into(),
++                            Json::Str(format!(
++                            "atomic encoded document exceeds {limit} byte capacity; code retained"
++                        )),
++                        ));
++                    }
++                }
++            }
++        }
++    }
++    let mut text = dumps_compact_bounded(&document, budget).ok_or_else(|| {
++        format!("atomic JSON exceeds {limit} byte capacity even without recovered IR")
++    })?;
++    text.push('\n');
++    Ok(text)
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn encoded_overflow_preserves_code_and_replaces_only_the_graph() {
++        let original = Json::Object(vec![(
++            "functions".into(),
++            Json::Array(vec![Json::Object(vec![
++                ("code".into(), Json::Str("retained C".into())),
++                ("error".into(), Json::Null),
++                ("atomic_facts".into(), Json::Str("😀".repeat(1000))),
++            ])]),
++        )]);
++        let full = render(original.clone(), 20000).unwrap();
++        assert!(full.len() > 12000); // ASCII surrogate escaping is accounted for.
++        let reduced = render(original.clone(), 256).unwrap();
++        let document: serde_json::Value = serde_json::from_str(&reduced).unwrap();
++        let function = &document["functions"][0];
++        assert_eq!(function["code"], "retained C");
++        assert_eq!(function["error"], serde_json::Value::Null);
++        assert!(function.get("atomic_facts").is_none());
++        assert!(function["atomic_facts_error"]
++            .as_str()
++            .unwrap()
++            .contains("256"));
++        assert!(reduced.len() <= 256);
++        assert!(render(original, 1).is_err());
++    }
++}
 diff --git a/decompiler/crates/kuna-cli/src/decompile.rs b/decompiler/crates/kuna-cli/src/decompile.rs
-index ad249b04..9eb551e5 100644
+index ad249b04..62074996 100644
 --- a/decompiler/crates/kuna-cli/src/decompile.rs
 +++ b/decompiler/crates/kuna-cli/src/decompile.rs
-@@ -841,6 +841,7 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
+@@ -841,6 +841,8 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
      let mut target: Option<String> = None;
      let mut addr = false;
      let mut json = false;
 +    let mut atomic_facts = false;
++    let mut atomic_output_bytes = None;
      let mut bfd_target: Option<String> = None;
      let mut raw = false;
      let mut regions = false;
-@@ -871,6 +872,7 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
+@@ -871,6 +873,13 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
          match a {
              "--addr" => addr = true,
              "--json" => json = true,
 +            "--atomic-facts" => atomic_facts = true,
++            "--atomic-output-bytes" => {
++                let value = take_value(argv, &mut i, "--atomic-output-bytes")?;
++                atomic_output_bytes = Some(value.parse::<usize>()
++                    .ok().filter(|bytes| *bytes > 0)
++                    .ok_or("--atomic-output-bytes requires a positive byte count")?);
++            }
              "--raw" => raw = true,
              "--raw-image" => raw_image = true,
              "--base" => base = Some(parse_cli_address(&take_value(argv, &mut i, "--base")?)?),
-@@ -980,6 +982,9 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
+@@ -979,7 +988,13 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
+         return Err("--base requires --raw-image".into());
      }
- 
+
++    if atomic_output_bytes.is_some() && !atomic_facts {
++        return Err("--atomic-output-bytes requires --atomic-facts".into());
++    }
      if json {
 +        if atomic_facts && (!cfg!(feature = "embed-specs") || sleighpath.is_some()) {
 +            return Err("--atomic-facts requires embedded specs and does not accept --sleighpath".into());
@@ -28,18 +116,19 @@ index ad249b04..9eb551e5 100644
          // Refused, not ignored: each of these is a `decomp_dbg` transcript the
          // in-process JSON path never produces, and silently dropping half a
          // request is the failure mode `--json` exists to end.
-@@ -997,6 +1002,7 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
+@@ -997,6 +1012,8 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
              binary: &binary,
              target: &target,
              by_address: addr,
 +            atomic_facts,
++            atomic_output_bytes: atomic_output_bytes.unwrap_or(8 * 1024 * 1024),
              forwarded: &forwarded,
              mode: mode.as_deref(),
              bfd_target: bfd_target.as_deref(),
-@@ -1007,6 +1013,10 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
+@@ -1007,6 +1024,10 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
          }));
      }
- 
+
 +    if atomic_facts {
 +        return Err("--atomic-facts requires --json".into());
 +    }
@@ -47,15 +136,16 @@ index ad249b04..9eb551e5 100644
      // (kuna outlang, DIV-80) The auto policy -- follow the binary when the caller
      // named no language. See `decompile_all::detected_output_language`.
      if !saw_language && !options.iter().any(|(n, _)| n == "setlanguage") {
-@@ -1106,6 +1116,7 @@ struct JsonRequest<'a> {
+@@ -1106,6 +1127,8 @@ struct JsonRequest<'a> {
      binary: &'a str,
      target: &'a str,
      by_address: bool,
 +    atomic_facts: bool,
++    atomic_output_bytes: usize,
      /// The `--option` / `--language` tokens, in argv order.
      forwarded: &'a [String],
      mode: Option<&'a str>,
-@@ -1127,6 +1138,18 @@ struct JsonRequest<'a> {
+@@ -1127,6 +1150,18 @@ struct JsonRequest<'a> {
  /// drift.
  fn run_json(req: &JsonRequest) -> i32 {
      let mut argv: Vec<String> = vec![req.binary.to_string(), "--json".into()];
@@ -74,35 +164,56 @@ index ad249b04..9eb551e5 100644
      if req.by_address {
          argv.push("--addr".into());
          argv.push(if looks_like_addr(req.target) {
-@@ -1168,7 +1191,7 @@ fn run_json(req: &JsonRequest) -> i32 {
+@@ -1168,7 +1203,7 @@ fn run_json(req: &JsonRequest) -> i32 {
      // it has to reconcile against a prose stderr line — the missing error channel
      // is half of why this flag exists. The verdict follows the document, matching
      // `run`'s stdout-then-stderr ordering.
 -    let (text, failure) = match decompile_json(&args, req.target) {
-+    let (text, failure) = match decompile_json(&args, req.target, req.atomic_facts) {
++    let (text, failure) = match decompile_json(&args, req.target, req.atomic_facts.then_some(req.atomic_output_bytes)) {
          Ok(answered) => answered,
          Err(message) => (
              decompile_all::render_result_json(
-@@ -1197,7 +1220,7 @@ fn run_json(req: &JsonRequest) -> i32 {
+@@ -1197,7 +1232,7 @@ fn run_json(req: &JsonRequest) -> i32 {
  /// was asked about exactly that function — so `--json` cannot turn the text
  /// surface's non-zero verdict into a success; the reason is in the document too,
  /// as the record's `error` and as the run-level one.
 -fn decompile_json(args: &AllArgs, target: &str) -> Result<(String, Option<String>), String> {
-+fn decompile_json(args: &AllArgs, target: &str, atomic_facts: bool) -> Result<(String, Option<String>), String> {
++fn decompile_json(args: &AllArgs, target: &str, atomic_limit: Option<usize>) -> Result<(String, Option<String>), String> {
      let mut prog = decompile_all::load_program(args, DriverDefaults::Decompile)?;
      let targets = decompile_all::resolve_targets(&prog, args)?;
      let interior = crate::interior::selections(&prog, args, &targets);
-@@ -1217,7 +1240,7 @@ fn decompile_json(args: &AllArgs, target: &str) -> Result<(String, Option<String
+@@ -1217,7 +1252,7 @@ fn decompile_json(args: &AllArgs, target: &str) -> Result<(String, Option<String
          });
      }
- 
+
 -    let funcs = decompile_all::decompile_entries(&mut prog, args, targets, false);
-+    let funcs = decompile_all::decompile_entries(&mut prog, args, targets, false, atomic_facts);
++    let funcs = decompile_all::decompile_entries(&mut prog, args, targets, false, atomic_limit.is_some());
      let assertions = prog.assertion_outcomes();
      let mut failure = funcs.iter().find_map(|f| {
          f.error.as_ref().map(|reason| {
+@@ -1235,14 +1270,18 @@ fn decompile_json(args: &AllArgs, target: &str) -> Result<(String, Option<String
+     if failure.is_none() && decompile_all::any_refused_assertion(&assertions) {
+         failure = Some(format!("--assert directive refused by the pipeline in {}", args.binary));
+     }
+-    let text = decompile_all::render_result_json(
++    let text = if let Some(limit) = atomic_limit {
++        decompile_all::render_atomic_result_json(
++            &args.binary, &funcs, &args.options, failure.as_deref(), &assertions, &interior, limit,
++        )?
++    } else { decompile_all::render_result_json(
+         &args.binary,
+         &funcs,
+         &args.options,
+         failure.as_deref(),
+         &assertions,
+         &interior,
+-    );
++    ) };
+     if failure.is_none() && args.assert_strict && rejected {
+         failure = Some(format!("--assert directive rejected in {}", args.binary));
+     }
 diff --git a/decompiler/crates/kuna-cli/src/decompile_all.rs b/decompiler/crates/kuna-cli/src/decompile_all.rs
-index 698c7243..1f812ce6 100644
+index 698c7243..dfd9ef01 100644
 --- a/decompiler/crates/kuna-cli/src/decompile_all.rs
 +++ b/decompiler/crates/kuna-cli/src/decompile_all.rs
 @@ -744,6 +744,7 @@ fn run_jobs_worker(args: &Args) -> Result<(), String> {
@@ -138,7 +249,27 @@ index 698c7243..1f812ce6 100644
          ..DecompileOptions::default()
      };
      kuna_console::project::decompile_targets_with(prog, targets, &opts)
-@@ -2152,6 +2155,17 @@ fn result_json(
+@@ -2003,6 +2006,19 @@ pub(crate) fn render_result_json(
+     render_selected_json(binary, funcs, options, error, None, assertions, interior)
+ }
+
++pub(crate) fn render_atomic_result_json(
++    binary: &str,
++    funcs: &[FuncResult],
++    options: &[(String, String)],
++    error: Option<&str>,
++    assertions: &[kuna_console::assertions::Outcome],
++    interior: &crate::interior::Interiors,
++    limit: usize,
++) -> Result<String, String> {
++    let language = last_option_value(options, "setlanguage").unwrap_or("c-language");
++    crate::atomic_json::render(result_json(binary, funcs, language, error, None, assertions, interior), limit)
++}
++
+ /// [`render_result_json`] plus the inventory `total` a NARROWED whole-binary run
+ /// answers with.
+ ///
+@@ -2152,6 +2168,17 @@ fn result_json(
                      // Always present, `[]` unless the option is on.
                      ("types".into(), types),
                  ];
@@ -169,13 +300,13 @@ index 3eb2a6e4..2b951ba2 100644
      };
      decompile_callee_first(prog, args, targets, explicit, base)
 diff --git a/decompiler/crates/kuna-cli/src/jsonfmt.rs b/decompiler/crates/kuna-cli/src/jsonfmt.rs
-index 198b85a6..22c1e086 100644
+index 198b85a6..71bd9675 100644
 --- a/decompiler/crates/kuna-cli/src/jsonfmt.rs
 +++ b/decompiler/crates/kuna-cli/src/jsonfmt.rs
 @@ -28,6 +28,19 @@ pub enum Json {
      Object(Vec<(String, Json)>),
  }
- 
+
 +impl From<serde_json::Value> for Json {
 +    fn from(value: serde_json::Value) -> Self {
 +        match value {
@@ -192,6 +323,256 @@ index 198b85a6..22c1e086 100644
  /// Render `v` exactly as CPython's `json.dumps(v, indent=2)` would (ASCII-safe
  /// string escaping, `", "`/`": "` item/key separators collapsed to the indent
  /// form: items separated by `,\n`, keys by `": "`).
+@@ -50,6 +63,12 @@ pub fn dumps_compact(v: &Json) -> String {
+     writer::render(v, Format::Compact)
+ }
+
++/// Enforce the caller's encoded-byte budget before growing the output buffer.
++/// Uses the same writer and escaping as the other modes; no length estimator.
++pub fn dumps_compact_bounded(v: &Json, limit: usize) -> Option<String> {
++    writer::render_bounded(v, Format::Compact, limit)
++}
++
+ /// Extract the JSON array/object span out of a `decomp_dbg` console transcript.
+ ///
+ /// Port of `kuna/catalog.py::_extract_json`: drop the fixed `[decomp]>` prompt
+diff --git a/decompiler/crates/kuna-cli/src/jsonfmt/writer.rs b/decompiler/crates/kuna-cli/src/jsonfmt/writer.rs
+index c4eca1db..06b9d024 100644
+--- a/decompiler/crates/kuna-cli/src/jsonfmt/writer.rs
++++ b/decompiler/crates/kuna-cli/src/jsonfmt/writer.rs
+@@ -1,7 +1,7 @@
+ //! JSON layout and ASCII-safe escaping shared by all CLI output modes.
+
+ use super::Json;
+-use std::fmt::Write as _;
++use std::fmt::{self, Write};
+
+ #[derive(Clone, Copy, PartialEq, Eq)]
+ pub(super) enum Format {
+@@ -12,108 +12,142 @@ pub(super) enum Format {
+
+ pub(super) fn render(value: &Json, format: Format) -> String {
+     let mut out = String::new();
+-    write_value(&mut out, value, 0, format);
++    write_value(&mut out, value, 0, format).expect("String writer is infallible");
+     out
+ }
+
++struct BoundedString {
++    text: String,
++    limit: usize,
++}
++
++impl Write for BoundedString {
++    fn write_str(&mut self, value: &str) -> fmt::Result {
++        let next = self.text.len().checked_add(value.len()).ok_or(fmt::Error)?;
++        if next > self.limit {
++            return Err(fmt::Error);
++        }
++        if next > self.text.capacity() {
++            let capacity = next
++                .max(self.text.capacity().saturating_mul(2))
++                .min(self.limit);
++            self.text
++                .try_reserve_exact(capacity - self.text.len())
++                .map_err(|_| fmt::Error)?;
++        }
++        self.text.push_str(value);
++        Ok(())
++    }
++}
++
++pub(super) fn render_bounded(value: &Json, format: Format, limit: usize) -> Option<String> {
++    let mut out = BoundedString {
++        text: String::new(),
++        limit,
++    };
++    write_value(&mut out, value, 0, format).ok()?;
++    Some(out.text)
++}
++
+ impl Format {
+-    fn line(self, out: &mut String, indent: usize) {
++    fn line(self, out: &mut impl Write, indent: usize) -> fmt::Result {
+         if self != Self::Compact {
+-            out.push('\n');
++            out.write_char('\n')?;
+             for _ in 0..indent {
+-                out.push(' ');
++                out.write_char(' ')?;
+             }
+         }
++        Ok(())
+     }
+ }
+
+-fn write_value(out: &mut String, value: &Json, indent: usize, format: Format) {
++fn write_value(out: &mut impl Write, value: &Json, indent: usize, format: Format) -> fmt::Result {
+     match value {
+-        Json::Null => out.push_str("null"),
+-        Json::Bool(true) => out.push_str("true"),
+-        Json::Bool(false) => out.push_str("false"),
+-        Json::Number(number) => out.push_str(number),
++        Json::Null => out.write_str("null"),
++        Json::Bool(true) => out.write_str("true"),
++        Json::Bool(false) => out.write_str("false"),
++        Json::Number(number) => out.write_str(number),
+         Json::Str(text) => write_string(out, text),
+         Json::Array(items) => {
+-            out.push('[');
++            out.write_char('[')?;
+             for (i, item) in items.iter().enumerate() {
+                 if i > 0 {
+-                    out.push(',');
++                    out.write_char(',')?;
+                 }
+-                format.line(out, indent + 2);
+-                write_value(out, item, indent + 2, format);
++                format.line(out, indent + 2)?;
++                write_value(out, item, indent + 2, format)?;
+             }
+             if !items.is_empty() {
+-                format.line(out, indent);
++                format.line(out, indent)?;
+             }
+-            out.push(']');
++            out.write_char(']')
+         }
+         Json::Object(pairs) => {
+             if format == Format::Sorted && pairs.len() > 1 {
+                 let mut ordered: Vec<_> = pairs.iter().collect();
+                 ordered.sort_by(|a, b| a.0.cmp(&b.0));
+-                write_pairs(out, ordered.into_iter(), indent, format);
++                write_pairs(out, ordered.into_iter(), indent, format)
+             } else {
+-                write_pairs(out, pairs.iter(), indent, format);
++                write_pairs(out, pairs.iter(), indent, format)
+             }
+         }
+     }
+ }
+
+ fn write_pairs<'a>(
+-    out: &mut String,
++    out: &mut impl Write,
+     pairs: impl ExactSizeIterator<Item = &'a (String, Json)>,
+     indent: usize,
+     format: Format,
+-) {
++) -> fmt::Result {
+     let nonempty = pairs.len() != 0;
+-    out.push('{');
++    out.write_char('{')?;
+     for (i, (key, value)) in pairs.enumerate() {
+         if i > 0 {
+-            out.push(',');
++            out.write_char(',')?;
+         }
+-        format.line(out, indent + 2);
+-        write_string(out, key);
+-        out.push(':');
++        format.line(out, indent + 2)?;
++        write_string(out, key)?;
++        out.write_char(':')?;
+         if format != Format::Compact {
+-            out.push(' ');
++            out.write_char(' ')?;
+         }
+-        write_value(out, value, indent + 2, format);
++        write_value(out, value, indent + 2, format)?;
+     }
+     if nonempty {
+-        format.line(out, indent);
++        format.line(out, indent)?;
+     }
+-    out.push('}');
++    out.write_char('}')
+ }
+
+-fn write_string(out: &mut String, s: &str) {
+-    out.push('"');
++fn write_string(out: &mut impl Write, s: &str) -> fmt::Result {
++    out.write_char('"')?;
+     for ch in s.chars() {
+         match ch {
+-            '"' => out.push_str("\\\""),
+-            '\\' => out.push_str("\\\\"),
+-            '\n' => out.push_str("\\n"),
+-            '\r' => out.push_str("\\r"),
+-            '\t' => out.push_str("\\t"),
+-            '\u{0008}' => out.push_str("\\b"),
+-            '\u{000C}' => out.push_str("\\f"),
++            '"' => out.write_str("\\\""),
++            '\\' => out.write_str("\\\\"),
++            '\n' => out.write_str("\\n"),
++            '\r' => out.write_str("\\r"),
++            '\t' => out.write_str("\\t"),
++            '\u{0008}' => out.write_str("\\b"),
++            '\u{000C}' => out.write_str("\\f"),
+             c if (c as u32) < 0x20 => {
+-                let _ = write!(out, "\\u{:04x}", c as u32);
++                write!(out, "\\u{:04x}", c as u32)
+             }
+-            c if (c as u32) < 0x7F => out.push(c),
++            c if (c as u32) < 0x7F => out.write_char(c),
+             c => {
+                 // ensure_ascii: emit \uXXXX (surrogate pair for astral planes).
+                 let cp = c as u32;
+                 if cp <= 0xFFFF {
+-                    let _ = write!(out, "\\u{:04x}", cp);
++                    write!(out, "\\u{:04x}", cp)
+                 } else {
+                     let v = cp - 0x10000;
+                     let hi = 0xD800 + (v >> 10);
+                     let lo = 0xDC00 + (v & 0x3FF);
+-                    let _ = write!(out, "\\u{:04x}\\u{:04x}", hi, lo);
++                    write!(out, "\\u{:04x}\\u{:04x}", hi, lo)
+                 }
+             }
+-        }
++        }?;
+     }
+-    out.push('"');
++    out.write_char('"')
+ }
+diff --git a/decompiler/crates/kuna-cli/src/jsonfmt/writer_tests.rs b/decompiler/crates/kuna-cli/src/jsonfmt/writer_tests.rs
+index 6710e12a..ef90468c 100644
+--- a/decompiler/crates/kuna-cli/src/jsonfmt/writer_tests.rs
++++ b/decompiler/crates/kuna-cli/src/jsonfmt/writer_tests.rs
+@@ -94,3 +94,21 @@ fn every_unicode_scalar_round_trips_through_ascii_output() {
+         assert_eq!(serde_json::from_str::<String>(&output).unwrap(), text);
+     }
+ }
++
++#[test]
++fn bounded_writer_counts_actual_escaped_bytes_at_every_boundary() {
++    let value = Json::Object(vec![("escaped".into(), Json::Str("\0\"\\é😀".into()))]);
++    let complete = dumps_compact(&value);
++    assert!(complete.is_ascii());
++    for limit in 0..complete.len() {
++        assert!(dumps_compact_bounded(&value, limit).is_none());
++    }
++    assert_eq!(
++        dumps_compact_bounded(&value, complete.len()),
++        Some(complete.clone())
++    );
++    assert_eq!(
++        dumps_compact_bounded(&value, complete.len() + 1),
++        Some(complete)
++    );
++}
+diff --git a/decompiler/crates/kuna-cli/src/main.rs b/decompiler/crates/kuna-cli/src/main.rs
+index 2345743c..40fff9ec 100644
+--- a/decompiler/crates/kuna-cli/src/main.rs
++++ b/decompiler/crates/kuna-cli/src/main.rs
+@@ -1,6 +1,7 @@
+ //! Command dispatch for the kuna CLI.
+
+ mod args;
++mod atomic_json;
+ mod callgraph;
+ mod catalog;
+ mod crypto;
 diff --git a/decompiler/crates/kuna-cli/src/project_stream.rs b/decompiler/crates/kuna-cli/src/project_stream.rs
 index e40b18c9..b8cae233 100644
 --- a/decompiler/crates/kuna-cli/src/project_stream.rs
@@ -203,7 +584,7 @@ index e40b18c9..b8cae233 100644
 +        want_atomic_facts: false,
          want_pointer_arguments: false,
      };
- 
+
 diff --git a/decompiler/crates/kuna-console/src/inspect.rs b/decompiler/crates/kuna-console/src/inspect.rs
 index 74024b10..1ecc4fae 100644
 --- a/decompiler/crates/kuna-console/src/inspect.rs
@@ -214,7 +595,7 @@ index 74024b10..1ecc4fae 100644
      pub tokens_error: Option<String>,
 +    pub atomic_facts: Option<Result<kuna_decomp::atomic_facts::FunctionFacts, String>>,
  }
- 
+
  impl FuncDetail {
 @@ -40,13 +41,13 @@ impl FuncDetail {
      ) -> Self {
@@ -231,7 +612,7 @@ index 74024b10..1ecc4fae 100644
 +        FuncDetail { tokens, tokens_error: None, ..Default::default() }
      }
  }
- 
+
 diff --git a/decompiler/crates/kuna-console/src/project.rs b/decompiler/crates/kuna-console/src/project.rs
 index bc401db2..775ca348 100644
 --- a/decompiler/crates/kuna-console/src/project.rs
@@ -295,65 +676,14 @@ index 40b093b6..8f03b654 100644
  smallvec.workspace = true
  slotmap.workspace = true
 +serde = { version = "1", features = ["derive"] }
- 
+
  [dev-dependencies]
  # Verifier-only: the datatest <stringmatch> engine (item w10-structure-printbody).
  regex = { workspace = true }
 -serde = { version = "1", features = ["derive"] }
  toml = { version = "1.1", default-features = false, features = ["parse", "serde", "std"] }
- 
+
  [build-dependencies]
-diff --git a/decompiler/crates/kuna-decomp/src/substrate/funcdata_printraw.rs b/decompiler/crates/kuna-decomp/src/substrate/funcdata_printraw.rs
-index 39927ceb..844950a6 100644
---- a/decompiler/crates/kuna-decomp/src/substrate/funcdata_printraw.rs
-+++ b/decompiler/crates/kuna-decomp/src/substrate/funcdata_printraw.rs
-@@ -376,7 +376,7 @@ fn callother_operator_name(
- /// dispatch.  The special op-codes (LOAD/STORE/branches/calls/RETURN/marker)
- /// match their `TypeOp*::printRaw` override; everything else falls to the
- /// generic Binary/Unary/Func shape keyed by the [`TypeOpClass`].
--fn render_op(s: &mut String, arch: &Architecture, fd: &Funcdata, op: OpId) -> Result<(), String> {
-+pub(crate) fn render_op(s: &mut String, arch: &Architecture, fd: &Funcdata, op: OpId) -> Result<(), String> {
-     let opc = fd.obank().get(op).ok_or_else(|| "render_op: stale op".to_string())?.code();
-     let num_input = fd.obank().get(op).ok_or_else(|| "render_op: stale op".to_string())?.num_input();
-     let in_at = |i: int4| -> Option<VarnodeId> { fd.obank().get(op).and_then(|o| o.get_in(i)) };
-diff --git a/decompiler/crates/kuna-decomp/src/substrate/mod.rs b/decompiler/crates/kuna-decomp/src/substrate/mod.rs
-index 00528cb5..08da88eb 100644
---- a/decompiler/crates/kuna-decomp/src/substrate/mod.rs
-+++ b/decompiler/crates/kuna-decomp/src/substrate/mod.rs
-@@ -11,6 +11,7 @@ pub mod funcdata_block;
- pub mod funcdata_encode;
- pub mod funcdata_op;
- pub mod funcdata_printraw;
-+pub mod atomic_facts;
- pub mod funcdata_varnode;
- pub mod dtype;
- pub mod context;
-diff --git a/docs/spec/00-overview.md b/docs/spec/00-overview.md
-index ce499c4f..f54772b3 100644
---- a/docs/spec/00-overview.md
-+++ b/docs/spec/00-overview.md
-@@ -3431,3 +3431,21 @@ Reserving it creates no analysis varnode and changes no physical mapping or
- emitted C. Ghidra receives temporary storage for the logical local, rather than
- a persistable ordinary stack-variable location; ordinary symbol storage and
- register-plus-stack parameter JOINs keep their existing encoding.
-+
-+## Experimental read-only atomic facts
-+
-+The opt-in `decompile --json --atomic-facts` surface captures the same live
-+function after C rendering (`decompiler/crates/kuna-decomp/src/substrate/atomic_facts.rs`).
-+It does not change the analysis phases or C output. The default path does not
-+collect these records. This experiment requires embedded processor specs and
-+selects those assets explicitly; a caller-provided `--sleighpath` is rejected.
-+
-+The export retains ordered basic-block predecessors and successors, slotmap
-+value identities, operation sequence identities, operand indexes, outputs and
-+phi input-to-predecessor-edge bindings. IDs belong to this captured function
-+model; instruction addresses are origins, not SSA value identities. Native
-+recovered graph completeness does not establish runtime successor coverage,
-+memory alias dependencies or machine-semantic equivalence. Indirect-branch
-+operations and definitions outside block membership remain explicit. Capacity
-+failures make this facet unavailable with a reason and preserve the C record;
-+they do not emit a clipped graph labeled complete.
 diff --git a/decompiler/crates/kuna-decomp/src/substrate/atomic_facts.rs b/decompiler/crates/kuna-decomp/src/substrate/atomic_facts.rs
 new file mode 100644
 index 00000000..65e18270
@@ -634,3 +964,63 @@ index 00000000..65e18270
 +        coverage,
 +    })
 +}
+diff --git a/decompiler/crates/kuna-decomp/src/substrate/funcdata_printraw.rs b/decompiler/crates/kuna-decomp/src/substrate/funcdata_printraw.rs
+index 39927ceb..844950a6 100644
+--- a/decompiler/crates/kuna-decomp/src/substrate/funcdata_printraw.rs
++++ b/decompiler/crates/kuna-decomp/src/substrate/funcdata_printraw.rs
+@@ -376,7 +376,7 @@ fn callother_operator_name(
+ /// dispatch.  The special op-codes (LOAD/STORE/branches/calls/RETURN/marker)
+ /// match their `TypeOp*::printRaw` override; everything else falls to the
+ /// generic Binary/Unary/Func shape keyed by the [`TypeOpClass`].
+-fn render_op(s: &mut String, arch: &Architecture, fd: &Funcdata, op: OpId) -> Result<(), String> {
++pub(crate) fn render_op(s: &mut String, arch: &Architecture, fd: &Funcdata, op: OpId) -> Result<(), String> {
+     let opc = fd.obank().get(op).ok_or_else(|| "render_op: stale op".to_string())?.code();
+     let num_input = fd.obank().get(op).ok_or_else(|| "render_op: stale op".to_string())?.num_input();
+     let in_at = |i: int4| -> Option<VarnodeId> { fd.obank().get(op).and_then(|o| o.get_in(i)) };
+diff --git a/decompiler/crates/kuna-decomp/src/substrate/mod.rs b/decompiler/crates/kuna-decomp/src/substrate/mod.rs
+index 00528cb5..08da88eb 100644
+--- a/decompiler/crates/kuna-decomp/src/substrate/mod.rs
++++ b/decompiler/crates/kuna-decomp/src/substrate/mod.rs
+@@ -11,6 +11,7 @@ pub mod funcdata_block;
+ pub mod funcdata_encode;
+ pub mod funcdata_op;
+ pub mod funcdata_printraw;
++pub mod atomic_facts;
+ pub mod funcdata_varnode;
+ pub mod dtype;
+ pub mod context;
+diff --git a/docs/spec/00-overview.md b/docs/spec/00-overview.md
+index ce499c4f..e1bebe28 100644
+--- a/docs/spec/00-overview.md
++++ b/docs/spec/00-overview.md
+@@ -3431,3 +3431,30 @@ Reserving it creates no analysis varnode and changes no physical mapping or
+ emitted C. Ghidra receives temporary storage for the logical local, rather than
+ a persistable ordinary stack-variable location; ordinary symbol storage and
+ register-plus-stack parameter JOINs keep their existing encoding.
++
++## Experimental read-only atomic facts
++
++The opt-in `decompile --json --atomic-facts` surface captures the same live
++function after C rendering (`decompiler/crates/kuna-decomp/src/substrate/atomic_facts.rs`).
++It does not change the analysis phases or C output. The default path does not
++collect these records. This experiment requires embedded processor specs and
++selects those assets explicitly; a caller-provided `--sleighpath` is rejected.
++
++The export retains ordered basic-block predecessors and successors, slotmap
++value identities, operation sequence identities, operand indexes, outputs and
++phi input-to-predecessor-edge bindings. IDs belong to this captured function
++model; instruction addresses are origins, not SSA value identities. Native
++recovered graph completeness does not establish runtime successor coverage,
++memory alias dependencies or machine-semantic equivalence. Indirect-branch
++operations and definitions outside block membership remain explicit. Capacity
++failures make this facet unavailable with a reason and preserve the C record;
++they do not emit a clipped graph labeled complete.
++
++`--atomic-output-bytes N` sets the encoded document budget (default 8 MiB).
++Atomic JSON uses the ordinary record producer and the shared compact ASCII-safe
++writer. That writer checks each encoded write before growing its bounded output
++buffer, including control/surrogate escaping and the final newline. A document
++that cannot fit drops only its graph facet, reports `atomic_facts_error`, and
++retains C, locations and ordinary metadata. If that base record also cannot fit,
++the command reports failure instead of truncating it or analyzing the target
++again. This flag requires `--atomic-facts --json`; ordinary output is unchanged.

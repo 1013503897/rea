@@ -11,7 +11,7 @@ import {
 } from "../../scripts/lib/verifier-run.mjs";
 
 const [binary, output, scenario = "zlib"] = process.argv.slice(2);
-assert.ok(["zlib", "sqlite-partial"].includes(scenario));
+assert.ok(["zlib", "sqlite-partial", "sqlite-encoded"].includes(scenario));
 const verifier = createVerifierRun();
 const client = new Client({ name: "rea-codemode-verifier", version: "0.1.0" });
 const transport = new StdioClientTransport({
@@ -49,7 +49,40 @@ try {
   const ajv = new Ajv2020({ strict: false });
   for (const tool of catalog.tools) ajv.compile(tool.inputSchema);
   const opened = await call("open_binary", { path: binary });
-  if (scenario === "sqlite-partial") {
+  if (scenario === "sqlite-encoded") {
+    for (const entry of ["0xb90e0", "0xb3d00"]) {
+      const result = await call("execute_javascript", {
+        code: `
+const s=await rea.snapshot({entry:${JSON.stringify(entry)}});if(!s.ok)throw new Error(JSON.stringify(s));
+const c=await rea.code({snapshot:s.data.snapshot,limit:4});if(!c.ok)throw new Error(JSON.stringify(c));
+const graph=await rea.operations({snapshot:s.data.snapshot,limit:1,fields:["opcode"]});
+return {snapshot:s.data,code:c.data,graph};`,
+      });
+      assert.equal(result.value.snapshot.facets.code.availability, "available");
+      assert.ok(result.value.snapshot.source.bytes <= 8 * 1024 * 1024);
+      assert.ok(result.value.code.total_lines > 1000);
+      assert.ok(result.value.code.text.length > 0);
+      assert.equal(
+        result.value.code.evidence_id,
+        result.value.snapshot.source.evidence_id,
+      );
+      if (entry === "0xb3d00") {
+        assert.equal(result.value.graph.ok, true);
+        assert.equal(result.value.graph.data.total, 5164);
+      } else {
+        assert.equal(result.value.snapshot.coverage.operations, null);
+        assert.equal(result.value.graph.ok, false);
+        assert.match(
+          result.value.graph.error.details.native_error,
+          /encoded document/u,
+        );
+        assert.equal(
+          result.value.graph.error.details.evidence_id,
+          result.value.snapshot.source.evidence_id,
+        );
+      }
+    }
+  } else if (scenario === "sqlite-partial") {
     assert.equal(opened.context.analysis_model, "experimental-native-ir-v1");
     const result = await call("execute_javascript", {
       code: `
