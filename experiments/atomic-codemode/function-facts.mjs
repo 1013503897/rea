@@ -1,13 +1,10 @@
 import { parseKunaInventory } from "../../dist/kuna/KunaProjectFiles.js";
 import { requireResult } from "./fact-error.mjs";
-import { pageFacts } from "./fact-reads.mjs";
+import { freezeFacts, pageFacts } from "./fact-reads.mjs";
 
 export const parseFunctionFacts = (text) =>
-  Object.freeze(
-    requireResult(parseKunaInventory(text), "invalid_provider_output").map(
-      (entry) =>
-        Object.freeze({ ...entry, aliases: Object.freeze([...entry.aliases]) }),
-    ),
+  freezeFacts(
+    requireResult(parseKunaInventory(text), "invalid_provider_output"),
   );
 
 export function selectFunctionFacts(functions, input) {

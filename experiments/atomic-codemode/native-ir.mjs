@@ -4,14 +4,7 @@ import { FactFailure } from "./fact-error.mjs";
 import { parseNativeFunction } from "./native-ir-contract.mjs";
 import { backwardSlice } from "../atomic-re-tools/kuna-ssa.mjs";
 import { controlDependencies } from "./control-dependence.mjs";
-
-const freeze = (object) => {
-  if (object && typeof object === "object") {
-    Object.values(object).forEach(freeze);
-    Object.freeze(object);
-  }
-  return object;
-};
+import { freezeFacts as freeze } from "./fact-reads.mjs";
 const index = (map, key, row) => {
   if (!map.has(key)) map.set(key, []);
   map.get(key).push(row);

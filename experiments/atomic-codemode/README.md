@@ -85,6 +85,21 @@ extraction is unavailable. Real capacity and cold/warm MCP checks are documented
 in [native-engine.md](native-engine.md). Whole-model costs and unequal-depth
 comparisons remain separate in the trial report.
 
+The corrected SQLite comparison reaches the formatter implementation in all
+three interfaces. Code Mode uses fewer calls than atomic direct in that sample;
+a traditional run reusing its persistent whole-project cache is faster than
+Code Mode's fresh lease. Cache state, completed-answer coverage and actual
+uncached tokens must therefore accompany any cost comparison.
+
+SDK views share immutable parsed inventories with their owner. A real SDK probe
+initially changed a returned string and made the next query disappear under the
+same Evidence ID. Freezing at the cache boundary fixes that producing rule,
+without copying or parsing the entire inventory for each read. `verify-sdk.mjs`
+checks the real provider's string/metadata/function views and complete retained
+source digest. The fixed probe passes under the bounded runner (1.328 seconds,
+1.144 family CPU seconds, 110.6 MiB kernel family peak, zero OOM kills and verified
+payload cleanup); it is a correctness check, not a model-cost measurement.
+
 Completion requires actual model Code Mode use, independently checked task
 answers, shared atomic/direct/Code Mode semantics, needed relation coverage,
 failure/cancellation/identity tests, and equivalent completed-task measurements

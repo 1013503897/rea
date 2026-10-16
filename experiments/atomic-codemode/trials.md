@@ -240,3 +240,71 @@ failed resource discovery, a client approval-policy rejection and ambiguous name
 lookups. This selection confound must be corrected in the next focused baseline;
 the failed attempts and their costs are not discarded. Both runs still preserve
 target/runtime identity, clean up their profiles/payloads and have zero OOM kills.
+
+The corrected SQLite comparison pins `e9b9a8dd0`, the same question and patched
+engine, and the same requested model alias/reasoning. Both experimental adapters
+now expose twelve identical fact methods, including the missing function-entry
+lookup. The direct lane uses explicit direct-API instructions rather than being
+told to call a nonexistent Code Mode entrypoint. The traditional selected
+catalog replaces `binary_session` with `list_procedures`; exact-name discovery
+guidance is enabled. These instruction/catalog changes are recorded and are not
+retroactively applied to earlier trials.
+
+| Measurement | Code Mode v2 | Atomic direct v1 | Traditional cold v2 | Traditional reused-cache v1 |
+| --- | ---: | ---: | ---: | ---: |
+| MCP attempts / failures | 12 / 0 | 24 / 0 | 14 / 2 | 11 / 1 |
+| Internal Code Mode API reads | 15 | — | — | — |
+| Cumulative input tokens | 454,914 | 464,979 | 1,093,061 | 432,446 |
+| Included cached input | 414,080 | 371,712 | 1,036,928 | 377,600 |
+| Uncached input | 40,834 | 93,267 | 56,133 | 54,846 |
+| Output / included reasoning | 3,636 / 1,129 | 4,591 / 1,482 | 4,056 / 787 | 2,889 / 488 |
+| Model wall seconds | 126.250 | 146.656 | 346.051 | 98.210 |
+| Family wall seconds | 127.171 | 147.151 | 346.491 | 98.690 |
+| Family CPU seconds | 16.199 | 18.445 | 219.655 | 15.601 |
+| Kernel family peak MiB | 598.2 | 565.0 | 1,128.7 | 779.2 |
+
+All four answers cover the two malformed-message selectors, original expression
+argument, formatter implementation, free/`vmprintf`/pointer store, missing local
+allocation-success check, separate depth/status/success paths, and static-only
+limitations. They agree with the independent instruction checks recorded below.
+The reused-cache traditional answer supports the closing-parenthesis decrement
+with reconstructed C; its returned assembly excerpt omits that destination. The
+other three obtain the decrement's actual instructions. This evidentiary-depth
+difference is retained rather than claiming byte-for-byte identical answers.
+
+The remaining traditional failures are an interior-address `analyze_function`
+request in both runs and an ambiguous function-name lookup in the cold run.
+`list_procedures` is available and used. Neither is a policy rejection or a
+deliberately missing discovery tool. Errors and retries stay in total costs.
+
+Traditional cold analysis creates a validated persistent project containing
+3,923 decompiled functions, a 4.4 MB C export and a 17.5 MB assembly export. The
+next fresh model profile uses the same explicit project cache. Its retained
+manifest binds the target digest, patched engine digest and one-job setting.
+The large cold/warm CPU difference is consistent with avoiding this project
+creation; model strategies also differ, so it is not a controlled measurement
+of cache speedup alone. Experimental Code Mode/direct analyze selected functions
+and reuse captures only within a lease; cross-session result caching is absent.
+Comparing their cold run with the traditional reused-cache run cannot establish
+an adapter speedup. In this sample, the latter is faster and has fewer cumulative
+input tokens than Code Mode. All four target/runtime identities, profile/payload
+cleanup checks pass, with no OOM kills. The private ledger is
+`round-e9b9a8d-ledger.json`; each table cell remains one stochastic trial.
+
+The task oracle for this SQLite artifact (SHA-256
+`2e6eef9a727f081f0d453b4e5e6cbd8b9ef8b6f86cbf7681cbad444d3b0b55c8`)
+is the shipped machine code, checked independently of model answers: wrapper
+entry `0x65180`; status comparisons `0x65230` / `0x65239`; context-field load/test
+`0x65268` / `0x65270`; format load `0x65284`; emission call `0x65290`;
+parenthesis increment `0x64699` and decrement `0x64c92`; formatter implementation
+`0x5efc0`, free call `0x5f031`, formatting call `0x5f062` and pointer store
+`0x5f067`. Named PLT entries and runtime binding remain separate from that local
+static implementation evidence. No SQL input was executed to prove feasibility.
+
+Coverage must be sufficient for the particular question before reporting an
+equal-completion cost comparison. More tools or a successful MCP transport do
+not establish this. Current gaps include exact-address-only xrefs, a minimum-five
+string inventory, unknown runtime successors and memory aliases, and bounded IR
+extraction. In particular, real `sqlite3VdbeExec` exceeds the graph limit while
+retaining 3,654 lines of C. A local successful diagnostic task does not prove
+full Kuna/Ghidra/IDA parity or arbitrary complex-function coverage.

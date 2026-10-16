@@ -1,4 +1,14 @@
 // Shared read projections and partial batch semantics; no provider protocols.
+// Parsed JSON facts are owned by their cache. SDK callers may retain views,
+// but must not be able to change later reads under the same Evidence identity.
+export function freezeFacts(value) {
+  if (value && typeof value === "object") {
+    for (const child of Object.values(value)) freezeFacts(child);
+    Object.freeze(value);
+  }
+  return value;
+}
+
 export const sourceSummary = ({ evidence_id, sha256, bytes, elapsed_ms }) => ({
   evidence_id,
   sha256,

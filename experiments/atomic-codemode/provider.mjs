@@ -16,6 +16,7 @@ import {
   pageFacts,
   projectFact,
   readFactBatch,
+  freezeFacts,
 } from "./fact-reads.mjs";
 import { parseFunctionFacts, selectFunctionFacts } from "./function-facts.mjs";
 import {
@@ -195,12 +196,14 @@ export class KunaFactOwner {
       ],
       signal,
     );
-    this.#strings ??= requireResult(
-      parseKunaStringInventory(
-        await this.#sourceText(capture.source.evidence_id),
-        capture.input,
+    this.#strings ??= freezeFacts(
+      requireResult(
+        parseKunaStringInventory(
+          await this.#sourceText(capture.source.evidence_id),
+          capture.input,
+        ),
+        "invalid_provider_output",
       ),
-      "invalid_provider_output",
     );
     const inventory = this.#strings;
     const rows = inventory.items.filter((row) =>
