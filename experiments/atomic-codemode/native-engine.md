@@ -670,7 +670,8 @@ profiled. The [subsequent native computation study](native-compute-study.md) now
 measures them: VM drive about 34 seconds, C rendering 0.22 seconds and projection
 0.03 seconds. Skipping C is a small opportunity for this workload. An offline
 lossless encoding probe also puts the earlier full 17.8 MB diagnostic record
-inside the unchanged 8 MiB transport. That codec is not implemented in the public
-engine; allocation/inflation bounds, shared decoding, Evidence and real-model
-behavior still need testing. Current model comparisons share the same
+inside the unchanged 8 MiB transport. The [subsequent codec study](native-graph-transport-study.md)
+now implements and verifies this through both public experimental MCP adapters,
+including complete decoded Evidence and shared text-budget ownership. Actual
+model behavior remains to be tested. Model comparisons share the same
 computation/fact owners, avoiding a capability difference between adapters.

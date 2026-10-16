@@ -6,6 +6,10 @@ import { readCallFacet } from "./native-call-contract.mjs";
 import { readProjectionFacet } from "./native-projection-contract.mjs";
 import { operation, parseOperation } from "./native-operation-contract.mjs";
 import {
+  decodeGraphArchive,
+  MAX_GRAPH_JSON_BYTES,
+} from "./native-graph-encoding.mjs";
+import {
   hex,
   ordinal,
   valueId,
@@ -40,7 +44,7 @@ const factsSchema = z.strictObject({
     )
     .min(1)
     .max(12000),
-  operations: z.array(operation).max(12000),
+  operations: z.array(operation).max(32000),
   values: z.array(value).max(36000),
   coverage: z.strictObject({
     scope: z.string(),
@@ -111,7 +115,7 @@ function preflight(facts) {
   );
   for (const [key, limit] of [
     ["blocks", 12000],
-    ["operations", 12000],
+    ["operations", 32000],
     ["values", 36000],
   ])
     requireFact(
@@ -119,7 +123,7 @@ function preflight(facts) {
       `Native ${key} exceeds resource capacity or has invalid shape`,
     );
   for (const [rows, limit] of [
-    [facts.coverage?.indirect_branch_operations, 12000],
+    [facts.coverage?.indirect_branch_operations, 32000],
     [facts.coverage?.omitted_definition_ids, 36000],
     [facts.coverage?.issues, 12000],
   ])
@@ -144,46 +148,105 @@ function preflight(facts) {
     0,
   );
   requireFact(
-    inputs <= 50000 && members <= 12000 && edges <= 100000,
+    inputs <= 100000 && members <= 32000 && edges <= 100000,
     "Native relationships exceed resource capacity",
+  );
+  const displayBytes =
+    facts.operations.reduce(
+      (sum, op) =>
+        sum +
+        (typeof op?.statement === "string"
+          ? Buffer.byteLength(op.statement)
+          : 0),
+      0,
+    ) +
+    facts.values.reduce(
+      (sum, value) =>
+        sum +
+        (typeof value?.type_name === "string"
+          ? Buffer.byteLength(value.type_name)
+          : 0),
+      0,
+    );
+  requireFact(
+    displayBytes <= 4 * 1024 * 1024,
+    "Native graph display exceeds resource capacity",
   );
 }
 const readGraph = (fn) =>
   readNativeFacet(fn, "atomic_facts", "recovered IR", (raw) => {
-    preflight(raw);
-    return parseFacts(raw);
+    const decoded = decodeGraphArchive(raw);
+    const graph = decoded === undefined ? raw : JSON.parse(decoded);
+    preflight(graph);
+    return parseFacts(graph);
   });
 
+function readSource(text) {
+  requireFact(
+    Buffer.byteLength(text) <= NATIVE_OUTPUT_BYTES,
+    "Native JSON source exceeds transport budget",
+  );
+  return JSON.parse(text);
+}
+function readFunction(raw, entry, expectedInput) {
+  requireFact(
+    Array.isArray(raw?.functions) && raw.functions.length === 1,
+    "Native source must describe exactly one function",
+  );
+  const doc = documentSchema.parse(raw),
+    fn = doc.functions[0];
+  if (expectedInput !== undefined && doc.binary !== expectedInput)
+    throw new FactFailure(
+      "subject_mismatch",
+      "Native source names a different command input",
+      { expected: expectedInput, observed: doc.binary },
+    );
+  if (entry !== undefined && fn.address_hex !== entry)
+    throw new FactFailure(
+      "subject_mismatch",
+      "Native function entry differs from requested subject",
+    );
+  return { doc, fn };
+}
 export function parseNativeFunction(text, entry, expectedInput) {
   try {
-    requireFact(
-      Buffer.byteLength(text) <= NATIVE_OUTPUT_BYTES,
-      "Native JSON source exceeds transport budget",
-    );
-    const raw = JSON.parse(text);
-    requireFact(
-      Array.isArray(raw?.functions) && raw.functions.length === 1,
-      "Native source must describe exactly one function",
-    );
-    const doc = documentSchema.parse(raw),
-      fn = doc.functions[0];
-    if (expectedInput !== undefined && doc.binary !== expectedInput)
-      throw new FactFailure(
-        "subject_mismatch",
-        "Native source names a different command input",
-        { expected: expectedInput, observed: doc.binary },
-      );
-    if (fn.address_hex !== entry)
-      throw new FactFailure(
-        "subject_mismatch",
-        "Native function entry differs from requested subject",
-      );
+    const { doc, fn } = readFunction(readSource(text), entry, expectedInput);
     return {
       code: fn.code,
       language: doc.language,
       facts: readGraph(fn),
       calls: readCallFacet(fn),
       projection: readProjectionFacet(fn),
+    };
+  } catch (error) {
+    throw formatFailure(error);
+  }
+}
+
+export function readNativeGraphEvidence(text) {
+  try {
+    const raw = readSource(text);
+    if (raw?.functions === undefined)
+      throw new FactFailure(
+        "capability_unavailable",
+        "This retained source is not a native function record",
+      );
+    const { fn } = readFunction(raw);
+    if (fn.atomic_facts === undefined)
+      throw new FactFailure(
+        "capability_unavailable",
+        "Recovered graph source was not captured",
+        { native_error: fn.atomic_facts_error?.slice(0, 1024) },
+      );
+    const decoded = decodeGraphArchive(fn.atomic_facts);
+    const view = decoded ?? JSON.stringify(fn.atomic_facts);
+    requireFact(
+      Buffer.byteLength(view) <= MAX_GRAPH_JSON_BYTES,
+      "Native graph Evidence view exceeds decoded capacity",
+    );
+    return {
+      text: view,
+      encoding: decoded === undefined ? "json" : "gzip-base64",
     };
   } catch (error) {
     throw formatFailure(error);

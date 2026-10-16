@@ -2,6 +2,22 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { parseNativeIR } from "./native-ir.mjs";
 
+test("malformed compressed graph leaves independent call facts and code readable", () => {
+  const doc = fixture();
+  const originalCode = doc.functions[0].code;
+  doc.functions[0].atomic_facts = {
+    schema_version: 4,
+    encoding: "gzip-base64",
+    raw_bytes: 64,
+    data: "AAAA",
+  };
+  const model = parseNativeIR(JSON.stringify(doc), "0x1000");
+  assert.equal(model.code, originalCode);
+  assert.equal(model.facets.recovered_ir.availability, "unavailable");
+  assert.equal(model.facets.calls.availability, "available");
+  assert.equal(model.calls({}).total, 2);
+});
+
 const input = (input_index, value_id) => ({
   input_index,
   value_id,

@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { gzipSync } from "node:zlib";
 import { parseNativeIR } from "./native-ir.mjs";
+import { readNativeGraphEvidence } from "./native-ir-contract.mjs";
 import { controlDependencies } from "./control-dependence.mjs";
 
 const id = (n) => `0x${n}:0`;
@@ -120,6 +122,68 @@ function diamond() {
     ],
   };
 }
+
+test("compressed and ordinary graphs have identical parsed facts and malformed archives preserve code", () => {
+  const doc = diamond(),
+    raw = Buffer.from(JSON.stringify(doc.functions[0].atomic_facts));
+  const ordinary = parseNativeIR(JSON.stringify(doc), "0x1000");
+  doc.functions[0].atomic_facts = {
+    schema_version: 4,
+    encoding: "gzip-base64",
+    raw_bytes: raw.length,
+    data: gzipSync(raw).toString("base64"),
+  };
+  const encoded = parseNativeIR(JSON.stringify(doc), "0x1000");
+  assert.deepEqual(encoded.coverage, ordinary.coverage);
+  assert.deepEqual(
+    encoded.select({ fields: ["inputs", "output", "definitions"] }),
+    ordinary.select({ fields: ["inputs", "output", "definitions"] }),
+  );
+  assert.deepEqual(encoded.blocks({}), ordinary.blocks({}));
+  assert.deepEqual(readNativeGraphEvidence(JSON.stringify(doc)), {
+    text: raw.toString(),
+    encoding: "gzip-base64",
+  });
+  for (const change of [
+    { raw_bytes: 2 },
+    { data: "broken" },
+    { raw_bytes: 32 * 1024 * 1024 + 1 },
+  ]) {
+    const bad = structuredClone(doc);
+    Object.assign(bad.functions[0].atomic_facts, change);
+    const model = parseNativeIR(JSON.stringify(bad), "0x1000");
+    assert.equal(model.code, "reconstructed C");
+    assert.equal(model.facets.recovered_ir.availability, "unavailable");
+    assert.throws(() => model.select({}));
+  }
+  for (const text of [
+    "{malformed logical JSON",
+    JSON.stringify({ schema_version: 4, data: "nested" }),
+  ]) {
+    const bad = structuredClone(doc),
+      bytes = Buffer.from(text);
+    bad.functions[0].atomic_facts = {
+      schema_version: 4,
+      encoding: "gzip-base64",
+      raw_bytes: bytes.length,
+      data: gzipSync(bytes).toString("base64"),
+    };
+    const source = JSON.stringify(bad);
+    assert.equal(
+      parseNativeIR(source, "0x1000").facets.recovered_ir.availability,
+      "unavailable",
+    );
+    assert.equal(
+      readNativeGraphEvidence(source).text,
+      text,
+      "Malformed logical facts remain inspectable through owned decoded source",
+    );
+  }
+  assert.throws(
+    () => readNativeGraphEvidence('{"hex":"0102"}'),
+    (error) => error.code === "capability_unavailable",
+  );
+});
 
 test("native identity, implicit CFG and operand/phi bindings do not depend on display text", () => {
   const model = parseNativeIR(JSON.stringify(diamond()), "0x1000");
@@ -248,7 +312,7 @@ test("native facet failure preserves C without fabricating an empty graph; sourc
 test("oversized or malformed native arrays fail before diagnostic expansion", () => {
   const capacity = diamond();
   capacity.functions[0].atomic_facts.operations = Array.from(
-    { length: 12001 },
+    { length: 32001 },
     () => ({}),
   );
   assert.throws(

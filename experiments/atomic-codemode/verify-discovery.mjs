@@ -44,6 +44,7 @@ for (const direct of [false, true]) {
       "values",
       "instructions",
       "bytes",
+      "evidence",
     ];
     const selected = await call(ids.map((name) => prefix + name).join(" "));
     assert.deepEqual(
@@ -77,6 +78,11 @@ for (const direct of [false, true]) {
           seeds: ["0x1:0"],
           input_indices: [0],
         },
+      ],
+      [
+        "evidence",
+        { evidence_id: "ev_example", component: "recovered_ir" },
+        { evidence_id: "ev_example", component: "unknown" },
       ],
     ]) {
       const method = selected.methods.find((m) => m.method === name);

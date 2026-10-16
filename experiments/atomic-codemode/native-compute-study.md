@@ -6,7 +6,9 @@ or establish model-token savings.
 
 ## Phase instrument and actual measurements
 
-Apply `kuna-native-ir.patch`, then `kuna-atomic-timing-diagnostic.patch`, to Kuna
+Use experiment commit `7d0da075e` and its versions of both patches to reproduce
+these historical measurements. Apply `kuna-native-ir.patch`, then
+`kuna-atomic-timing-diagnostic.patch`, to Kuna
 `fe01d6294eb0d1053ce343c8943646df88e143fc`. Reuse existing compiled specs and the
 one-job opt-level-1 embed-specs build in `native-engine.md`. Preserved engine:
 `c755184455b8fe8950a5194788d954bc0476602779b6dd614cb893a230f6fde7`;
@@ -114,5 +116,7 @@ allocation/encoding growth, bounded inflation, exact format/length/row admission
 malformed-graph isolation from calls/C, complete Evidence access, actual CPU and
 memory, fallback behavior and real-model workflows. The shared owner must return
 selected facts rather than send an encoded graph to the agent. The current
-public engine still has a bounded call-rooted projection, without a complete VM
-CFG or arbitrary expansion of unretained definitions.
+public engine at this sizing checkpoint still has a bounded call-rooted
+projection. The [subsequent implementation](native-graph-transport-study.md)
+now verifies full recovered-graph access through bounded native/Node encoding
+and both public MCP adapters; real-model verification remains separate.

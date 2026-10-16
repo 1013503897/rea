@@ -52,8 +52,11 @@ evaluator. The ambient environment and credentials are not logged.
 Current bounds: 64 MiB guest heap, 32 KiB code and script value/error payloads, 64 host calls per execution,
 120 seconds wall deadline and 2 seconds of guest synchronous execution; native requests have existing supervision, an 8 MiB
 capture budget and 1 GiB function-memory limit. Retained source storage is 64 MiB
-per target, with two resident indexes (at most 2 MiB diagnostic or 8 MiB native
-source each). Sources are
+per target, with two resident indexes (each derived from at most 2 MiB diagnostic
+or 8 MiB native wire source). Compressed native graphs admit at most 32 MiB decoded
+JSON plus independent row/text/relationship bounds. One decoded Evidence text view
+up to 32 MiB is also retained per lease; these source bounds are not parsed-heap
+size guarantees. Sources are
 content-digested and retained until close; explicit evaluator copies survive
 close. Capacity failures are explicit, not clipped facts. Leases and snapshot
 handles prevent cross-session joins.
@@ -276,7 +279,12 @@ the now finer fact/query boundary.
 The [native phase study](native-compute-study.md) now measures the VM drive at
 about 34 seconds, C rendering at 0.22 seconds and projection at 0.03 seconds.
 Repeated new native processes do not gain the API owner's warm result reuse.
-It also demonstrates offline lossless encoding of all VM facts below the existing
-transport budget; native codec/decoder bounds and model verification remain
-pending. This may close full-graph/definition coverage without another analysis
-or a live-function lifecycle, but is not yet a callable capability.
+Its subsequent [bounded codec implementation](native-graph-transport-study.md)
+now returns the complete 21,349-operation VM graph in about 3.79 MB, inside the
+unchanged 8 MiB wire budget. Selected definitions/CFG reads and decoded Evidence
+work through both real MCP adapters; all graph fields and ordinary C/calls match
+the prior complete golden. Same-lease reuse is about 67 ms after a 39.7-second
+fresh capture, with resource limits and no OOM. The [next question/oracle](savepoint-control-oracle.md)
+start from names/error messages and exercise the new condition/CFG coverage.
+Actual model results remain pending; source fidelity is not machine equivalence,
+provider parity or a general speedup.

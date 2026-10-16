@@ -8,6 +8,7 @@ import { KunaTargetCommands } from "../../dist/kuna/KunaTargetCommands.js";
 import { referenceReader } from "./reference-reads.mjs";
 import { PrivateRuntimeRoot } from "../../dist/process/PrivateRuntimeRoot.js";
 import { parseNativeIR } from "./native-ir.mjs";
+import { NativeEvidenceReads } from "./native-evidence-reads.mjs";
 import { DEFAULT_NATIVE_OPERATION_FIELDS } from "./native-operation-views.mjs";
 import { FactFailure, requireResult } from "./fact-error.mjs";
 import { windowReaders } from "./window-readers.mjs";
@@ -42,6 +43,10 @@ export class KunaFactOwner {
   #strings;
   #functions;
   #captureDirectory;
+  #evidence = new NativeEvidenceReads(async (id) => ({
+    text: await this.#sourceText(id),
+    source: this.#sources.get(id).source,
+  }));
   #nativeIR = false;
   context;
   static async open(path, environment = process.env) {
@@ -462,16 +467,7 @@ export class KunaFactOwner {
     };
   }
   async evidence(input) {
-    const text = await this.#sourceText(input.evidence_id);
-    return {
-      source: this.#sources.get(input.evidence_id).source,
-      text: text.slice(input.offset, input.offset + input.limit),
-      total_code_units: text.length,
-      next_offset:
-        input.offset + input.limit < text.length
-          ? input.offset + input.limit
-          : null,
-    };
+    return this.#evidence.read(input);
   }
   async close() {
     this.#lifetime.abort();
@@ -484,6 +480,7 @@ export class KunaFactOwner {
     this.#snapshots.clear();
     this.#strings = undefined;
     this.#functions = undefined;
+    this.#evidence.clear();
   }
   cancel() {
     this.#lifetime.abort();

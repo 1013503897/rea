@@ -1,9 +1,176 @@
+diff --git a/decompiler/Cargo.lock b/decompiler/Cargo.lock
+index 157e7bd2..6caa4604 100644
+--- a/decompiler/Cargo.lock
++++ b/decompiler/Cargo.lock
+@@ -23,6 +23,12 @@ version = "0.7.8"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "d3fb67a6e08acf24fdeccbac2cb6ac4305825bd1f117462e0e6f2f193345ad56"
+ 
++[[package]]
++name = "base64"
++version = "0.22.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
++
+ [[package]]
+ name = "bitflags"
+ version = "2.13.0"
+@@ -265,6 +271,8 @@ dependencies = [
+ name = "kuna-cli"
+ version = "0.1.0"
+ dependencies = [
++ "base64",
++ "flate2",
+  "kuna-analysis",
+  "kuna-base",
+  "kuna-console",
+diff --git a/decompiler/crates/kuna-cli/Cargo.toml b/decompiler/crates/kuna-cli/Cargo.toml
+index 06231a77..db79599c 100644
+--- a/decompiler/crates/kuna-cli/Cargo.toml
++++ b/decompiler/crates/kuna-cli/Cargo.toml
+@@ -9,6 +9,8 @@ license.workspace = true
+ publish.workspace = true
+ 
+ [dependencies]
++base64 = "=0.22.1"
++flate2 = "=1.1.9"
+ kuna-decomp.workspace = true
+ kuna-base.workspace = true
+ kuna-console.workspace = true
+diff --git a/decompiler/crates/kuna-cli/src/atomic_compression.rs b/decompiler/crates/kuna-cli/src/atomic_compression.rs
+new file mode 100644
+index 00000000..48631d39
+--- /dev/null
++++ b/decompiler/crates/kuna-cli/src/atomic_compression.rs
+@@ -0,0 +1,122 @@
++//! Bounded lossless wire encoding of logical schema-3 atomic graphs.
++use crate::jsonfmt::{dumps_compact_bounded, Json};
++use base64::{engine::general_purpose::STANDARD, Engine as _};
++use flate2::{write::GzEncoder, Compression};
++use std::io::{self, Write};
++
++const MAX_RAW_BYTES: usize = 32 * 1024 * 1024;
++struct BoundedBytes {
++    data: Vec<u8>,
++    limit: usize,
++}
++impl Write for BoundedBytes {
++    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
++        let next = self
++            .data
++            .len()
++            .checked_add(bytes.len())
++            .filter(|n| *n <= self.limit)
++            .ok_or_else(|| io::Error::other("atomic compression capacity exceeded"))?;
++        if next > self.data.capacity() {
++            let capacity = next
++                .max(self.data.capacity().saturating_mul(2))
++                .min(self.limit);
++            self.data
++                .try_reserve_exact(capacity - self.data.len())
++                .map_err(|_| io::Error::other("atomic compression allocation failed"))?;
++        }
++        self.data.extend_from_slice(bytes);
++        Ok(bytes.len())
++    }
++    fn flush(&mut self) -> io::Result<()> {
++        Ok(())
++    }
++}
++
++pub(crate) fn encode(graph: &Json, limit: usize) -> Option<(Json, usize)> {
++    let Json::Object(fields) = graph else {
++        return None;
++    };
++    if !fields
++        .iter()
++        .any(|(key, v)| key == "schema_version" && *v == Json::Number("3".into()))
++    {
++        return None;
++    }
++    let raw = dumps_compact_bounded(graph, MAX_RAW_BYTES)?;
++    let mut envelope = Json::Object(vec![
++        ("schema_version".into(), Json::Number("4".into())),
++        ("encoding".into(), Json::Str("gzip-base64".into())),
++        ("raw_bytes".into(), Json::Number(raw.len().to_string())),
++        ("data".into(), Json::Str(String::new())),
++    ]);
++    let overhead = dumps_compact_bounded(&envelope, limit)?.len();
++    let payload_limit = limit.checked_sub(overhead)?;
++    let compressed_limit = (payload_limit / 4).checked_mul(3)?;
++    let mut gzip = GzEncoder::new(
++        BoundedBytes {
++            data: Vec::new(),
++            limit: compressed_limit,
++        },
++        Compression::fast(),
++    );
++    gzip.write_all(raw.as_bytes()).ok()?;
++    let compressed = gzip.finish().ok()?.data;
++    let encoded_len = compressed
++        .len()
++        .checked_add(2)?
++        .checked_div(3)?
++        .checked_mul(4)?;
++    if encoded_len > payload_limit {
++        return None;
++    }
++    let encoded = STANDARD.encode(compressed);
++    if let Json::Object(fields) = &mut envelope {
++        let (_, data) = fields.iter_mut().find(|(key, _)| key == "data")?;
++        *data = Json::Str(encoded);
++    }
++    Some((envelope, overhead + encoded_len))
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use std::io::Read;
++    #[test]
++    fn lossless_frame_accounts_for_escaping_and_base64_expansion() {
++        let graph = Json::Object(vec![
++            ("schema_version".into(), Json::Number("3".into())),
++            ("statement".into(), Json::Str("中文😀\0".repeat(1000))),
++        ]);
++        let (encoded, size) = encode(&graph, 2000).unwrap();
++        let text = dumps_compact_bounded(&encoded, 2000).unwrap();
++        assert_eq!(text.len(), size);
++        let frame: serde_json::Value = serde_json::from_str(&text).unwrap();
++        let bytes = STANDARD.decode(frame["data"].as_str().unwrap()).unwrap();
++        let mut restored = String::new();
++        flate2::read::GzDecoder::new(bytes.as_slice())
++            .read_to_string(&mut restored)
++            .unwrap();
++        assert_eq!(
++            restored,
++            dumps_compact_bounded(&graph, MAX_RAW_BYTES).unwrap()
++        );
++        assert_eq!(frame["raw_bytes"].as_u64().unwrap(), restored.len() as u64);
++        assert!(encode(&graph, 1).is_none());
++        assert!(encode(&graph, size - 1).is_none());
++    }
++    #[test]
++    fn archive_is_single_layer_and_raw_allocation_has_an_independent_bound() {
++        assert!(encode(&Json::Str("not a graph".into()), 1000).is_none());
++        let nested = Json::Object(vec![("schema_version".into(), Json::Number("4".into()))]);
++        assert!(encode(&nested, 1000).is_none());
++        let oversized = Json::Object(vec![
++            ("schema_version".into(), Json::Number("3".into())),
++            (
++                "statement".into(),
++                Json::Str("\0".repeat(MAX_RAW_BYTES / 6 + 1)),
++            ),
++        ]);
++        assert!(encode(&oversized, 1000).is_none());
++    }
++}
 diff --git a/decompiler/crates/kuna-cli/src/atomic_json.rs b/decompiler/crates/kuna-cli/src/atomic_json.rs
 new file mode 100644
-index 00000000..527ee788
+index 00000000..7077bc56
 --- /dev/null
 +++ b/decompiler/crates/kuna-cli/src/atomic_json.rs
-@@ -0,0 +1,249 @@
+@@ -0,0 +1,359 @@
 +//! Opt-in atomic documents share the ordinary record producer and JSON writer.
 +//! A graph that cannot fit must not discard otherwise readable reconstructed C.
 +
@@ -21,35 +188,40 @@ index 00000000..527ee788
 +    Capacity,
 +    RedundantWithGraph,
 +}
++fn function_records(document: &mut Json) -> Option<&mut Vec<Json>> {
++    let Json::Object(fields) = document else {
++        return None;
++    };
++    let (_, value) = fields.iter_mut().find(|(key, _)| key == "functions")?;
++    let Json::Array(functions) = value else {
++        return None;
++    };
++    Some(functions)
++}
 +fn take_facet(document: &mut Json, name: &str, limit: usize, why: Omission) -> Vec<RemovedFacet> {
 +    let mut removed = Vec::new();
-+    if let Json::Object(fields) = document {
-+        if let Some(Json::Array(functions)) = fields
-+            .iter_mut()
-+            .find_map(|(key, value)| (key == "functions").then_some(value))
-+        {
-+            for (function, record) in functions.iter_mut().enumerate() {
-+                if let Json::Object(fields) = record {
-+                    if matches!(why, Omission::RedundantWithGraph)
-+                        && !fields.iter().any(|(key, _)| key == "atomic_facts")
-+                    {
-+                        continue;
++    if let Some(functions) = function_records(document) {
++        for (function, record) in functions.iter_mut().enumerate() {
++            if let Json::Object(fields) = record {
++                if matches!(why, Omission::RedundantWithGraph)
++                    && !fields.iter().any(|(key, _)| key == "atomic_facts")
++                {
++                    continue;
++                }
++                if let Some(field) = fields.iter().position(|(key, _)| key == name) {
++                    let value = fields.remove(field);
++                    let error = format!("{name}_error");
++                    let added_error = matches!(why, Omission::Capacity)
++                        && !fields.iter().any(|(key, _)| key == &error);
++                    if added_error {
++                        fields.push((error, Json::Str(format!("atomic encoded document exceeds {limit} byte capacity; {name} omitted, code retained"))));
 +                    }
-+                    if let Some(field) = fields.iter().position(|(key, _)| key == name) {
-+                        let value = fields.remove(field);
-+                        let error = format!("{name}_error");
-+                        let added_error = matches!(why, Omission::Capacity)
-+                            && !fields.iter().any(|(key, _)| key == &error);
-+                        if added_error {
-+                            fields.push((error, Json::Str(format!("atomic encoded document exceeds {limit} byte capacity; {name} omitted, code retained"))));
-+                        }
-+                        removed.push(RemovedFacet {
-+                            function,
-+                            field,
-+                            value,
-+                            added_error,
-+                        });
-+                    }
++                    removed.push(RemovedFacet {
++                        function,
++                        field,
++                        value,
++                        added_error,
++                    });
 +                }
 +            }
 +        }
@@ -57,22 +229,62 @@ index 00000000..527ee788
 +    removed
 +}
 +fn restore_facet(document: &mut Json, removed: Vec<RemovedFacet>) {
-+    if let Json::Object(fields) = document {
-+        if let Some(Json::Array(functions)) = fields
-+            .iter_mut()
-+            .find_map(|(key, value)| (key == "functions").then_some(value))
-+        {
-+            for facet in removed {
-+                if let Json::Object(fields) = &mut functions[facet.function] {
-+                    if facet.added_error {
-+                        let error = format!("{}_error", facet.value.0);
-+                        fields.retain(|(key, _)| key != &error);
++    if let Some(functions) = function_records(document) {
++        for facet in removed {
++            if let Json::Object(fields) = &mut functions[facet.function] {
++                if facet.added_error {
++                    let error = format!("{}_error", facet.value.0);
++                    fields.retain(|(key, _)| key != &error);
++                }
++                fields.insert(facet.field, facet.value);
++            }
++        }
++    }
++}
++struct GraphAlternative {
++    function: usize,
++    value: Json,
++}
++fn compress_graphs(document: &mut Json, budget: usize) -> Vec<GraphAlternative> {
++    let mut originals = Vec::new();
++    let mut remaining = budget;
++    if let Some(functions) = function_records(document) {
++        for (function, record) in functions.iter_mut().enumerate() {
++            if let Json::Object(fields) = record {
++                if let Some((_, graph)) = fields.iter_mut().find(|(key, _)| key == "atomic_facts") {
++                    if let Some((encoded, size)) =
++                        crate::atomic_compression::encode(graph, remaining)
++                    {
++                        remaining -= size;
++                        originals.push(GraphAlternative {
++                            function,
++                            value: std::mem::replace(graph, encoded),
++                        });
 +                    }
-+                    fields.insert(facet.field, facet.value);
 +                }
 +            }
 +        }
 +    }
++    originals
++}
++fn exchange_graphs(
++    document: &mut Json,
++    alternatives: Vec<GraphAlternative>,
++) -> Vec<GraphAlternative> {
++    let mut previous = Vec::new();
++    if let Some(functions) = function_records(document) {
++        for alternative in alternatives {
++            if let Json::Object(fields) = &mut functions[alternative.function] {
++                if let Some((_, graph)) = fields.iter_mut().find(|(key, _)| key == "atomic_facts") {
++                    previous.push(GraphAlternative {
++                        function: alternative.function,
++                        value: std::mem::replace(graph, alternative.value),
++                    });
++                }
++            }
++        }
++    }
++    previous
 +}
 +fn bounded(document: &Json, budget: usize) -> Option<String> {
 +    let mut text = dumps_compact_bounded(document, budget)?;
@@ -94,10 +306,25 @@ index 00000000..527ee788
 +    if let Some(text) = bounded(&document, budget) {
 +        return Ok(text);
 +    }
++    let originals = compress_graphs(&mut document, budget);
++    let alternatives = if originals.is_empty() {
++        Vec::new()
++    } else {
++        if let Some(text) = bounded(&document, budget) {
++            return Ok(text);
++        }
++        exchange_graphs(&mut document, originals)
++    };
 +    let calls = take_facet(&mut document, "atomic_calls", limit, Omission::Capacity);
 +    if !calls.is_empty() {
 +        if let Some(text) = bounded(&document, budget) {
 +            return Ok(text);
++        }
++        if !alternatives.is_empty() {
++            drop(exchange_graphs(&mut document, alternatives));
++            if let Some(text) = bounded(&document, budget) {
++                return Ok(text);
++            }
 +        }
 +    }
 +    restore_facet(&mut document, calls);
@@ -160,6 +387,56 @@ index 00000000..527ee788
 +            .contains("256"));
 +        assert!(reduced.len() <= 256);
 +        assert!(render(original, 1).is_err());
++    }
++}
++
++#[cfg(test)]
++mod compressed_graph_tests {
++    use super::*;
++    use base64::{engine::general_purpose::STANDARD, Engine as _};
++    use std::io::Read;
++    #[test]
++    fn compressed_graph_retains_calls_and_code_before_losing_any_facet() {
++        let graph = Json::Object(vec![
++            ("schema_version".into(), Json::Number("3".into())),
++            ("payload".into(), Json::Str("x".repeat(100_000))),
++        ]);
++        let original = Json::Object(vec![(
++            "functions".into(),
++            Json::Array(vec![Json::Object(vec![
++                ("code".into(), Json::Str("retained C".into())),
++                ("atomic_facts".into(), graph.clone()),
++                ("atomic_calls".into(), Json::Str("independent calls".into())),
++                ("atomic_projection".into(), Json::Str("fallback".into())),
++            ])]),
++        )]);
++        let uncompressed: serde_json::Value =
++            serde_json::from_str(&render(original.clone(), 200_000).unwrap()).unwrap();
++        assert_eq!(
++            uncompressed["functions"][0]["atomic_facts"]["schema_version"],
++            3
++        );
++        let text = render(original.clone(), 4096).unwrap();
++        assert!(text.len() <= 4096);
++        let document: serde_json::Value = serde_json::from_str(&text).unwrap();
++        let function = &document["functions"][0];
++        assert_eq!(function["code"], "retained C");
++        assert_eq!(function["atomic_calls"], "independent calls");
++        assert!(function.get("atomic_projection").is_none());
++        assert!(function.get("atomic_facts_error").is_none());
++        let frame = &function["atomic_facts"];
++        assert_eq!(frame["schema_version"], 4);
++        let compressed = STANDARD.decode(frame["data"].as_str().unwrap()).unwrap();
++        let mut restored = String::new();
++        flate2::read::GzDecoder::new(compressed.as_slice())
++            .read_to_string(&mut restored)
++            .unwrap();
++        assert_eq!(restored, dumps_compact_bounded(&graph, 200_000).unwrap());
++        let tiny: serde_json::Value =
++            serde_json::from_str(&render(original, 512).unwrap()).unwrap();
++        assert!(tiny["functions"][0].get("atomic_facts").is_none());
++        assert_eq!(tiny["functions"][0]["atomic_projection"], "fallback");
++        assert_eq!(tiny["functions"][0]["atomic_calls"], "independent calls");
 +    }
 +}
 +
@@ -283,7 +560,7 @@ index ad249b04..62074996 100644
 @@ -979,7 +988,13 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
          return Err("--base requires --raw-image".into());
      }
-
+ 
 +    if atomic_output_bytes.is_some() && !atomic_facts {
 +        return Err("--atomic-output-bytes requires --atomic-facts".into());
 +    }
@@ -306,7 +583,7 @@ index ad249b04..62074996 100644
 @@ -1007,6 +1024,10 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
          }));
      }
-
+ 
 +    if atomic_facts {
 +        return Err("--atomic-facts requires --json".into());
 +    }
@@ -363,7 +640,7 @@ index ad249b04..62074996 100644
 @@ -1217,7 +1252,7 @@ fn decompile_json(args: &AllArgs, target: &str) -> Result<(String, Option<String
          });
      }
-
+ 
 -    let funcs = decompile_all::decompile_entries(&mut prog, args, targets, false);
 +    let funcs = decompile_all::decompile_entries(&mut prog, args, targets, false, atomic_limit.is_some());
      let assertions = prog.assertion_outcomes();
@@ -430,7 +707,7 @@ index 698c7243..330c0f3f 100644
 @@ -2003,6 +2006,19 @@ pub(crate) fn render_result_json(
      render_selected_json(binary, funcs, options, error, None, assertions, interior)
  }
-
+ 
 +pub(crate) fn render_atomic_result_json(
 +    binary: &str,
 +    funcs: &[FuncResult],
@@ -461,7 +738,7 @@ index 698c7243..330c0f3f 100644
                          f.stack_objects.iter().map(stack_object_json).collect(),
 @@ -3519,3 +3540,16 @@ mod triage_tests {
      }
-
+ 
  }
 +
 +// Named independent facets share serialization/failure semantics; a bad facet
@@ -495,7 +772,7 @@ index 198b85a6..71bd9675 100644
 @@ -28,6 +28,19 @@ pub enum Json {
      Object(Vec<(String, Json)>),
  }
-
+ 
 +impl From<serde_json::Value> for Json {
 +    fn from(value: serde_json::Value) -> Self {
 +        match value {
@@ -515,7 +792,7 @@ index 198b85a6..71bd9675 100644
 @@ -50,6 +63,12 @@ pub fn dumps_compact(v: &Json) -> String {
      writer::render(v, Format::Compact)
  }
-
+ 
 +/// Enforce the caller's encoded-byte budget before growing the output buffer.
 +/// Uses the same writer and escaping as the other modes; no length estimator.
 +pub fn dumps_compact_bounded(v: &Json, limit: usize) -> Option<String> {
@@ -531,22 +808,22 @@ index c4eca1db..06b9d024 100644
 +++ b/decompiler/crates/kuna-cli/src/jsonfmt/writer.rs
 @@ -1,7 +1,7 @@
  //! JSON layout and ASCII-safe escaping shared by all CLI output modes.
-
+ 
  use super::Json;
 -use std::fmt::Write as _;
 +use std::fmt::{self, Write};
-
+ 
  #[derive(Clone, Copy, PartialEq, Eq)]
  pub(super) enum Format {
 @@ -12,108 +12,142 @@ pub(super) enum Format {
-
+ 
  pub(super) fn render(value: &Json, format: Format) -> String {
      let mut out = String::new();
 -    write_value(&mut out, value, 0, format);
 +    write_value(&mut out, value, 0, format).expect("String writer is infallible");
      out
  }
-
+ 
 +struct BoundedString {
 +    text: String,
 +    limit: usize,
@@ -594,7 +871,7 @@ index c4eca1db..06b9d024 100644
 +        Ok(())
      }
  }
-
+ 
 -fn write_value(out: &mut String, value: &Json, indent: usize, format: Format) {
 +fn write_value(out: &mut impl Write, value: &Json, indent: usize, format: Format) -> fmt::Result {
      match value {
@@ -640,7 +917,7 @@ index c4eca1db..06b9d024 100644
          }
      }
  }
-
+ 
  fn write_pairs<'a>(
 -    out: &mut String,
 +    out: &mut impl Write,
@@ -677,7 +954,7 @@ index c4eca1db..06b9d024 100644
 -    out.push('}');
 +    out.write_char('}')
  }
-
+ 
 -fn write_string(out: &mut String, s: &str) {
 -    out.push('"');
 +fn write_string(out: &mut impl Write, s: &str) -> fmt::Result {
@@ -751,14 +1028,15 @@ index 6710e12a..ef90468c 100644
 +    );
 +}
 diff --git a/decompiler/crates/kuna-cli/src/main.rs b/decompiler/crates/kuna-cli/src/main.rs
-index 2345743c..40fff9ec 100644
+index 2345743c..3da94435 100644
 --- a/decompiler/crates/kuna-cli/src/main.rs
 +++ b/decompiler/crates/kuna-cli/src/main.rs
-@@ -1,6 +1,7 @@
+@@ -1,6 +1,8 @@
  //! Command dispatch for the kuna CLI.
-
+ 
  mod args;
 +mod atomic_json;
++mod atomic_compression;
  mod callgraph;
  mod catalog;
  mod crypto;
@@ -773,7 +1051,7 @@ index e40b18c9..b8cae233 100644
 +        want_atomic_facts: false,
          want_pointer_arguments: false,
      };
-
+ 
 diff --git a/decompiler/crates/kuna-console/src/inspect.rs b/decompiler/crates/kuna-console/src/inspect.rs
 index 74024b10..72e4ec24 100644
 --- a/decompiler/crates/kuna-console/src/inspect.rs
@@ -786,7 +1064,7 @@ index 74024b10..72e4ec24 100644
 +    pub atomic_calls: Option<Result<kuna_decomp::atomic_calls::CallFacts, String>>,
 +    pub atomic_projection: Option<Result<kuna_decomp::atomic_projection::Projection, String>>,
  }
-
+ 
  impl FuncDetail {
 @@ -40,13 +43,13 @@ impl FuncDetail {
      ) -> Self {
@@ -803,7 +1081,7 @@ index 74024b10..72e4ec24 100644
 +        FuncDetail { tokens, tokens_error: None, ..Default::default() }
      }
  }
-
+ 
 diff --git a/decompiler/crates/kuna-console/src/project.rs b/decompiler/crates/kuna-console/src/project.rs
 index bc401db2..1b53ccf1 100644
 --- a/decompiler/crates/kuna-console/src/project.rs
@@ -873,17 +1151,17 @@ index 40b093b6..8f03b654 100644
  smallvec.workspace = true
  slotmap.workspace = true
 +serde = { version = "1", features = ["derive"] }
-
+ 
  [dev-dependencies]
  # Verifier-only: the datatest <stringmatch> engine (item w10-structure-printbody).
  regex = { workspace = true }
 -serde = { version = "1", features = ["derive"] }
  toml = { version = "1.1", default-features = false, features = ["parse", "serde", "std"] }
-
+ 
  [build-dependencies]
 diff --git a/decompiler/crates/kuna-decomp/src/substrate/atomic_calls.rs b/decompiler/crates/kuna-decomp/src/substrate/atomic_calls.rs
 new file mode 100644
-index 00000000..821ca6f0
+index 00000000..2b7ced64
 --- /dev/null
 +++ b/decompiler/crates/kuna-decomp/src/substrate/atomic_calls.rs
 @@ -0,0 +1,216 @@
@@ -934,7 +1212,7 @@ index 00000000..821ca6f0
 +    let mut items = Vec::new();
 +    let mut keys = BTreeSet::new();
 +    let mut inputs = 0usize;
-+    let mut text_bytes = 0usize;
++    let mut text = atomic_values::TextBudget::new(2 * 1024 * 1024);
 +    for &key in &membership.calls {
 +        let op = fd.obank().get(key).ok_or("stale call operation")?;
 +        inputs = inputs
@@ -945,9 +1223,9 @@ index 00000000..821ca6f0
 +        }
 +        let spec = specs.get(&key).copied();
 +        if let Some(spec) = spec {
-+            atomic_values::charge_text(&mut text_bytes, spec.get_name().len())?;
++            text.charge(spec.get_name().len())?;
 +            if spec.proto().has_model() {
-+                atomic_values::charge_text(&mut text_bytes, spec.proto().get_model_name().len())?;
++                text.charge(spec.proto().get_model_name().len())?;
 +            }
 +        }
 +        for index in 0..op.num_input() {
@@ -963,7 +1241,7 @@ index 00000000..821ca6f0
 +        }
 +        items.push(collect(fd, key, spec)?);
 +    }
-+    let values = atomic_values::collect(fd, keys, &mut text_bytes)?;
++    let values = atomic_values::collect(fd, keys, &mut text)?;
 +    Ok(CallFacts {
 +        schema_version: 1, items, values,
 +        coverage: CallCoverage {
@@ -1105,10 +1383,10 @@ index 00000000..821ca6f0
 +}
 diff --git a/decompiler/crates/kuna-decomp/src/substrate/atomic_facts.rs b/decompiler/crates/kuna-decomp/src/substrate/atomic_facts.rs
 new file mode 100644
-index 00000000..78d5fc50
+index 00000000..6b9afe69
 --- /dev/null
 +++ b/decompiler/crates/kuna-decomp/src/substrate/atomic_facts.rs
-@@ -0,0 +1,155 @@
+@@ -0,0 +1,156 @@
 +//! Opt-in, read-only export of the recovered function IR for the REA experiment.
 +//! IDs are local to this captured model; addresses alone are not SSA identities.
 +use crate::{
@@ -1162,10 +1440,11 @@ index 00000000..78d5fc50
 +) -> Result<FunctionFacts, String> {
 +    // Bounds cover allocations before JSON serialization, independently of the
 +    // transport byte budget. Overflow is an unavailable facet, not clipped IR.
-+    const MAX_OPERATIONS: usize = 12_000;
++    const MAX_OPERATIONS: usize = 32_000;
 +    const MAX_VALUES: usize = 36_000;
-+    const MAX_INPUTS: usize = 50_000;
-+    const MAX_DISPLAY_BYTES: usize = 2 * 1024 * 1024;
++    const MAX_INPUTS: usize = 100_000;
++    const MAX_DISPLAY_BYTES: usize = 4 * 1024 * 1024;
++    const MAX_CFG_EDGES: usize = 50_000;
 +    if fd.bblocks_get_size() <= 0 {
 +        return Err("recovered basic-block graph is unavailable".into());
 +    }
@@ -1197,7 +1476,7 @@ index 00000000..78d5fc50
 +        edge_count = edge_count
 +            .checked_add(block.size_out() as usize)
 +            .ok_or("atomic CFG edge count overflow")?;
-+        if edge_count > MAX_INPUTS {
++        if edge_count > MAX_CFG_EDGES {
 +            return Err("atomic CFG edge capacity exceeded".into());
 +        }
 +        let tail = members.last().and_then(|id| fd.obank().get(*id));
@@ -1336,10 +1615,10 @@ index 00000000..6628ddd7
 +}
 diff --git a/decompiler/crates/kuna-decomp/src/substrate/atomic_operations.rs b/decompiler/crates/kuna-decomp/src/substrate/atomic_operations.rs
 new file mode 100644
-index 00000000..7d56cce5
+index 00000000..30d6be39
 --- /dev/null
 +++ b/decompiler/crates/kuna-decomp/src/substrate/atomic_operations.rs
-@@ -0,0 +1,127 @@
+@@ -0,0 +1,119 @@
 +//! Shared read-only operation/value normalization for full and selected facts.
 +use crate::{
 +    architecture::Architecture,
@@ -1372,10 +1651,9 @@ index 00000000..7d56cce5
 +pub struct OperationBudget {
 +    max_values: usize,
 +    max_inputs: usize,
-+    max_display: usize,
 +    keys: BTreeSet<VarnodeId>,
 +    input_count: usize,
-+    display_bytes: usize,
++    text: atomic_values::TextBudget,
 +    pub issues: Vec<String>,
 +}
 +impl OperationBudget {
@@ -1383,10 +1661,9 @@ index 00000000..7d56cce5
 +        Self {
 +            max_values,
 +            max_inputs,
-+            max_display,
 +            keys: BTreeSet::new(),
 +            input_count: 0,
-+            display_bytes: 0,
++            text: atomic_values::TextBudget::new(max_display),
 +            issues: Vec::new(),
 +        }
 +    }
@@ -1445,13 +1722,7 @@ index 00000000..7d56cce5
 +        }
 +        let mut statement = String::new();
 +        crate::funcdata_printraw::render_op(&mut statement, arch, fd, key)?;
-+        self.display_bytes = self
-+            .display_bytes
-+            .checked_add(statement.len())
-+            .ok_or("atomic display count overflow")?;
-+        if self.display_bytes > self.max_display {
-+            return Err("atomic display capacity exceeded".into());
-+        }
++        self.text.charge(statement.len())?;
 +        Ok(OperationFact {
 +            id,
 +            address: format!("0x{:x}", op.get_seq_num().get_addr().get_offset()),
@@ -1464,7 +1735,7 @@ index 00000000..7d56cce5
 +        })
 +    }
 +    pub fn values(&mut self, fd: &Funcdata) -> Result<Vec<ValueFact>, String> {
-+        atomic_values::collect(fd, std::mem::take(&mut self.keys), &mut self.display_bytes)
++        atomic_values::collect(fd, std::mem::take(&mut self.keys), &mut self.text)
 +    }
 +}
 diff --git a/decompiler/crates/kuna-decomp/src/substrate/atomic_projection.rs b/decompiler/crates/kuna-decomp/src/substrate/atomic_projection.rs
@@ -1592,10 +1863,10 @@ index 00000000..097b153a
 +}
 diff --git a/decompiler/crates/kuna-decomp/src/substrate/atomic_values.rs b/decompiler/crates/kuna-decomp/src/substrate/atomic_values.rs
 new file mode 100644
-index 00000000..fc509847
+index 00000000..6d23954c
 --- /dev/null
 +++ b/decompiler/crates/kuna-decomp/src/substrate/atomic_values.rs
-@@ -0,0 +1,70 @@
+@@ -0,0 +1,80 @@
 +//! One read-only interpretation of native value and operation identities.
 +use crate::{
 +    context::{OpId, VarnodeId},
@@ -1605,7 +1876,26 @@ index 00000000..fc509847
 +use slotmap::Key;
 +use std::collections::BTreeSet;
 +
-+pub const MAX_TEXT_BYTES: usize = 2 * 1024 * 1024;
++pub struct TextBudget {
++    used: usize,
++    limit: usize,
++}
++impl TextBudget {
++    pub fn new(limit: usize) -> Self {
++        Self { used: 0, limit }
++    }
++    pub fn charge(&mut self, bytes: usize) -> Result<(), String> {
++        let next = self
++            .used
++            .checked_add(bytes)
++            .ok_or("atomic text count overflow")?;
++        if next > self.limit {
++            return Err("atomic text capacity exceeded".into());
++        }
++        self.used = next;
++        Ok(())
++    }
++}
 +#[derive(Debug, Clone, Serialize)]
 +pub struct ValueFact {
 +    pub id: String,
@@ -1630,25 +1920,16 @@ index 00000000..fc509847
 +        seq.get_time()
 +    ))
 +}
-+pub fn charge_text(used: &mut usize, bytes: usize) -> Result<(), String> {
-+    *used = used
-+        .checked_add(bytes)
-+        .ok_or("atomic text count overflow")?;
-+    if *used > MAX_TEXT_BYTES {
-+        return Err("atomic text capacity exceeded".into());
-+    }
-+    Ok(())
-+}
 +pub fn collect(
 +    fd: &Funcdata,
 +    keys: BTreeSet<VarnodeId>,
-+    text_bytes: &mut usize,
++    text: &mut TextBudget,
 +) -> Result<Vec<ValueFact>, String> {
 +    let mut values = Vec::with_capacity(keys.len());
 +    for key in keys {
 +        let value = fd.vbank().get(key).ok_or("stale input/output value")?;
 +        let type_name = value.get_type().get_name();
-+        charge_text(text_bytes, type_name.len())?;
++        text.charge(type_name.len())?;
 +        values.push(ValueFact {
 +            id: value_id(key),
 +            space: value
@@ -1697,10 +1978,10 @@ index 00528cb5..b019a174 100644
  pub mod dtype;
  pub mod context;
 diff --git a/docs/spec/00-overview.md b/docs/spec/00-overview.md
-index ce499c4f..5a98b2c3 100644
+index ce499c4f..b3b53dcf 100644
 --- a/docs/spec/00-overview.md
 +++ b/docs/spec/00-overview.md
-@@ -3431,3 +3431,68 @@ Reserving it creates no analysis varnode and changes no physical mapping or
+@@ -3431,3 +3431,79 @@ Reserving it creates no analysis varnode and changes no physical mapping or
  emitted C. Ghidra receives temporary storage for the logical local, rather than
  a persistable ordinary stack-variable location; ordinary symbol storage and
  register-plus-stack parameter JOINs keep their existing encoding.
@@ -1747,7 +2028,18 @@ index ce499c4f..5a98b2c3 100644
 +and placeholders stay unknown. Input slots are not source parameter ordinals.
 +
 +The encoded writer attempts bounded facet alternatives without cloning their
-+contents. A full graph omits its redundant operation projection; if encoded
++contents. A raw schema-3 graph that fits keeps its existing format. Before
++dropping useful facts, an oversized graph can use a schema-4 envelope with
++`encoding: "gzip-base64"`, the exact `raw_bytes` and canonical padded `data`.
++Its decompressed JSON is the unchanged logical schema-3 graph. Raw encoding
++stops at 32 MiB; compressed output, base64 expansion and envelope overhead are
++bounded before allocation against the caller's encoded budget. All graphs in a
++document share that encoded budget. Optional compression does not analyze again.
++The independent full-graph row limits are 32,000 operations, 36,000 values,
++100,000 inputs, 4 MiB display/type text, 12,000 blocks and 50,000 CFG edges.
++They bound construction separately from wire size; exceeding them is unavailable,
++not a complete clipped graph. C and independent calls keep their own contracts.
++A full graph omits its redundant operation projection; if encoded
 +capacity makes that graph unavailable, the independent projection is restored.
 +A fitting graph has priority, then fitting calls, then the projection. Failed
 +facets retain named errors. If C itself cannot fit, output fails explicitly

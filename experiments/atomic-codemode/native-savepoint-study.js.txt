@@ -1,0 +1,50 @@
+const read = async (name,input) => {
+  const result=await rea[name](input);
+  if(!result.ok)throw new Error(JSON.stringify(result.error));
+  return result.data;
+};
+const complete=(page)=>{
+  if(page.next_offset!==null)throw new Error("Continue the selected fact page before drawing a complete conclusion");
+  return page;
+};
+const found=await read("functions",{query:"sqlite3VdbeExec",exact:true});
+complete(found);
+const formats=[];
+for(const query of ["cannot open savepoint - SQL statements in progress","cannot release savepoint - SQL statements in progress"]) {
+  const strings=await read("strings",{query});
+  complete(strings);
+  const addresses=[...new Set(strings.items.filter((s)=>s.value===query).map((s)=>s.address))];
+  if(addresses.length!==1)throw new Error("Ambiguous format: "+JSON.stringify(strings));
+  const references=await read("references",{addresses,direction:"incoming",fields:["fromFunction","instruction"]});
+  for(const result of references.results) {
+    if(!result.ok)throw new Error(JSON.stringify(result.error));
+    complete(result);
+  }
+  formats.push({query,address:addresses[0],string_evidence_id:strings.source.evidence_id,references});
+}
+const owners=formats.map((f)=>new Set(f.references.results.flatMap((r)=>r.ok?r.items.map((ref)=>ref.fromFunction?.address).filter(Boolean):[])));
+const candidates=found.items.filter((f)=>owners.every((set)=>set.has(f.address)));
+if(candidates.length!==1)throw new Error("Unresolved format-owning function: "+JSON.stringify({found,formats}));
+const capture=await read("snapshot",{entry:candidates[0].address});
+const snapshot=capture.snapshot;
+for(const format of formats) {
+  const producers=await read("operations",{snapshot,constant:format.address,fields:["opcode","output"]});
+  complete(producers);
+  const setup=producers.items.filter((op)=>op.opcode==="CPUI_PTRSUB");
+  if(setup.length!==1)throw new Error("Ambiguous format producer: "+JSON.stringify(producers));
+  const uses=await read("relations",{snapshot,kind:"uses",seeds:[setup[0].id]});
+  complete(uses);
+  Object.assign(format,{producer:setup[0],uses});
+}
+const controls=await read("relations",{snapshot,kind:"controllers",seeds:formats.map((f)=>f.producer.block)});
+complete(controls);
+const branchIDs=[...new Set(controls.items.flatMap((relation)=>relation.edge.condition_value?[relation.edge.condition_value]:[]))];
+const conditions=await read("values",{snapshot,ids:branchIDs});
+complete(conditions);
+const definitions=await read("operations",{snapshot,ids:conditions.items.map((v)=>v.definition).filter(Boolean),fields:["opcode","inputs","output","constants"]});
+complete(definitions);
+const values=await read("values",{snapshot,ids:[...new Set(definitions.items.flatMap((op)=>op.inputs.map((i)=>i.value_id).filter(Boolean)))]});
+complete(values);
+const evidence=await read("evidence",{evidence_id:capture.source.evidence_id,component:"recovered_ir",limit:128});
+if((await read("snapshot",{entry:candidates[0].address})).snapshot!==snapshot)throw new Error("Capture was not reused");
+return {capture,formats,controls,conditions,definitions,values,evidence};

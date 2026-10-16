@@ -1,0 +1,30 @@
+Investigate sqlite3VdbeExec in {{artifact_path}} statically, starting from these
+observed error formats:
+- cannot open savepoint - SQL statements in progress
+- cannot release savepoint - SQL statements in progress
+
+Locate both retained format sources and determine whether they reach the same
+recovered error call, including how their values merge. Names can identify
+multiple callable entries; establish the format-owning implementation from
+references or byte evidence before deep analysis. Reuse one retained VM capture
+and selected structured facts rather than fetching the whole C report or graph.
+
+For each format-setup block, find the nearest recovered conditional predecessor
+controlling entry to that setup. Report both successor edges, their identities,
+polarity and condition value/test. Trace each condition through its Boolean
+definition to constants and LOAD boundaries, preserving operand indexes and
+widths. Stop at those memory reads; do not guess source field names or arbitrary
+runtime contents. Distinct SSA values, storage offsets and computed contents are
+different facts.
+
+Verify the selected setup sites, shared machine CALL, conditional branch targets
+and relevant load/spill instructions with focused instruction windows. Explain
+the static local guards, including comparison signedness, without claiming these
+are all earlier path conditions or a demonstrated SQL trigger. Distinguish native
+edge/PHI identities from machine instruction addresses and transfers.
+
+Keep the answer focused, with real Evidence IDs and target digest. State the
+available recovered-graph scope and remaining alias, complete-machine-flow,
+nontermination and runtime-feasibility limits. If using derived controllers,
+retain their finite-recovered-exit-path semantics. Complete retained Evidence
+has a paged source/decoded-graph view; return only the facts needed here.

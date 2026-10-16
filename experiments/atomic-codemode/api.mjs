@@ -253,9 +253,10 @@ export const methods = {
     "await rea.code({snapshot:s,offset:100,limit:64})",
   ),
   evidence: definition(
-    "Read complete retained native source in UTF-16-code-unit pages by its evidence_id; no reanalysis. Available until close_binary.",
+    "Read complete retained native source in UTF-16-code-unit pages by evidence_id; no reanalysis. component:source preserves exact original wire JSON. component:recovered_ir reads the decoded graph source, including lossless compressed graphs; source hash remains the original capture and view has its own hash/byte count. This is source inspection, not a claim that malformed graph facts are valid. Available until close_binary.",
     {
       evidence_id: z.string().startsWith("ev_"),
+      component: z.enum(["source", "recovered_ir"]).default("source"),
       offset: page.offset,
       limit: z.number().int().min(1).max(16384).default(4096),
     },
