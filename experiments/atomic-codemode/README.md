@@ -66,7 +66,7 @@ and produced a 40,183-byte response. Oversized errors now return explicit
 ordinary smaller errors remain intact. `verify-executor.mjs` confirms real MCP
 delivery and continued access to source Evidence collected before the exception.
 It measures response bytes, not model tokens or an analysis speedup. Targeted JS
-tests now total 42, alongside the separate real-provider and native-writer checks.
+tests at this stage totaled 42, alongside the separate real-provider and native-writer checks.
 
 The diagnostic SSA format still has incomplete CFG and phi predecessor coverage.
 The opt-in [native recovered IR experiment](native-engine.md) adds full recovered
@@ -165,4 +165,7 @@ Recovered calls and their boundary values now survive full-graph capacity
 failure. The real VM capture preserves 416 call operations and 1,294 boundary
 values while its graph remains unavailable. Values clearly state their partial
 scope; definition IDs do not imply readable defining operations. See the
-[boundary question and oracle](boundary-oracle.md) for the next pinned model task.
+[boundary question and oracle](boundary-oracle.md) and its completed real-model
+pair in [trials.md](trials.md). Both answers pass, using one VM capture each.
+Code Mode's single-sample latency is lower, with mixed context costs; broader
+efficiency remains unproven. The current focused JS suite passes 47 tests.

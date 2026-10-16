@@ -5,6 +5,15 @@ cost is comparable after reviewing the completed answer and its evidence. A
 successful tool call, fewer response bytes or more graph records is insufficient.
 No claim of complete reverse-engineering capability follows from these tasks.
 
+The [boundary-facet question/oracle](boundary-oracle.md) now also has a completed
+real-model pair. Both answers correctly use calls and boundary values despite
+full-graph capacity failure, reuse one VM analysis and preserve definition/use
+and runtime uncertainty. Code Mode is faster in this sample and uses slightly
+less cumulative input, while uncached input and maximum response context are
+higher. See the full costs and independent source checks in [trials.md](trials.md).
+This verifies the narrower recovered-call capability; it does not supply selected
+definition bodies when the full graph is unavailable.
+
 The atomic direct and Code Mode lanes share the same method registry, provider
 owner, selectors, failures and retained sources. The traditional lane selects
 relevant production tools, including the discovery route advertised by its

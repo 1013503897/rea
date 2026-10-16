@@ -632,3 +632,68 @@ including 5,009 reasoning. Summed model wall time is 869.125 seconds. This
 research-attempt cost is separate from the successful paired tables and excludes
 native builds, scripted verifiers and development conversation. Failed/partial
 attempts are retained rather than hidden in a selected success result.
+
+## Calls beyond graph capacity: real-model pair
+
+The question and acceptance oracle are committed before either launch in
+`f9f9dc209`. Both lanes use its fourteen shared fact methods and the preserved
+`e7d3f0cc...` embedded-spec engine. Direct runs first this time. Both request
+`gpt-6.1-sol/high`, identical common envelope/stopping guidance, fresh leases and
+native caches, one CPU and the same 4 GiB hard / 3 GiB early-stop bounds. OS and
+remote prompt caches are uncontrolled. This question requires one VM analysis;
+the preceding shallow-reference task does not, so their elapsed times are not
+a before/after adapter comparison.
+
+| Measurement                            | Atomic direct boundary v1 | Code Mode boundary v1 |
+| -------------------------------------- | ------------------------: | --------------------: |
+| MCP requests / transport failures      |                    18 / 0 |                 9 / 0 |
+| Observed model responses               |                        13 |                    12 |
+| Client exec / wait calls               |                    10 / 2 |                 9 / 2 |
+| Model wall seconds                     |                   146.865 |               127.791 |
+| Family wall seconds                    |                   148.137 |               128.304 |
+| Family CPU seconds                     |                    44.640 |                43.600 |
+| Family memory peak MiB                 |                     869.2 |                 865.0 |
+| Cumulative input tokens                |                   332,318 |               321,922 |
+| Cached input tokens                    |                   304,768 |               294,144 |
+| Uncached input tokens                  |                    27,550 |                27,778 |
+| Output tokens, including reasoning     |                     3,927 |                 3,188 |
+| Reasoning tokens, included in output   |                       870 |                   439 |
+| Largest observed response input tokens |                    34,549 |                35,170 |
+
+Both complete answers satisfy the fixed oracle. They select implementation entry
+`0xea6d0`, distinguish available C/calls/boundary values from the unavailable
+graph, aggregate 395 known direct and 21 unresolved indirect recovered calls,
+and identify the two selected targets, distinct fspec annotations, argument
+slots/passing storage and shared input value `v30000004b`. Focused machine
+windows verify the selected CALL bytes and essential argument setup. Both state
+that retained definition IDs do not provide operation bodies, full def/use,
+aliases or runtime coverage. The Code Mode answer additionally inspects the PLT
+stub; independent GNU disassembly verifies its `JMP [0x15a2f8]` at `0x296c0`.
+
+Each lane performs exactly one VM decompilation and reuses that source for its
+call/value reads. Direct composes four count pages and a selected call read;
+Code Mode retains the selected rows while aggregating its four pages locally.
+All six/seven captured sources respectively verify their hashes, target and
+engine identities; all three/four cited IDs exist. The full retained VM function
+records are identical across lanes. Every recovered direct pair belongs to the
+independent 396-pair machine oracle, with only `0xf2493 -> 0x29370` absent; all
+21 indirect origins match. This corroborates the stated coverage, not complete
+machine/IR or runtime equivalence.
+
+Runtime/engine/target fingerprints remain unchanged; per-response usage totals
+match the runner; profile/process cleanup and OOM-zero receipts verify. Code
+Mode uses about 3.1% less cumulative input and 13.0% less model wall time in this
+single sample, but slightly more uncached input and a larger maximum response
+context. Memory peaks are close. Both clients have JavaScript dispatch; halving
+MCP requests saves only one model response. This is a useful capability result
+with mixed context costs, not a repeatable causal efficiency claim or provider
+parity result.
+
+Ledger: `.cache/atomic-codemode/ledger-boundary-round-f9f9dc2.json`; full-answer
+and source review: `boundary-answer-review-v1.json` beside it. Pair totals are
+654,240 input tokens (598,912 cached, 55,328 uncached), 7,115 output tokens
+(1,309 included reasoning) and 274.656 model wall seconds. These totals include
+discovery and extra reads. Builds, scripted verification, development/parent
+conversation, resolved server model build, remote CPU/memory and monetary cost
+remain unmeasured by this pair. Lease/native analysis is cold; subsequent reads
+are warm within the same lease, not a cross-session result-cache benchmark.

@@ -386,3 +386,10 @@ in default lenient mode, lint and changed-file formatting pass, and the patch
 applies forward to the pinned upstream revision and reverses from the clone.
 Full repository typechecking retains its previously recorded resource limitation.
 The [boundary question/oracle](boundary-oracle.md) are fixed before model runs.
+
+The subsequent real-model pair passes that oracle in both calling modes. Each
+uses one VM analysis and the same retained function record; neither invents a
+complete graph from the available call-boundary values. Source digests, target
+and preserved-engine pins, selected machine checks, cleanup and OOM-zero receipts
+verify. See [whole-task costs](trials.md): the capability survives real model use,
+but a single mixed-context-cost pair does not establish general efficiency.
