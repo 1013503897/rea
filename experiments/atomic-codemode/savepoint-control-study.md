@@ -81,9 +81,84 @@ OS/provider-service caches and remote compute costs are uncontrolled/unmeasured.
 
 ## Discovery-controlled repeat
 
-Pending. The intended repeat keeps the same question, oracle, native engine and
-all atomic methods, reverses lane order, and uses the runner's existing
+Executed at `7a7c4a6d7`, Code Mode first, then direct. The repeat keeps the same
+question, oracle, native engine and all atomic methods, and uses the runner's existing
 `--enabled-tools` / `--guide-enabled-tools` options with server name `rea`.
-Each manifest lists that lane's complete catalog, so no analysis tool is removed.
+Each manifest lists that lane's complete catalog: seventeen direct tools or four
+Code Mode tools. No analysis method is removed. Captured first client calls
+select these exact function names; neither repeats the broad metadata spill.
 This changes discovery guidance and namespace together for both lanes; it is a
 separate stratum from the natural-discovery pair, not a retroactive replacement.
+
+Both complete answers again pass the same oracle: correct format ownership,
+PHI/call and native edges, signed-positive versus equality guards, Boolean/load
+widths and operand indexes, independent selected machine bytes, real provenance
+and explicit static/alias/runtime limits. Both use one retained VM capture and
+close the lease. Direct cites ten observed source IDs; Code Mode cites nine,
+combining some instruction windows. All recovered graph and ordinary function
+fields equal the earlier full golden in both lanes. Neither fetches a whole C
+report or graph. Neither uses derived controllers; both keep local guards
+separate from all earlier conditions and runtime feasibility.
+
+| Whole-task measure             | Direct atomic | Code Mode |
+| ------------------------------ | ------------: | --------: |
+| Cumulative input tokens        |       538,013 |   608,622 |
+| Included cached input          |       457,088 |   530,688 |
+| Uncached input                 |        80,925 |    77,934 |
+| Output tokens                  |         5,150 |     5,989 |
+| Included reasoning output      |           697 |     1,462 |
+| Observed model responses       |            19 |        25 |
+| MCP attempts                   |            24 |        13 |
+| Successful atomic fact reads   |            20 |        18 |
+| Model wall seconds             |       187.544 |   266.141 |
+| Family wall seconds            |       188.086 |   266.650 |
+| Family CPU seconds             |        52.113 |   102.739 |
+| Kernel process-family peak MiB |         859.1 |     883.1 |
+| VM source-capture wall seconds |        37.026 |   107.804 |
+
+There are no failed MCP attempts, recorded inner-API failures or resource aborts.
+Per-response usage sums agree; OOM is zero, cleanup is verified, and target,
+engine and runtime fingerprints remain unchanged. Full records use suffix `-v2`
+under the same local artifact directory. Request/model settings and resource
+bounds are unchanged from the first pair.
+
+Code Mode again has slightly lower uncached input (3.7%) and fewer MCP requests,
+but more cumulative input, output, model responses, wall time and family CPU in
+this sample. It has twelve client waits versus three for direct. Discovery
+guidance alone has not established an overall improvement across strata.
+
+The VM capture is a substantial confound: its 107.804 seconds differs from
+37.026 in direct and 38.013/38.871 in the first pair. Source elapsed time includes
+command supervision and retention; it is not an isolated native drive interval.
+No per-command CPU or phase diagnostic was captured during these model trials.
+The additional instruction-window API call overlapped the pending Code Mode
+snapshot; its own wall time also includes waiting beyond the retained native
+source times. Whether concurrency, host contention or another lower boundary
+caused the variation is unresolved. CPU affinity/quota do not give an exclusive
+core. Do not subtract these intervals from whole-task time to manufacture a
+Code Mode speedup or attribute the difference to dispatch alone.
+
+Both lanes actually use the client's `exec`/`wait` JavaScript surface, despite
+the recorded client Code Mode feature flags being false. Direct atomic already
+composes MCP calls through that client executor. These results compare a server
+Code Mode boundary against directly called atomic MCP tools in that environment;
+they do not compare JavaScript composition against its absence. Tool counts and
+configured feature flags cannot establish the client's actual available surface.
+
+## Remaining questions
+
+Four real runs establish this scoped control/data-flow task on the full recovered
+graph, without a stable overall efficiency win. There is no traditional-provider
+cell for this graph-identity question and no general complex-software superiority
+claim. Whole-task cumulative input across all four runs is 2,272,374 tokens,
+including 2,017,408 cached and 254,966 uncached; output is 23,021 including 5,005
+reasoning tokens. Total model wall is 883.590 seconds. These totals retain the
+initial failed request and discovery costs, not a pooled treatment estimate.
+
+The retained graph also exposes the next coverage question: `0xea801:fe` is one
+`CPUI_BRANCHIND` in block 8 with 149 recovered successors. Current edges expose
+identities/destinations but no case values. The native jump-table owner should
+be examined before exporting case-to-edge/target relations; a successor ordinal
+is not a case value. This is a fact-export limitation, not evidence that Kuna
+itself cannot recover the labels. The source-capture/concurrent-read cost
+variation also needs a bounded, matched diagnostic before further speed claims.
