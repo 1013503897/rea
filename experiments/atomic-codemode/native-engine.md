@@ -425,3 +425,33 @@ results remain mixed. [trials.md](trials.md) records cumulative/cached/uncached
 tokens, model responses, elapsed time, CPU and process-family memory, including
 the slower Code Mode result. No native engine or analysis-speed improvement is
 claimed for this shared owner metadata change.
+
+## Tagged cleanup ownership regression
+
+Source inspection finds that the experimental owner awaits but ignores
+`KunaTargetCommands.close()`'s tagged `Result`. On error it would clear its state
+and let `AtomicSession` drop the owner while claiming a successful close. The
+SDK verifier reproduces this before the fix: an injected `ProviderCleanupError`
+does not reject close. Its fallback cleanup still removes the real owned state;
+the original failing result is retained as `cleanup-before.json`.
+
+The owning boundary now uses the existing `requireResult` projection before
+closing its cache root or clearing state. The existing session queue therefore
+retains the owner on failure. Both close and target replacement report
+`cleanup_incomplete`, preserve the staged file identity and original lease, and
+succeed on retry; the file is then absent. MCP's open/close error adapter now
+preserves context and resource details rather than dropping that evidence. The
+CLI already propagates the thrown error as a failed command. No alternate
+cleanup owner or downstream retry workaround is added.
+
+`verify-cleanup.mjs` runs against real provider reads and resources, injecting
+one tagged failure per close/replacement case. `verify-cleanup-mcp.mjs` injects
+one explicit test-only failure in an isolated server, then verifies public
+Code Mode and direct error metadata and successful retry. These are controlled
+boundary failures, not a claim that the real engine failed to stop. The SDK
+check takes 1.730 family wall / 1.567 CPU seconds, 130.4 MiB kernel peak; MCP Code
+Mode takes 1.931 / 1.639 seconds, 200.0 MiB; direct takes 1.730 / 1.489 seconds,
+192.8 MiB. All verify process cleanup and OOM 0. The original failing verifier
+takes 1.226 / 0.985 seconds, 122.7 MiB and also verifies fallback cleanup/OOM 0.
+The 49 focused JS tests, lint and formatting pass. This lifecycle-only change
+follows the recorded model pairs; no new model token or speed claim is made.

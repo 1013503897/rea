@@ -469,7 +469,8 @@ export class KunaFactOwner {
   }
   async close() {
     this.#lifetime.abort();
-    await this.#commands.close();
+    // A failed Result retains native cleanup owners; leave this lease retryable.
+    requireResult(await this.#commands.close());
     await this.#root.close();
     this.#loaded.clear();
     this.#sources.clear();

@@ -40,9 +40,11 @@ const createServer = () => {
         } catch (error) {
           return encode({
             ok: false,
+            context: session.context,
             error: {
               code: error.code ?? "analysis_failed",
               message: error.message,
+              details: error.details ?? {},
             },
           });
         }

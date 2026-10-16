@@ -181,3 +181,13 @@ that paging. In the new sample direct is faster and lower on cumulative/uncached
 input than Code Mode, reversing the preceding latency ordering. Whole-task
 effects remain mixed; see [the complete results](trials.md). This aggregate is a
 shared fact-layer improvement, available to either adapter.
+
+The shared owner also checks the native cleanup `Result` before releasing its
+lease or clearing retained state. A tagged cleanup failure now stays retryable;
+MCP errors retain the lease context and reported resources. The real SDK
+failure-injection verifier first reproduces the old false success, then verifies
+both close and target replacement retain the staged file/owner until a successful
+retry. Both public MCP adapters preserve that error and retry successfully.
+These use an injected tagged failure, not an observed engine cleanup incident;
+native reads and subsequent cleanup use the real provider. See the recorded
+scope and resource receipts in [native-engine.md](native-engine.md).
