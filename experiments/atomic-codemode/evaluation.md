@@ -33,6 +33,17 @@ All resource trials are serial with one CPU, 4 GiB hard memory, early stop at
 file cache. A single stochastic trial is an observation, not a reliable ranking;
 API-only replay cannot replace real model trials or establish their token cost.
 
+The CLI transcripts establish that all lanes have a client JavaScript `exec`
+surface, even with `code_mode=false` requested. Count actual model responses,
+client dispatch/wait calls and MCP requests separately. This comparison is not
+an ablation against a client incapable of code composition. The optional
+`agent-trial.py --normalize-mcp-guidance` adds identical envelope/stopping guidance
+to any lane: select `structuredContent` or parsed text once, avoid printing both
+encodings, stop when supported and close the target. It is recorded explicitly;
+the initial SQLite and VM rounds do not have that later guidance. Their native
+analysis commands/profiles also differ (selected functions versus production
+project and facet workflows); engine equality alone does not isolate Code Mode.
+
 The pinned SQLite artifact is `/usr/lib/x86_64-linux-gnu/libsqlite3.so.0.8.6`,
 SHA-256 `2e6eef9a727f081f0d453b4e5e6cbd8b9ef8b6f86cbf7681cbad444d3b0b55c8`.
 The malformed-MATCH oracle and earlier unequal-depth results are retained in

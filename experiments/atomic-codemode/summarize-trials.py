@@ -6,6 +6,47 @@ import json
 from pathlib import Path
 
 
+def client_observations(directory, declared_usage):
+    path = directory / 'codex-tool-context.jsonl'
+    receipt_path = directory / 'context-receipt.json'
+    if not path.exists() or not receipt_path.exists():
+        return {'availability': 'unavailable', 'model_responses': None,
+                'tool_calls': None, 'per_response_usage_matches_summary': None}
+    receipt = json.loads(receipt_path.read_text())
+    responses, calls = {}, {}
+    for line in path.read_text().splitlines():
+        event = json.loads(line)
+        payload = event['payload']
+        if event['type'] == 'token_usage_record':
+            key, value = payload['response_id'], payload['usage']
+            if key in responses and responses[key] != value:
+                raise ValueError('Conflicting usage for the same model response')
+            responses[key] = value
+        elif event['type'] == 'response_item' and payload['type'] in (
+                'custom_tool_call', 'function_call'):
+            key = payload['call_id']
+            if key in calls and calls[key] != payload:
+                raise ValueError('Conflicting records for the same client call')
+            calls[key] = payload
+    totals = collections.Counter()
+    for usage in responses.values():
+        totals.update(usage)
+    complete = receipt['status'] == 'captured'
+    matches = (all(totals[key] == value for key, value in declared_usage.items())
+               if complete and responses else None)
+    if matches is False:
+        raise ValueError('Per-response usage differs from the runner summary')
+    return {
+        'availability': receipt['status'],
+        'model_responses': len(responses) if responses else None,
+        'tool_calls': dict(collections.Counter(value['name'] for value in calls.values())),
+        'per_response_usage_matches_summary': matches,
+        'scope': 'Observed unique model responses and client dispatch/wait calls. '
+                 'Configured Code Mode feature flags do not establish the actual '
+                 'client tool surface. MCP requests are not model response rounds.',
+    }
+
+
 def summarize(directory):
     summary = json.loads((directory / 'summary.json').read_text())
     resource_records = [json.loads(line) for line in directory.with_suffix('.log').read_text().splitlines()
@@ -19,6 +60,7 @@ def summarize(directory):
     usage = collections.Counter()
     for turn in summary['usage']:
         usage.update(turn)
+    client = client_observations(directory, usage)
     calls = summary['completed_mcp_calls']  # This runner key also retains failed attempts.
     statuses = collections.Counter(call['status'] for call in calls)
     methods = collections.Counter()
@@ -44,7 +86,9 @@ def summarize(directory):
         'requested_model': summary['requested_model'],
         'reasoning': summary['reasoning'],
         'usage': dict(usage),
+        'client_observations': client,
         'outer_attempts': len(calls),
+        'outer_attempt_scope': 'MCP requests, not model responses or client executor calls',
         'outer_statuses': dict(statuses),
         'outer_failures': [{k: call[k] for k in ('tool', 'status', 'error')}
                            for call in calls if call['status'] != 'completed'],

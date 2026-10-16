@@ -72,6 +72,8 @@ def main():
                         help='Retain owned tool/usage items; excludes account/ambient state')
     parser.add_argument('--guide-enabled-tools', action='store_true',
                         help='Opt-in exact-name discovery guidance for selected REA tools')
+    parser.add_argument('--normalize-mcp-guidance', action='store_true',
+                        help='Opt-in common envelope/stopping guidance, identical across protocol lanes')
     args = parser.parse_args()
     if args.guide_enabled_tools and args.enabled_tools is None:
         parser.error('--guide-enabled-tools requires --enabled-tools')
@@ -190,6 +192,13 @@ def main():
             'possible and select the requested normalized_result fields before returning '
             'intermediate output to model context. Keep real Evidence IDs and limitations.'
         )
+    if args.normalize_mcp_guidance:
+        instruction += (
+            ' MCP calls return transport envelopes: prefer structuredContent when present; '
+            'otherwise parse the text content JSON. Do not print both duplicate encodings. '
+            'Apply the same rule to every tool. Stop once the requested facts are supported, '
+            'state missing coverage explicitly, and close the binary when finished.'
+        )
     if args.guide_enabled_tools:
         instruction += (
             ' Configured REA tool function names for this trial: '
@@ -252,6 +261,7 @@ def main():
             'mode': args.mode, 'model': args.model, 'reasoning': args.reasoning,
             'capture_tool_context': args.capture_tool_context,
             'guide_enabled_tools': args.guide_enabled_tools,
+            'normalize_mcp_guidance': args.normalize_mcp_guidance,
             'driver_commit': subprocess.check_output(
                 ['git', 'rev-parse', 'HEAD'], cwd=driver_repository, text=True).strip(),
             'runtime_revision': args.revision,

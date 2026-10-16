@@ -72,6 +72,13 @@ through Code Mode, but initially exposes an IR-to-machine-path error. The revise
 trial correctly explains that machine path with lower observed task costs;
 broader claims still require more than this single seeded task.
 
+The large SQLite VM diagnostic task also completes when its native graph exceeds
+capacity. Atomic direct beats Code Mode on cumulative input and wall time in
+that sample, and a traditional reused-project run is fastest. The actual CLI
+client already exposes JavaScript dispatch in every lane, regardless of requested
+feature flags. MCP request counts therefore do not establish fewer model rounds;
+the ledger now records actual model responses and client dispatch/wait calls.
+
 `instructions` reads selected machine byte/decode windows through the same
 owner. Recovered operations use `origin_address` and blocks `origin_start`;
 these locations cannot be substituted for machine branch destinations. The

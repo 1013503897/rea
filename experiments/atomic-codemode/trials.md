@@ -4,8 +4,11 @@ The first trial used the committed `5aa1c5c64` runtime, requested model alias
 `gpt-6.1-sol` with high reasoning, Codex CLI 0.161.0 and the zlib question in this
 directory. The resolved server-side model build is not inferred. Its actual
 registered MCP server name was `rea-codemode`, with only the four Code Mode tools.
-Shell/file tools, web search, delegation and client-side Code Mode were disabled;
-the actual trace establishes server-side `execute_javascript` use.
+The runner requests disabled shell/file tools, web search, delegation and client
+Code Mode feature flags. Actual transcripts nevertheless contain the client's
+`exec` dispatch surface in every lane. The earlier inference that these flags
+established an executor-free client was too strong; it is corrected here. The
+actual trace separately establishes server-side `execute_javascript` use.
 
 The model independently found the string and xref, requested the owning function's
 snapshot, used operations/relations/slices and inspected reconstructed C. Its
@@ -99,7 +102,7 @@ task comparison. It does not prove global runtime reachability or correctness
 on arbitrary binaries. All target digests remained unchanged, temporary model
 profiles were removed, and observed payload cleanup succeeded.
 
-Code Mode reduces direct atomic round trips on this trial, but traditional tools
+Code Mode reduces direct atomic MCP requests on this trial, but traditional tools
 win both cumulative input tokens and wall time. The prototype still makes the
 model assemble incomplete CFG/phi/value relationships and repeatedly inspect
 operations or C. Fixing the arbitrary C page cap reduced internal C reads from
@@ -253,6 +256,8 @@ retroactively applied to earlier trials.
 | Measurement | Code Mode v2 | Atomic direct v1 | Traditional cold v2 | Traditional reused-cache v1 |
 | --- | ---: | ---: | ---: | ---: |
 | MCP attempts / failures | 12 / 0 | 24 / 0 | 14 / 2 | 11 / 1 |
+| Unique model responses | 14 | 14 | 33 | 13 |
+| Client `exec` / `wait` calls | 13 / 0 | 13 / 0 | 15 / 17 | 12 / 0 |
 | Internal Code Mode API reads | 15 | — | — | — |
 | Cumulative input tokens | 454,914 | 464,979 | 1,093,061 | 432,446 |
 | Included cached input | 414,080 | 371,712 | 1,036,928 | 377,600 |
@@ -308,3 +313,63 @@ string inventory, unknown runtime successors and memory aliases, and bounded IR
 extraction. In particular, real `sqlite3VdbeExec` exceeds the graph limit while
 retaining 3,654 lines of C. A local successful diagnostic task does not prove
 full Kuna/Ghidra/IDA parity or arbitrary complex-function coverage.
+
+The separate large-VM diagnostic task pins `5aa78c873`, with question and
+independent instruction anchors committed before running the models in
+[evaluation.md](evaluation.md). It uses the corrected traditional selection and
+guidance, the same patched engine and model settings, and serial bounded trials.
+The fresh traditional project cache is reused only for its explicitly labeled
+fourth run. None of these trials uses the later opt-in envelope/stopping guidance.
+
+| Measurement | Code Mode VM v1 | Atomic direct VM v1 | Traditional cold VM v1 | Traditional reused-cache VM v1 |
+| --- | ---: | ---: | ---: | ---: |
+| MCP attempts / failures | 14 / 0 | 20 / 0 | 10 / 2 | 14 / 5 |
+| Unique model responses | 18 | 17 | 27 | 18 |
+| Client `exec` / `wait` calls | 15 / 2 | 13 / 3 | 12 / 14 | 17 / 0 |
+| Cumulative input tokens | 729,420 | 594,606 | 698,971 | 617,340 |
+| Included cached input | 664,960 | 526,720 | 625,152 | 543,616 |
+| Uncached input | 64,460 | 67,886 | 73,819 | 73,724 |
+| Output / included reasoning | 4,474 / 975 | 4,287 / 1,045 | 4,565 / 999 | 4,446 / 1,290 |
+| Model wall seconds | 243.082 | 218.541 | 342.966 | 185.580 |
+| Family wall seconds | 244.298 | 219.062 | 343.367 | 186.321 |
+| Family CPU seconds | 89.693 | 79.343 | 207.596 | 28.162 |
+| Kernel family peak MiB | 871.2 | 858.9 | 1,408.6 | 783.2 |
+
+All four answers correctly distinguish selector zero plus signed positive
+`db+0xd8` for open, found name plus selector one plus the same positive counter
+for release, the shared `0xf238b` emission / local status five, and missing-name
+precedence with status one. They preserve offsets, real source references and
+static-only limitations. None falsely promotes local status five into an
+unconditional final return. Both atomic answers explicitly name the VM's
+unavailable graph facet while using its valid C and selected machine windows.
+The cold traditional answer omits the optional formatter implementation detail;
+the other three include it. The fixed question concerns local message selection
+and joins, so that extra detail is not required for its completion.
+
+The traditional failures are ambiguous procedure names (and consequent
+name-selected assembly/pseudocode failures in the reused-cache run), not missing
+discovery tools or client approval rejections. Costs are retained. The final
+traditional model does not explicitly call `close_binary`; teardown still
+verifies payload/profile cleanup. Both target/runtime identities remain unchanged
+in all four runs, and OOM kills are zero. These are four single stochastic
+observations, not confidence intervals.
+
+This larger local task is a useful counterexample to an automatic Code Mode
+win: atomic direct has fewer cumulative input tokens and lower wall time than
+Code Mode despite making more MCP requests; traditional with a reused project
+is fastest. Uncached input is closer across the lanes. Source review shows that
+the models choose different investigation sequences and optional helper depth.
+The prototype can complete this task through an unavailable IR facet; a claim
+of general complex-software superiority is still unsupported.
+
+Actual client dispatch matters to interpreting **all** these tables. The direct
+atomic SQLite run performs 24 MCP requests inside 13 client `exec` calls; Code
+Mode performs 12 MCP requests inside the same 13 client `exec` calls. Both have
+14 observed model responses. Thus halving MCP requests does not halve model
+round trips here. The traditional client can also combine calls and filter
+results in JavaScript. These lanes compare server-side Code Mode with direct MCP
+surfaces under that same capable client, not JavaScript versus a client incapable
+of composition. `summarize-trials.py` now counts unique response/call identities
+from actual retained events and verifies that per-response usage sums to the
+runner's declared totals. Missing captures remain unknown. Client waiting during
+long analysis is part of completed-task cost, not additional analysis facts.
