@@ -6,6 +6,8 @@ the corresponding recovered function input. Explain which context field the help
 updates for opening/closing parentheses, where the caller checks that same field,
 and how the successful and malformed paths differ. Verify the essential pointer,
 field and control-transfer claims against selected machine instructions.
+In the final answer, explicitly distinguish the wrapper's routing for helper
+return codes 0, 1 and 18, including the malformed and depth-limit diagnostics.
 
 Keep the answer focused on this cross-function state flow. Give function and
 instruction addresses and real Evidence references. Distinguish recovered call

@@ -54,3 +54,11 @@ added. Older sources used pretty JSON; their smaller/newer encoded sizes must
 not be attributed to the call exporter. The earlier compact-writer change is a
 separate experiment. Unsupported old schema graphs remain unavailable with valid
 C retained, rather than acquiring guessed call records.
+
+The first paired question runs at `01e5c5955` both explain the primary state flow
+correctly but omit the oracle's separate return-1/return-18 distinctions. Because
+the initial question did not explicitly enumerate those codes, the next round
+clarifies that requirement in `sqlite-call-question.txt` before either lane
+starts. The required facts and independent oracle stay unchanged. Earlier
+questions and costs remain pinned to their original commits; neither incomplete
+sample is counted as a full-oracle success.

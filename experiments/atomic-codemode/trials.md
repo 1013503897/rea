@@ -467,3 +467,51 @@ family CPU 3.619 seconds and memory peak 436.6 MiB. Cleanup is verified, OOM 0.
 The failed sample and raw receipts remain under `.cache/atomic-codemode/` and
 are excluded from correctness-equal paired costs. Subsequent attempts use an
 independent preserved executable and explicit pre/post engine validation.
+
+## Cross-function call task: initial question pair
+
+`sqlite-call-codemode-v2` and `sqlite-call-atomic-direct-v2` both run at
+`01e5c5955`, with engine `64c6b3f...` from an independent preserved executable.
+The fourteen fact methods, native profile, artifact, requested model/effort and
+common guidance match; Code Mode runs first. Runtime, engine and target bytes
+remain unchanged, per-response usage matches runner totals, cleanup is verified
+and OOM kills are zero. Both fresh target leases use uncontrolled warm OS caches.
+
+| Measurement                          | Code Mode call v2 | Atomic direct call v2 |
+| ------------------------------------ | ----------------: | --------------------: |
+| MCP requests / transport failures    |            10 / 0 |                27 / 0 |
+| Observed model responses             |                13 |                    16 |
+| Client exec calls                    |                12 |                    15 |
+| Model wall seconds                   |           168.622 |               156.033 |
+| Family wall seconds                  |           169.190 |               156.570 |
+| Family CPU seconds                   |            16.096 |                15.854 |
+| Family memory peak MiB               |             514.0 |                 608.1 |
+| Cumulative input tokens              |           454,199 |               564,158 |
+| Cached input tokens                  |           377,216 |               497,408 |
+| Uncached input tokens                |            76,983 |                66,750 |
+| Output tokens, including reasoning   |             4,987 |                 4,838 |
+| Reasoning tokens, included in output |             1,301 |                   935 |
+
+Both answers correctly connect call `0x65211 -> 0x64060`, caller SSA
+`v100000118`, passing storage `register:0x38/8`, and callee input `v300000042`.
+They verify caller LEA, helper pointer preservation, character dispatch,
+field increment/decrement and the caller's post-success field check against
+selected machine bytes. They preserve storage-match/alias and runtime
+limitations. Code Mode actually composes `calls`, `values`, operations and machine
+reads; direct uses the same primitives, including a bounded slice. All ten/nine
+cited Evidence sources respectively have matching retained-source SHA-256 and
+artifact identity.
+
+Neither final answer includes the original oracle's required separate routing
+for helper return 1 and 18. The question only explicitly asked to distinguish
+successful/malformed paths; the oracle was stricter than that wording. Do not
+retroactively delete this requirement or mark either sample a full-oracle pass.
+The task wording is now clarified before the next paired round, retaining the
+same oracle and adding no solution addresses. The table is an observed partial
+coverage result, not a completed-task efficiency claim. Its mixed costs also
+do not show a general Code Mode advantage: cumulative input is lower while
+uncached input and wall time are higher in this sample.
+
+Raw ledger: `.cache/atomic-codemode/ledger-call-round-01e5c59.json`. Each cell is
+one stochastic sample. The complete client already provides JavaScript dispatch
+in both lanes. No new traditional-provider cell is being claimed.
