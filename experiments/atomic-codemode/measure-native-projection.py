@@ -1,6 +1,7 @@
 """Size diagnostic SQLite SSA projections; does not implement a provider API."""
 
 import argparse
+from collections import deque
 import hashlib
 import json
 from pathlib import Path
@@ -18,6 +19,66 @@ COLUMNS = {
 
 def encoded(value):
     return json.dumps(value, ensure_ascii=True, separators=(',', ':')).encode()
+
+
+def bounded_source(path, budget):
+    with path.open('rb') as source:
+        raw = source.read(budget + 1)
+    assert len(raw) <= budget, 'Use a bounded native capture'
+    return raw
+
+
+def verify_capture(golden, path):
+    raw = bounded_source(path, 8 * 1024 * 1024)
+    document = json.loads(raw)
+    assert len(document['functions']) == 1
+    candidate = document['functions'][0]
+    ordinary = lambda fn: {key: row for key, row in fn.items()
+                           if not key.startswith('atomic_')}
+    assert ordinary(candidate) == ordinary(golden)
+    assert candidate['atomic_calls'] == golden['atomic_calls']
+    projection = candidate['atomic_projection']
+    assert projection['schema_version'] == 1
+    assert projection['coverage']['operation_budget'] == 4096
+    operations = {row['id']: row for row in golden['atomic_facts']['operations']}
+    values = {row['id']: row for row in golden['atomic_facts']['values']}
+    assert all(row == operations[row['id']] for row in projection['operations'])
+    assert all(row == values[row['id']] for row in projection['values'])
+    roots = [row['id'] for row in golden['atomic_calls']['items']]
+    assert projection['roots'] == roots
+    queue, queued, expected = deque(roots), set(roots), []
+    while queue and len(expected) < 4096:
+        key = queue.popleft()
+        if key not in operations:
+            continue
+        expected.append(key)
+        for operand in operations[key]['inputs']:
+            value = values.get(operand['value_id'])
+            definition = value['definition'] if value else None
+            if definition is not None and definition not in queued:
+                queued.add(definition)
+                queue.append(definition)
+    actual = [row['id'] for row in projection['operations']]
+    assert actual == expected
+    referenced = {row['output'] for row in projection['operations'] if row['output'] is not None} | {
+        i['value_id'] for row in projection['operations'] for i in row['inputs']
+        if i['value_id'] is not None}
+    assert len(projection['values']) == len(referenced)
+    assert {row['id'] for row in projection['values']} == referenced
+    missing = {row['definition'] for row in projection['values']
+               if row['definition'] is not None} - set(actual)
+    expected_frontier = {key: 'operation-budget' if key in operations
+                         else 'outside-recovered-membership' for key in missing}
+    actual_frontier = {row['definition']: row['reason']
+                       for row in projection['coverage']['frontier']}
+    assert len(actual_frontier) == len(projection['coverage']['frontier'])
+    assert actual_frontier == expected_frontier
+    return {'scope': 'Retained-source comparison, not independent machine/runtime equivalence',
+            'source': str(path), 'source_sha256': hashlib.sha256(raw).hexdigest(),
+            'ordinary_record_and_call_facet_equal': True,
+            'all_operation_and_value_records_equal': True,
+            'breadth_first_budget_and_frontier_match': True,
+            'operations': len(actual), 'values': len(referenced), 'frontier': len(missing)}
 
 
 def pack(table, rows):
@@ -65,11 +126,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('native_json', type=Path)
     parser.add_argument('report_json', type=Path)
+    parser.add_argument('--verify-capture', type=Path,
+                        help='Also compare a public projection capture with this full diagnostic')
     args = parser.parse_args()
     budget = 32 * 1024 * 1024
-    with args.native_json.open('rb') as source:
-        raw = source.read(budget + 1)
-    assert len(raw) <= budget, 'Use a bounded diagnostic capture'
+    raw = bounded_source(args.native_json, budget)
     document = json.loads(raw)
     assert len(document['functions']) == 1
     function = document['functions'][0]
@@ -113,6 +174,8 @@ def main():
         'all_call_projections': [projection(operations, values, [r['id'] for r in calls], depth, 4096)
                                  for depth in range(1, 5)],
     }
+    if args.verify_capture:
+        report['verified_projection'] = verify_capture(function, args.verify_capture)
     with args.report_json.open('x') as output:
         json.dump(report, output, indent=2)
         output.write('\n')

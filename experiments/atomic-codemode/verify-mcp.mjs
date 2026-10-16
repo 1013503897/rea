@@ -55,8 +55,9 @@ try {
         code: `
 const s=await rea.snapshot({entry:${JSON.stringify(entry)}});if(!s.ok)throw new Error(JSON.stringify(s));
 const c=await rea.code({snapshot:s.data.snapshot,limit:4});if(!c.ok)throw new Error(JSON.stringify(c));
-const graph=await rea.operations({snapshot:s.data.snapshot,limit:1,fields:["opcode"]});
-return {snapshot:s.data,code:c.data,graph};`,
+const operations=await rea.operations({snapshot:s.data.snapshot,limit:1,fields:["opcode"]});
+const graph=await rea.blocks({snapshot:s.data.snapshot,limit:1});
+return {snapshot:s.data,code:c.data,operations,graph};`,
       });
       assert.equal(result.value.snapshot.facets.code.availability, "available");
       assert.ok(result.value.snapshot.source.bytes <= 8 * 1024 * 1024);
@@ -68,9 +69,19 @@ return {snapshot:s.data,code:c.data,graph};`,
       );
       if (entry === "0xb3d00") {
         assert.equal(result.value.graph.ok, true);
-        assert.equal(result.value.graph.data.total, 5164);
+        assert.equal(result.value.operations.ok, true);
+        assert.equal(result.value.operations.data.total, 5164);
+        assert.equal(
+          result.value.snapshot.facets.operations.scope,
+          "complete-for-recovered-graph",
+        );
       } else {
-        assert.equal(result.value.snapshot.coverage.operations, null);
+        assert.equal(result.value.snapshot.coverage.blocks, null);
+        assert.equal(
+          result.value.snapshot.facets.operations.scope,
+          "bounded-call-rooted-definitions",
+        );
+        assert.equal(result.value.operations.ok, true);
         assert.equal(result.value.graph.ok, false);
         assert.match(
           result.value.graph.error.details.native_error,
@@ -92,7 +103,7 @@ const entries=await read(rea.functions({query:"sqlite3VdbeExec",exact:true}));
 const entry=entries.items.find(fn=>fn.address==="0xea6d0");if(!entry)throw new Error("fixture entry missing");
 const snap=await read(rea.snapshot({entry:entry.address}));
 const code=await read(rea.code({snapshot:snap.snapshot,limit:4}));
-const graph=await rea.operations({snapshot:snap.snapshot,limit:1});
+const graph=await rea.blocks({snapshot:snap.snapshot,limit:1});
 const evidence=await read(rea.evidence({evidence_id:snap.source.evidence_id,limit:512}));
 return {names,snap,code,graph,evidence_source:evidence.source};`,
     });
@@ -105,7 +116,11 @@ return {names,snap,code,graph,evidence_source:evidence.source};`,
       result.value.snap.facets.recovered_ir.availability,
       "unavailable",
     );
-    assert.equal(result.value.snap.coverage.operations, null);
+    assert.equal(result.value.snap.coverage.blocks, null);
+    assert.equal(
+      result.value.snap.facets.operations.scope,
+      "bounded-call-rooted-definitions",
+    );
     assert.ok(
       result.value.code.text.length > 0 && result.value.code.total_lines > 1000,
     );

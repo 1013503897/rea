@@ -2,7 +2,6 @@
 // diagnostic statements to recover value identity, operand indexes or CFG edges.
 import { FactFailure } from "./fact-error.mjs";
 import { parseNativeFunction } from "./native-ir-contract.mjs";
-import { backwardSlice } from "../atomic-re-tools/kuna-ssa.mjs";
 import { controlDependencies } from "./control-dependence.mjs";
 import { freezeFacts as freeze } from "./fact-reads.mjs";
 import {
@@ -12,26 +11,19 @@ import {
 } from "./native-call-views.mjs";
 import { requireFact } from "./native-contract.mjs";
 import {
+  indexOperationFacts,
+  createOperationViews,
+  coverageIssues,
+} from "./native-operation-views.mjs";
+import {
+  indexProjection,
+  createProjectionViews,
+} from "./native-projection-views.mjs";
+import {
   uniqueNative as unique,
   nativePage as page,
   readNativeIdentities as readIdentities,
 } from "./native-reads.mjs";
-const index = (map, key, row) => {
-  if (!map.has(key)) map.set(key, []);
-  map.get(key).push(row);
-};
-const kind = (opcode) =>
-  ({
-    CPUI_LOAD: "load",
-    CPUI_STORE: "store",
-    CPUI_MULTIEQUAL: "phi",
-    CPUI_CALL: "call",
-    CPUI_CALLIND: "call",
-    CPUI_BRANCH: "branch",
-    CPUI_CBRANCH: "branch",
-    CPUI_BRANCHIND: "switch",
-    CPUI_RETURN: "return",
-  })[opcode] ?? "value";
 function validateBlocks(operations, values, blocks) {
   const membership = new Set();
   for (const block of blocks.values()) {
@@ -66,106 +58,43 @@ function validateBlocks(operations, values, blocks) {
   );
 }
 
-function validateOperations(operations, values, blocks) {
-  for (const op of operations.values()) {
-    for (const [index, input] of op.inputs.entries()) {
-      requireFact(
-        input.input_index === index &&
-          (input.value_id === null || values.has(input.value_id)),
-        "Dangling or misindexed native operand",
-      );
-      requireFact(
-        input.phi_predecessor === null ||
-          (op.opcode === "CPUI_MULTIEQUAL" &&
-            blocks.get(op.block).predecessors[index] === input.phi_predecessor),
-        "Native phi/predecessor mismatch",
-      );
+function validatePhiBindings(operations, blocks) {
+  for (const op of operations.values())
+    for (const [position, input] of op.inputs.entries()) {
+      if (input.phi_predecessor !== null)
+        requireFact(
+          blocks.get(op.block).predecessors[position] === input.phi_predecessor,
+          "Native phi/predecessor mismatch",
+        );
       if (input.phi_predecessor_edge !== null)
         requireFact(
-          input.phi_predecessor !== null &&
-            blocks
-              .get(input.phi_predecessor)
-              ?.successors.some(
-                (edge) =>
-                  edge.id === input.phi_predecessor_edge &&
-                  edge.target === op.block,
-              ),
+          blocks
+            .get(input.phi_predecessor)
+            ?.successors.some(
+              (edge) =>
+                edge.id === input.phi_predecessor_edge &&
+                edge.target === op.block,
+            ),
           "Native phi incoming-edge identity mismatch",
         );
     }
-    requireFact(
-      op.output === null || values.get(op.output)?.definition === op.id,
-      "Native output/definition mismatch",
-    );
-  }
-}
-
-function validateValues(facts, operations, values) {
-  const omitted = new Set(facts.coverage.omitted_definition_ids);
-  for (const value of values.values())
-    if (value.definition !== null)
-      requireFact(
-        operations.get(value.definition)?.output === value.id ||
-          (!operations.has(value.definition) && omitted.has(value.definition)),
-        "Native value/definition mismatch",
-      );
 }
 
 function indexNative(facts) {
-  const operations = unique(facts.operations),
-    values = unique(facts.values),
-    blocks = unique(
-      facts.blocks.map(({ start, ...block }) =>
-        freeze({ ...block, origin_start: start }),
-      ),
-    );
-  validateBlocks(operations, values, blocks);
-  validateOperations(operations, values, blocks);
-  validateValues(facts, operations, values);
-  const users = new Map(),
-    incoming = new Map(),
-    outgoing = new Map(),
-    constants = new Map();
-  const normalized = new Map();
-  for (const op of operations.values()) {
-    const definitions = [],
-      literals = [];
-    for (const input of op.inputs) {
-      const value = values.get(input.value_id);
-      if (value?.definition) {
-        const relation = freeze({
-          definition: value.definition,
-          use: op.id,
-          input_index: input.input_index,
-          value_id: value.id,
-          phi_predecessor: input.phi_predecessor,
-          phi_predecessor_edge: input.phi_predecessor_edge,
-        });
-        definitions.push(relation);
-        index(users, value.definition, relation);
-      }
-      if (value?.is_constant) {
-        literals.push({
-          value: value.offset,
-          printed_size_bytes: value.size_bytes,
-          is_annotation: value.is_annotation,
-        });
-        index(constants, value.offset, op.id);
-      }
-    }
-    const { address: origin_address, ...payload } = op;
-    normalized.set(
-      op.id,
-      freeze({
-        ...payload,
-        origin_address,
-        kind: kind(op.opcode),
-        source_line: null,
-        definitions,
-        constants: literals,
-      }),
-    );
-  }
+  const core = indexOperationFacts(
+    facts.operations,
+    facts.values,
+    facts.coverage.omitted_definition_ids,
+  );
+  const blocks = unique(
+    facts.blocks.map(({ start, ...block }) =>
+      freeze({ ...block, origin_start: start }),
+    ),
+  );
+  validateBlocks(core.operations, core.values, blocks);
+  validatePhiBindings(core.operations, blocks);
+  const incoming = new Map(),
+    outgoing = new Map();
   for (const block of blocks.values())
     for (const edge of block.successors) {
       const row = freeze({
@@ -175,59 +104,49 @@ function indexNative(facts) {
         operation: block.operations.at(-1) ?? null,
         kind: edge.polarity ? "conditional" : "recovered",
       });
-      index(incoming, edge.target, row);
-      index(outgoing, block.id, row);
+      for (const [map, key] of [
+        [incoming, edge.target],
+        [outgoing, block.id],
+      ]) {
+        if (!map.has(key)) map.set(key, []);
+        map.get(key).push(row);
+      }
     }
-  return {
-    operations,
-    values,
-    blocks,
-    users,
-    incoming,
-    outgoing,
-    constants,
-    normalized,
-  };
+  return { ...core, blocks, incoming, outgoing };
 }
 
 function createViews(facts, code, indexes) {
-  const { values, blocks, users, incoming, outgoing, constants, normalized } =
-    indexes;
+  const { blocks, incoming, outgoing, normalized } = indexes;
+  const {
+    issues,
+    indirect_branch_operations,
+    omitted_definition_ids,
+    ...metadata
+  } = facts.coverage;
   const coverage = freeze({
-    ...facts.coverage,
+    ...metadata,
+    ...coverageIssues(issues),
+    indirect_branch_operation_count: indirect_branch_operations.length,
+    omitted_definition_count: omitted_definition_ids.length,
     operations: normalized.size,
+    values: indexes.values.size,
     blocks: blocks.size,
     control_flow: "complete-for-recovered-graph",
     representation:
       "optimized recovered IR; origins do not establish machine branch targets or block extents",
     runtime_successors: "unknown",
     memory_alias_dependencies: "unknown",
-    issues: facts.coverage.issues,
   });
-  const model = {
+  const core = createOperationViews(indexes, coverage);
+  return Object.freeze({
+    ...core,
     code,
-    coverage,
-    operation: (id) => normalized.get(id) ?? null,
     block: (id) => blocks.get(id) ?? null,
-    findConstant: (value) => [...new Set(constants.get(value) ?? [])],
-    uses: (id) => users.get(id) ?? [],
     incoming: (id) => incoming.get(id) ?? [],
-    select: (input) =>
-      selectOperations(normalized, constants, {
-        fields: ["kind", "statement", "definitions", "constants"],
-        ...input,
-      }),
-    values: (input) => ({
-      ...readIdentities(
-        values,
-        input,
-        (value) =>
-          input.is_input === undefined || value.is_input === input.is_input,
-      ),
-      coverage,
-    }),
     blocks: (input) => readIdentities(blocks, input),
     edges: (input) => {
+      if (["definitions", "uses"].includes(input.kind))
+        return core.definitionEdges(input);
       if (input.kind === "controllers") {
         const controls = controlDependencies(facts.blocks, {
           dependents: new Set(input.seeds),
@@ -238,82 +157,14 @@ function createViews(facts, code, indexes) {
         };
       }
       return page(
-        input.seeds.flatMap((seed) =>
-          input.kind === "definitions"
-            ? (normalized.get(seed)?.definitions ?? [])
-            : ((input.kind === "uses"
-                ? users
-                : input.kind === "incoming"
-                  ? incoming
-                  : outgoing
-              ).get(seed) ?? []),
+        input.seeds.flatMap(
+          (seed) =>
+            (input.kind === "incoming" ? incoming : outgoing).get(seed) ?? [],
         ),
         input,
       );
     },
-    slice: (input) => sliceValues(model, values, input),
-  };
-  return Object.freeze(model);
-}
-
-function selectOperations(normalized, constants, input = {}) {
-  const ids = input.ids && new Set(input.ids),
-    addresses = input.origin_addresses && new Set(input.origin_addresses),
-    blockIds = input.block_ids && new Set(input.block_ids);
-  const candidates = ids
-    ? [...ids].flatMap((id) => normalized.get(id) ?? [])
-    : input.constant
-      ? [...new Set(constants.get(input.constant) ?? [])].map((id) =>
-          normalized.get(id),
-        )
-      : normalized.values();
-  return page(
-    [...candidates].filter(
-      (op) =>
-        (!addresses || addresses.has(op.origin_address)) &&
-        (!blockIds || blockIds.has(op.block)) &&
-        (!input.constant ||
-          op.constants.some((literal) => literal.value === input.constant)) &&
-        (!input.kind || op.kind === input.kind),
-    ),
-    input,
-  );
-}
-
-function sliceValues(model, values, input) {
-  const result = backwardSlice(model, input.seeds, {
-    maxOperations: input.max_operations,
-    stopAt: input.stop_at,
-    stopKinds: input.stop_kinds,
   });
-  const frontier = new Map();
-  for (const op of result.operations)
-    for (const input of op.inputs) {
-      const value = values.get(input.value_id);
-      if (!value)
-        frontier.set(`${op.id}:${input.input_index}`, {
-          operation: op.id,
-          input_index: input.input_index,
-          reason: "native-null-input",
-        });
-      else if (!value.definition && !value.is_constant && !value.is_annotation)
-        frontier.set(value.id, {
-          value_id: value.id,
-          reason: value.is_input ? "function-input" : "definition-unavailable",
-        });
-    }
-  return {
-    ...result,
-    value_frontier: [...frontier.values()],
-    coverage: {
-      ...result.coverage,
-      status:
-        result.coverage.status === "complete-for-printed-definitions"
-          ? "complete-for-retained-value-definitions"
-          : result.coverage.status,
-      relation_authority: "native SSA value identities and operand indexes",
-    },
-  };
 }
 
 const projectedFailure = (error) => ({
@@ -322,55 +173,114 @@ const projectedFailure = (error) => ({
   details: error.details ?? {},
 });
 
-const captureFacets = (graph, calls, graphError, callError) =>
+const operationFailure = (projectionError, graphError) =>
+  projectionError?.details?.availability === "not-captured"
+    ? graphError
+    : (projectionError ?? graphError);
+
+const captureFacets = ({
+  graph,
+  projection,
+  calls,
+  graphError,
+  operationError,
+  callError,
+}) =>
   freeze({
     code: { availability: "available" },
     recovered_ir: graph
       ? { availability: "available" }
       : { availability: "unavailable", error: graphError },
+    operations: graph
+      ? {
+          availability: "available",
+          scope: "complete-for-recovered-graph",
+          count: graph.coverage.operations,
+        }
+      : projection
+        ? {
+            availability: "available",
+            scope: "bounded-call-rooted-definitions",
+            count: projection.coverage.operations,
+            root_count: projection.coverage.root_count,
+            definition_frontier_count:
+              projection.coverage.definition_frontier_count,
+          }
+        : {
+            availability: "unavailable",
+            error: operationError,
+          },
     calls: calls
       ? { availability: "available", ...calls.summary }
       : { availability: "unavailable", error: callError },
     values: graph
-      ? { availability: "available", scope: "complete-for-recovered-graph" }
-      : calls
+      ? {
+          availability: "available",
+          scope: "complete-for-recovered-graph",
+          count: graph.coverage.values,
+        }
+      : projection
         ? {
             availability: "available",
-            scope: "call-boundary-only",
-            count: calls.value_count,
+            scope: "call-rooted-definitions",
+            count: projection.coverage.values,
           }
-        : { availability: "unavailable", error: callError },
+        : calls
+          ? {
+              availability: "available",
+              scope: "call-boundary-only",
+              count: calls.value_count,
+            }
+          : { availability: "unavailable", error: callError },
   });
 
-export function parseNativeIR(text, entry, expectedInput) {
-  const capture = parseNativeFunction(text, entry, expectedInput);
-  let graph, graphIndex, graphError, calls, callError;
-  if (capture.facts.ok) {
-    try {
-      freeze(capture.facts.value);
-      graphIndex = indexNative(capture.facts.value);
-      graph = createViews(capture.facts.value, capture.code, graphIndex);
-    } catch (error) {
-      graphError = projectedFailure(error);
-    }
-  } else graphError = projectedFailure(capture.facts.error);
-  if (capture.calls.ok) {
-    try {
-      const callIndex = indexCallFacet(capture.calls.value);
-      if (graph && graphIndex) validateCallGraph(callIndex, graphIndex);
-      calls = createCallViews(capture.calls.value, callIndex);
-    } catch (error) {
-      callError = projectedFailure(error);
-    }
-  } else callError = projectedFailure(capture.calls.error);
-  const unavailable = (facet, error) => () => {
+const loadFacet = (result, build) => {
+  if (!result.ok) return { error: projectedFailure(result.error) };
+  try {
+    return build(result.value);
+  } catch (error) {
+    return { error: projectedFailure(error) };
+  }
+};
+const unavailable =
+  (facet, error = {}) =>
+  () => {
     throw new FactFailure(error.code, error.message, {
       ...error.details,
       facet,
     });
   };
-  const unavailableGraph = unavailable("recovered_ir", graphError ?? {});
-  const unavailableCalls = unavailable("calls", callError ?? {});
+export function parseNativeIR(text, entry, expectedInput) {
+  const capture = parseNativeFunction(text, entry, expectedInput);
+  const graph = loadFacet(capture.facts, (facts) => {
+    freeze(facts);
+    const index = indexNative(facts);
+    return { index, view: createViews(facts, capture.code, index) };
+  });
+  const calls = loadFacet(capture.calls, (facts) => {
+    const index = indexCallFacet(facts);
+    if (graph.view) validateCallGraph(index, graph.index);
+    return { index, view: createCallViews(facts, index) };
+  });
+  const unavailableGraph = unavailable("recovered_ir", graph.error);
+  const projection = graph.view
+    ? {}
+    : loadFacet(capture.projection, (facts) => {
+        const index = indexProjection(facts);
+        // Without a full graph, the independent call owner validates the projection.
+        if (calls.view) validateCallGraph(calls.index, index);
+        return {
+          view: createProjectionViews(
+            facts,
+            capture.code,
+            index,
+            unavailableGraph,
+          ),
+        };
+      });
+  const unavailableCalls = unavailable("calls", calls.error);
+  const operationError = operationFailure(projection.error, graph.error);
+  const unavailableOperations = unavailable("operations", operationError);
   const fallback = {
     code: capture.code,
     coverage: freeze({
@@ -379,27 +289,38 @@ export function parseNativeIR(text, entry, expectedInput) {
       blocks: null,
       control_flow: "unknown",
       machine_semantic_equivalence: "unknown",
-      issues: [graphError?.message],
+      issues: [graph.error?.message],
     }),
     ...Object.fromEntries(
-      [
-        "operation",
-        "block",
-        "findConstant",
-        "uses",
-        "incoming",
-        "select",
-        "blocks",
-        "edges",
-        "slice",
-      ].map((name) => [name, unavailableGraph]),
+      ["operation", "findConstant", "uses", "select", "slice"].map((name) => [
+        name,
+        unavailableOperations,
+      ]),
     ),
+    ...Object.fromEntries(
+      ["block", "incoming", "blocks"].map((name) => [name, unavailableGraph]),
+    ),
+    edges: (input) =>
+      ["definitions", "uses"].includes(input.kind)
+        ? unavailableOperations()
+        : unavailableGraph(),
   };
   return Object.freeze({
-    ...(graph ?? fallback),
+    ...(graph.view ?? projection.view ?? fallback),
     language: capture.language,
-    calls: calls?.calls ?? unavailableCalls,
-    values: graph?.values ?? calls?.values ?? unavailableCalls,
-    facets: captureFacets(graph, calls, graphError, callError),
+    calls: calls.view?.calls ?? unavailableCalls,
+    values:
+      graph.view?.values ??
+      projection.view?.values ??
+      calls.view?.values ??
+      unavailableCalls,
+    facets: captureFacets({
+      graph: graph.view,
+      projection: projection.view,
+      calls: calls.view,
+      graphError: graph.error,
+      operationError,
+      callError: calls.error,
+    }),
   });
 }

@@ -3,18 +3,21 @@ import { z } from "zod";
 import { FactFailure } from "./fact-error.mjs";
 import { NATIVE_OUTPUT_BYTES } from "./limits.mjs";
 import { readCallFacet } from "./native-call-contract.mjs";
+import { readProjectionFacet } from "./native-projection-contract.mjs";
+import { operation, parseOperation } from "./native-operation-contract.mjs";
 import {
   hex,
   ordinal,
   valueId,
   operationId,
+  edgeId,
   value,
   rowParser,
   requireFact,
   formatFailure,
   readNativeFacet,
 } from "./native-contract.mjs";
-const edgeId = z.string().regex(/^\d+:\d+$/u);
+
 const edge = z.strictObject({
   id: edgeId,
   target: ordinal,
@@ -22,23 +25,6 @@ const edge = z.strictObject({
   polarity: z.enum(["true", "false"]).nullable(),
   condition_value: valueId.nullable(),
   condition_test: z.enum(["eq-zero", "ne-zero"]).nullable(),
-});
-const operation = z.strictObject({
-  id: operationId,
-  address: hex,
-  block: ordinal,
-  opcode: z.string(),
-  statement: z.string(),
-  is_dead: z.boolean(),
-  inputs: z.array(
-    z.strictObject({
-      input_index: ordinal,
-      value_id: valueId.nullable(),
-      phi_predecessor: ordinal.nullable(),
-      phi_predecessor_edge: edgeId.nullable(),
-    }),
-  ),
-  output: valueId.nullable(),
 });
 const factsSchema = z.strictObject({
   schema_version: z.literal(3),
@@ -79,6 +65,8 @@ const documentSchema = z.object({
         atomic_facts_error: z.string().optional(),
         atomic_calls: z.unknown().optional(),
         atomic_calls_error: z.string().optional(),
+        atomic_projection: z.unknown().optional(),
+        atomic_projection_error: z.string().optional(),
       }),
     )
     .length(1),
@@ -92,14 +80,21 @@ const parseBlock = rowParser(nativeBlock, {
   predecessors: (id) => ordinal.parse(id),
   successors: (row) => edge.parse(row),
 });
-const parseOperation = rowParser(operation, {
-  inputs: (row) => operation.shape.inputs.element.parse(row),
+const graphCoverage = factsSchema.shape.coverage;
+const parseCoverage = rowParser(graphCoverage, {
+  indirect_branch_operations: (row) => operationId.parse(row),
+  omitted_definition_ids: (row) => operationId.parse(row),
+  issues: (row) => z.string().parse(row),
 });
-const parseFacts = rowParser(factsSchema, {
-  blocks: parseBlock,
-  operations: parseOperation,
-  values: (row) => value.parse(row),
-});
+const parseFacts = rowParser(
+  factsSchema,
+  {
+    blocks: parseBlock,
+    operations: parseOperation,
+    values: (row) => value.parse(row),
+  },
+  { coverage: parseCoverage },
+);
 
 function preflight(facts) {
   requireFact(
@@ -122,6 +117,15 @@ function preflight(facts) {
     requireFact(
       Array.isArray(facts[key]) && facts[key].length <= limit,
       `Native ${key} exceeds resource capacity or has invalid shape`,
+    );
+  for (const [rows, limit] of [
+    [facts.coverage?.indirect_branch_operations, 12000],
+    [facts.coverage?.omitted_definition_ids, 36000],
+    [facts.coverage?.issues, 12000],
+  ])
+    requireFact(
+      Array.isArray(rows) && rows.length <= limit,
+      "Native graph coverage exceeds capacity or has invalid shape",
     );
   const inputs = facts.operations.reduce(
     (sum, op) => sum + (Array.isArray(op?.inputs) ? op.inputs.length : 0),
@@ -179,6 +183,7 @@ export function parseNativeFunction(text, entry, expectedInput) {
       language: doc.language,
       facts: readGraph(fn),
       calls: readCallFacet(fn),
+      projection: readProjectionFacet(fn),
     };
   } catch (error) {
     throw formatFailure(error);

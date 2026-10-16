@@ -455,3 +455,90 @@ Mode takes 1.931 / 1.639 seconds, 200.0 MiB; direct takes 1.730 / 1.489 seconds,
 takes 1.226 / 0.985 seconds, 122.7 MiB and also verifies fallback cleanup/OOM 0.
 The 49 focused JS tests, lint and formatting pass. This lifecycle-only change
 follows the recorded model pairs; no new model token or speed claim is made.
+
+## Callable bounded definition projection
+
+The next native exporter retains a version-1 `atomic_projection` independently
+of graph version 3 and call version 1. One checked native membership scan owns
+call roots and an optional index of at most 65,536 operation keys; exceeding the
+index budget disables the projection without discarding calls. Full-graph row
+capacity is checked before rendering its rows. Full and selected facts share
+one operation/value normalizer, including exact identities, indexed operands,
+outputs, phi predecessor edges, flags and display. Default non-atomic analysis
+and C generation are unchanged.
+
+All recovered CALL/CALLIND operations are retained as projection roots, followed
+by backward operand definitions in breadth-first order. The projection bounds
+4,096 operations, 12,288 values, 16,384 inputs and 2 MiB text. Too many roots or
+another admission failure makes the facet explicitly unavailable. Omitted
+definitions retain exact IDs and operation-budget/outside-membership reasons.
+A fitting full graph omits its redundant projection; an encoded-overflow graph
+restores the fitting projection. Facets are moved through bounded alternatives,
+and a valid C/call record survives projection failure. There is no repeated
+decompilation or clipped collection labeled complete.
+
+The JS boundary shares operand/value validation and query indexes between full
+and sparse views. It checks root reachability, exact frontier membership,
+call/value agreement and phi metadata without inventing a CFG. In the absence
+of a full graph, conflicting projection facts do not erase independently valid
+calls. `snapshot.facets.operations` and `facets.values` expose their scopes;
+selected definitions/uses and slices work over the retained set. Uses remain
+selected-only, CFG/controller queries retain their graph error and Evidence ID,
+and slice missing definitions keep their native reasons. A missing projection
+preserves the original graph failure instead of hiding it behind a generic
+not-captured error. All adapters use this owner.
+
+Coverage returns counts instead of global omitted-ID inventories, at most eight
+160-character issue summaries, full issue counts and omission metadata. Complete
+native coverage/frontier details remain in source Evidence. Native operation
+rows retain `is_dead` with their identities; constant summaries add `value_id`
+and `input_index`, preserving exact offset/width semantics. No original-signature,
+arbitrary-width computation, memory-alias or runtime proof is introduced.
+
+Preserved engine SHA-256:
+`a0685486518e09d3c65f756325a7e9fed8df123a2a988aca2972a72335ce8edc`.
+The same one-job/embedded-spec build takes 309.805 family wall / 309.523 CPU
+seconds, 2,099.5 MiB kernel family peak. Six focused native JSON tests pass,
+including projection restoration and independent overflow (99.752 / 98.662
+seconds with test compilation, 626.9 MiB). The final CLI build reuses artifacts
+(0.320 / 0.146 seconds, 28.8 MiB), leaving the preserved digest unchanged.
+
+Real SQLite VM public reads expose 4,096 operations, 7,469 values and 326
+unexpanded definitions, while the complete graph remains unavailable. Source is
+4,008,032 bytes, inside the unchanged 8 MiB public budget. Every selected operation
+and value equals the earlier 17.8 MB diagnostic capture; ordinary C/metadata and
+the complete call facet also equal it. An independent BFS over that retained
+full graph produces exactly the same operation order and frontier. The extended
+`measure-native-projection.py --verify-capture` reproduces these comparisons.
+This is producer-fidelity evidence, not independent machine/runtime equivalence.
+
+Both public MCP adapters read the selected PHI definitions and slices from one
+VM source. Code Mode verifies unavailable controllers preserve the source ID.
+The corrected Code Mode verifier takes 52.706 wall / 47.550 CPU seconds,
+597.4 MiB peak; direct takes 39.696 / 39.418 seconds, 592.5 MiB. The first
+Code Mode verifier incorrectly expected INDIRECT definitions; independent source
+inspection shows MULTIEQUAL. Its 37.070 / 36.781 seconds, 593.3 MiB failed
+assertion is retained, then the verifier is corrected without changing native
+facts. These scripted runs are validation costs, not an adapter speed comparison.
+
+Small-function cross-call checks pass (8.476 / 8.204 seconds, 293.6 MiB); all three
+complete function records equal the prior exporter. Encoded Pragma/Parser checks
+pass (13.712 / 13.507 seconds, 361.5 MiB): Pragma retains 3,627 projected operations
+after graph encoding overflow, while Parser keeps its full 5,164-operation graph
+without a duplicate projection. Zlib control/phi regression passes (10.893 /
+10.700 seconds, 286.3 MiB). Real CLI reads verify both selected PHIs and repeated
+snapshot/source identity (37.367 / 37.174 seconds, 527.1 MiB).
+
+The real VM MCP cache benchmark observes cold snapshot wall 36,448.8 ms / family
+CPU 36.425 seconds, then warm 40.2 ms / 0.041 seconds with the identical handle
+and source. Cumulative family peak is 590.1 MiB, an upper bound on isolated warm
+phase memory. Its complete run is 37.667 / 37.492 seconds. This is same-lease
+capture reuse, not cross-session persistence or a model-token result; OS caches
+remain uncontrolled. All resource runs above verify cleanup and OOM 0.
+
+The focused JS suite passes 53 tests; lint/format, default lenient `check-spec`,
+Python compilation and patch forward/reverse checks pass. Full upstream corpus,
+stages and workspace gates remain unexecuted; the patch is not upstream-ready.
+No whole-repository typecheck pass is claimed beyond the previously recorded
+resource limitation. The [PHI-format task/oracle](projection-oracle.md) are fixed
+before real-model launches. No model benefit is assumed from these smaller facts.

@@ -1,0 +1,20 @@
+Analyze sqlite3VdbeExec in {{artifact_path}} statically. At recovered call origins
+0xf115c and 0xf238b, trace the second argument (passed in RSI) through its immediate
+SSA definition and every PHI alternative to the retained format-address
+producers. Use one retained capture and structured operation/value relationships.
+Report the call and PHI identities, each PHI operand index and native predecessor
+edge identity, and which format-address producer belongs to each alternative.
+Inspect the available operation scope before traversing: a bounded definition
+projection is not a complete recovered CFG or full use inventory.
+
+Read the candidate format strings with focused byte or string queries. Verify
+all alternative setup sites and the two machine CALL targets with selected
+instruction windows. Include actual jump destinations used by alternate setup
+paths, where present. Distinguish native PHI predecessors, instruction origins,
+constant address-space offsets and actual machine branch targets; a single
+instruction window does not establish the only format reaching a shared call.
+
+Keep the result focused, with real Evidence references and target digest. Reuse
+the same capture for selected reads. State any remaining definition frontier,
+memory-alias, CFG and runtime-reachability limits; do not claim a demonstrated
+SQL-level trigger or infer complete source signatures from recovered input slots.

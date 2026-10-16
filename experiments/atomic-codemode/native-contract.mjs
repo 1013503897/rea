@@ -6,6 +6,7 @@ export const requireFact = (condition, reason) => {
   if (!condition) throw new FactFailure("invalid_provider_output", reason);
 };
 export const hex = z.string().regex(/^0x(?:0|[1-9a-f][0-9a-f]{0,15})$/u);
+export const edgeId = z.string().regex(/^\d+:\d+$/u);
 export const ordinal = z.number().int().nonnegative().max(0x7fffffff);
 export const valueId = z.string().regex(/^v[0-9a-f]{1,16}$/u);
 export const operationId = z
@@ -22,18 +23,26 @@ export const value = z.strictObject({
   definition: operationId.nullable(),
   type_name: z.string(),
 });
-export const rowParser = (schema, arrays) => {
+export const rowParser = (schema, arrays, fields = {}) => {
   const metadata = schema.omit(
-    Object.fromEntries(Object.keys(arrays).map((key) => [key, true])),
+    Object.fromEntries(
+      [...Object.keys(arrays), ...Object.keys(fields)].map((key) => [
+        key,
+        true,
+      ]),
+    ),
   );
   return (raw) => {
-    const fields = { ...raw };
-    for (const key of Object.keys(arrays)) delete fields[key];
-    const result = metadata.parse(fields);
+    const metadataFields = { ...raw };
+    for (const key of [...Object.keys(arrays), ...Object.keys(fields)])
+      delete metadataFields[key];
+    const result = metadata.parse(metadataFields);
     for (const [key, parse] of Object.entries(arrays)) {
       requireFact(Array.isArray(raw[key]), `Native ${key} must be an array`);
       result[key] = raw[key].map(parse);
     }
+    for (const [key, parse] of Object.entries(fields))
+      result[key] = parse(raw[key]);
     return result;
   };
 };
@@ -80,6 +89,7 @@ export const readNativeFacet = (fn, name, label, parse) => {
         new FactFailure(
           "capability_unavailable",
           `Native ${label} facet was not captured`,
+          { availability: "not-captured" },
         ),
       );
     return ok(parse(fn[name]));

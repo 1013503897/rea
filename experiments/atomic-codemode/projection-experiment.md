@@ -1,5 +1,10 @@
 # Selected definitions after whole-graph capacity failure
 
+Historical probe at REA experiment revision `4d7fccbce`. Use that revision's
+patches to reproduce its preserved diagnostic engine and results below. The
+subsequent callable projection is documented in [native-engine.md](native-engine.md);
+its real-model question/oracle are [pinned separately](projection-oracle.md).
+
 This is a diagnostic feasibility probe following the completed boundary model
 pairs, not a new public provider capability. The analyst question is whether
 selected call-argument definitions can remain readable without materializing an

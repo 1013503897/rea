@@ -281,6 +281,10 @@ export class KunaFactOwner {
       facets: parsed.facets ?? {
         code: { availability: "available" },
         recovered_ir: { availability: "available", coverage: "partial" },
+        operations: {
+          availability: "available",
+          scope: "diagnostic-printed-SSA",
+        },
         calls: missingNativeFacet(),
         values: missingNativeFacet(),
       },
@@ -394,6 +398,7 @@ export class KunaFactOwner {
             "origin_address",
             "block",
             "source_line",
+            "is_dead",
           ]),
         ),
       };

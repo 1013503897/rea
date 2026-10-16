@@ -368,12 +368,15 @@ export const backwardSlice = (
     operations: selected,
     coverage: {
       status:
-        boundaries.length || missing.length || snapshot.coverage.issues.length
+        boundaries.length ||
+        missing.length ||
+        (snapshot.coverage.issue_count ?? snapshot.coverage.issues.length)
           ? "partial"
           : "complete-for-printed-definitions",
       boundaries,
       missing,
-      source_issues: snapshot.coverage.issues.length,
+      source_issues:
+        snapshot.coverage.issue_count ?? snapshot.coverage.issues.length,
       runtime_reachability: "unknown",
       memory_alias_dependencies: "unknown",
     },

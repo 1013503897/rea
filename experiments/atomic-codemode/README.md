@@ -195,5 +195,15 @@ scope and resource receipts in [native-engine.md](native-engine.md).
 A [subsequent diagnostic probe](projection-experiment.md) measures the VM's full
 17 MB recovered graph and much smaller selected definition neighborhoods. It
 supports trying a bounded operation/value facet, while preserving unresolved
-definitions and unavailable CFG. This is offline feasibility evidence; selected
-definition bodies remain an unimplemented public API gap.
+definitions and unavailable CFG. The following implementation now makes that
+facet callable; the original diagnostic remains separate from public results.
+
+`snapshot.facets.operations` distinguishes a complete recovered graph from a
+bounded call-rooted definition projection. `operations`, `values`, selected
+definition/use `relations` and `slice` share the same parsed operation owner in
+either case. Projection coverage preserves unexpanded definition counts and
+selected slice frontier reasons; CFG/controller reads remain unavailable.
+Native operation reads retain `is_dead` and literal operand/value identities.
+Coverage returns compact counts and bounded issue text, with complete native
+details retained in Evidence. [The new question/oracle](projection-oracle.md)
+are fixed before real-model trials of the PHI format alternatives.

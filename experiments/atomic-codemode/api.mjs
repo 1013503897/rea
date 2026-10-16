@@ -83,7 +83,7 @@ export const methods = {
     'await rea.references({addresses:["0x2000"]})',
   ),
   snapshot: definition(
-    "Analyze an explicit function entry once; return a retained capture handle, facets and coverage. Reuses the source within this target lease. Code, recovered calls and call-boundary values remain independently available when full recovered IR exceeds capacity; inspect facets before reads. Available calls include compact by_opcode counts of known/unknown targets over the whole retained call facet; no paging is needed for these counts. Selected calls and complete Evidence remain readable.",
+    "Analyze an explicit function entry once; return a retained capture handle, facets and coverage. Reuses the source within this target lease. Code, recovered calls and values remain independently available when full recovered IR exceeds capacity. A bounded call-rooted operation/definition projection may also be available; inspect facets.operations and coverage before reads. CFG queries still require the complete recovered graph. Available calls include compact by_opcode counts of known/unknown targets over the whole retained call facet; no paging is needed for these counts. Selected calls and complete Evidence remain readable.",
     { entry: hex },
     "snapshot",
     'await rea.snapshot({entry:"0x1000"})',
@@ -116,7 +116,7 @@ export const methods = {
     'await rea.instructions({windows:[{address:"0x1000",count:8}],fields:["bytes","text"]})',
   ),
   operations: definition(
-    "Select SSA operations by IDs, source instruction origins, block IDs, constant literal or kind. Filters intersect; identities and source lines are always retained. A literal match is not object identity. origin_addresses selects optimized recovered IR origins; use instructions for actual machine control transfers.",
+    "Select SSA operations by IDs, source instruction origins, block IDs, constant literal or kind. Filters intersect; identities and native is_dead are retained. Availability may be a complete recovered graph or a bounded call-rooted projection; inspect coverage before inferring absence. A literal match is not object identity. origin_addresses selects optimized recovered IR origins; use instructions for actual machine control transfers.",
     {
       snapshot,
       ids: z.array(z.string()).max(128).optional(),
@@ -131,7 +131,7 @@ export const methods = {
     'await rea.operations({snapshot:s,constant:"0x2000",fields:["statement"]})',
   ),
   relations: definition(
-    "Read definitions/uses for operation IDs, incoming/outgoing CFG edges or derived controllers for block IDs. Native IR includes exact operand/phi bindings and the complete recovered graph; diagnostic SSA has partial CFG and printed occurrences only. controllers requires native IR and concerns finite paths to recovered exits, not runtime feasibility.",
+    "Read definitions/uses for operation IDs, incoming/outgoing CFG edges or derived controllers for block IDs. Native facts include exact operand/phi bindings. A bounded call-rooted projection supports selected definitions/uses but no CFG; uses cover retained selected operations only. Diagnostic SSA has partial CFG and printed occurrences only. controllers requires an available complete native recovered graph and concerns finite paths to recovered exits, not runtime feasibility.",
     {
       snapshot,
       kind: z.enum([
@@ -151,7 +151,7 @@ export const methods = {
     'await rea.relations({snapshot:s,kind:"uses",seeds:[op.id]})',
   ),
   values: definition(
-    "Read identified native SSA values in a batch; is_input filters retained operand/output values, not an original source signature. Offset is an address-space offset, not a computed arbitrary-width value. Width, constants, function inputs, annotation status and defining operation are separate facts. Requires the pinned native exporter.",
+    "Read identified native SSA values in a batch; scope may be a full graph, bounded call-rooted definition projection, or call-boundary values only; is_input filters retained operand/output values, not an original source signature. Offset is an address-space offset, not a computed arbitrary-width value. Width, constants, function inputs, annotation status and defining operation are separate facts. Requires the pinned native exporter.",
     {
       snapshot,
       ids: z.array(z.string()).max(128).optional(),
@@ -216,7 +216,7 @@ export const methods = {
     "await rea.blocks({snapshot:s,ids:[op.block]})",
   ),
   slice: definition(
-    "Compose a bounded backward definition traversal from explicit operation IDs. Default load/phi cutoffs keep boundaries visible; choose stop_kinds:[] to traverse beyond them. Complete reachability and memory aliases remain unknown.",
+    "Compose a bounded backward definition traversal from explicit operation IDs. Available over either the complete recovered graph or a bounded call-rooted projection. Missing defining bodies retain frontier reasons; complete use sets and CFG are unavailable for a projection. Default load/phi cutoffs keep boundaries visible; choose stop_kinds:[] to traverse beyond them. Complete reachability and memory aliases remain unknown.",
     {
       snapshot,
       seeds: z.array(z.string()).min(1).max(64),
@@ -226,7 +226,7 @@ export const methods = {
       fields,
     },
     "slice",
-    "await rea.slice({snapshot:s,seeds:branchIds,max_operations:48})",
+    'await rea.slice({snapshot:s,seeds:callIds,stop_kinds:["load"],fields:["opcode","inputs","output","constants"]})',
   ),
   code: definition(
     "Read reconstructed code from the same retained function capture, even when its graph facet is unavailable. offset is zero-based. A large limit reads the complete code inside Code Mode for local filtering. The bridge byte budget bounds the result. No additional decompilation.",
@@ -263,19 +263,19 @@ const returns = {
   references:
     "data:{results:[{ok,address,source:{evidence_id},items:[{source_row,from,to,kind,fromFunction:{address,name}|null,toFunction:{address,name}|null,instruction}],total,next_offset,coverage}|{ok:false,address,error}]}. source_row is the zero-based row in retained native xrefs; Evidence identity plus source_row identifies an occurrence. Coverage preserves examined/excluded/unattributed counts and unknown function scope/discovery. fields projects optional columns; endpoints/kind/source_row stay.",
   snapshot:
-    "data:{snapshot:string,entry,source:{evidence_id,sha256},facets:{code:{availability},recovered_ir:{availability,error?},calls:{availability,count?,by_opcode?:[{opcode,known_target_count,unknown_target_count}],coverage?,error?},values:{availability,scope?,count?,error?}},coverage}. Call counts cover all retained recovered calls, including is_dead rows, not complete machine/runtime calls; target knowledge comes from a non-null native target, independent of opcode. An unavailable facet omits counts; an available empty call facet reports zeros. An unavailable graph has unknown/null counts, never a fabricated empty graph; code remains readable through the same handle.",
+    "data:{snapshot:string,entry,source:{evidence_id,sha256},facets:{code:{availability},recovered_ir:{availability,error?},operations:{availability,scope?,count?,root_count?,definition_frontier_count?,error?},calls:{availability,count?,by_opcode?:[{opcode,known_target_count,unknown_target_count}],coverage?,error?},values:{availability,scope?,count?,error?}},coverage}. Call counts cover all retained recovered calls, including is_dead rows, not complete machine/runtime calls; target knowledge comes from a non-null native target, independent of opcode. An unavailable facet omits counts; an available empty call facet reports zeros. The complete graph can be unavailable while operations reports a bounded projection count; an unavailable operation facet has unknown/null counts, never a fabricated empty set; code remains readable through the same handle.",
   operations:
-    "data:{items:[{id,origin_address,block,source_line,kind,statement,definitions,constants,inputs?,output?,opcode?}],total,next_offset,evidence_id,coverage}. Native inputs:[{input_index,value_id,phi_predecessor,phi_predecessor_edge}], output:value_id|null; definitions:[{definition,use,input_index,value_id,phi_predecessor,phi_predecessor_edge}]. Diagnostic definitions use printed occurrence instead. fields projects columns; identity remains.",
+    "data:{items:[{id,origin_address,block,source_line,kind,statement,definitions,constants,inputs?,output?,opcode?,is_dead?}],total,next_offset,evidence_id,coverage}. Native inputs:[{input_index,value_id,phi_predecessor,phi_predecessor_edge}], output:value_id|null; native constants include value_id/input_index and exact u64 value offset with printed_size_bytes (native width), not arbitrary-width computed values; definitions:[{definition,use,input_index,value_id,phi_predecessor,phi_predecessor_edge}]. Diagnostic definitions use printed occurrence instead. fields projects columns; identity and native is_dead remain. A call-rooted projection reports retained facts only, with unknown CFG and explicit definition frontier coverage.",
   relations:
-    "data:{items:definition/use edges OR CFG edges{from,to,operation,polarity?,condition_value?,condition_test?} OR controllers{controller,dependent,edge},total,next_offset,evidence_id,coverage,relation_coverage?}. definitions/uses seeds are operation-ID strings; incoming/outgoing/controllers seeds are numeric block IDs. Native def/use edges include input_index,value_id,phi_predecessor; diagnostic edges include occurrence only.",
+    "data:{items:definition/use edges OR CFG edges{from,to,operation,polarity?,condition_value?,condition_test?} OR controllers{controller,dependent,edge},total,next_offset,evidence_id,coverage,relation_coverage?,unretained_seeds?}. definitions/uses seeds are operation-ID strings; incoming/outgoing/controllers seeds are numeric block IDs. Native def/use edges include input_index,value_id,phi_predecessor; diagnostic edges include occurrence only.",
   values:
-    "data:{items:[{id,space,offset,size_bytes,is_constant,is_input,is_annotation,definition,type_name}],total,next_offset,evidence_id,coverage}; definitions are operation IDs, offsets are exact hex strings. When the graph is unavailable, only call-boundary values are retained; coverage states that scope and operations/definitions may be unreadable.",
+    "data:{items:[{id,space,offset,size_bytes,is_constant,is_input,is_annotation,definition,type_name}],total,next_offset,evidence_id,coverage}; definitions are operation IDs, offsets are exact hex strings. When the graph is unavailable, values may come from a bounded definition projection or only the call boundary; coverage states that scope and operations/definitions may be unreadable.",
   calls:
-    "data:{items:[{id,origin_address,block,opcode,spec_available,is_dead,target:{space,offset}|null,target_name,arguments:[{input_index,value_id,storage:{space,offset,size_bytes}|null,storage_authority}],output}],total,next_offset,missing,evidence_id,coverage}. fields selects target/target_name/arguments/output/prototype/stack_offset/target_value_id/is_dead. Values may be limited to the call boundary when the graph is unavailable; coverage states that scope. Calls include all retained call operations; null facts are unknown, not proof of no arguments or runtime binding. Candidate cross-function links require matching target identity and exact passing/input storage; join/subregister/alias interpretation remains unknown.",
+    "data:{items:[{id,origin_address,block,opcode,spec_available,is_dead,target:{space,offset}|null,target_name,arguments:[{input_index,value_id,storage:{space,offset,size_bytes}|null,storage_authority}],output}],total,next_offset,missing,evidence_id,coverage}. fields selects target/target_name/arguments/output/prototype/stack_offset/target_value_id/is_dead. Values may come from a bounded call-rooted definition projection or call-boundary set when the graph is unavailable; coverage states that scope. Calls include all retained call operations; null facts are unknown, not proof of no arguments or runtime binding. Candidate cross-function links require matching target identity and exact passing/input storage; join/subregister/alias interpretation remains unknown.",
   blocks:
     "data:{items:[{id,origin_start,operations,predecessors,successors:[{target,index,polarity,condition_value,condition_test}]}],total,next_offset,evidence_id,coverage}; IDs are local to this snapshot.",
   slice:
-    "data:{operations:[operation rows as above],coverage:{status,boundaries:[{id,reason}],missing,source_issues,runtime_reachability,memory_alias_dependencies},evidence_id}",
+    "data:{operations:[operation rows as above],coverage:{status,boundaries:[{id,reason}],missing,missing_reasons?,source_scope?,source_issues,runtime_reachability,memory_alias_dependencies},value_frontier?:[{value_id?|operation?,input_index?,reason}],evidence_id}",
   code: "data:{evidence_id,start_line,language:string|null,text,total_lines,next_offset,coverage}; language is native-reported or unknown. Read/filter full reconstructed text within Code Mode without returning it all.",
   evidence:
     "data:{source:{evidence_id,sha256,bytes,arguments},text,total_code_units,next_offset}; source has complete native output, including code before the SSA graph.",

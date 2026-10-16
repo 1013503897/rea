@@ -1,9 +1,9 @@
 diff --git a/decompiler/crates/kuna-cli/src/atomic_json.rs b/decompiler/crates/kuna-cli/src/atomic_json.rs
 new file mode 100644
-index 00000000..ebfe18d8
+index 00000000..527ee788
 --- /dev/null
 +++ b/decompiler/crates/kuna-cli/src/atomic_json.rs
-@@ -0,0 +1,166 @@
+@@ -0,0 +1,249 @@
 +//! Opt-in atomic documents share the ordinary record producer and JSON writer.
 +//! A graph that cannot fit must not discard otherwise readable reconstructed C.
 +
@@ -16,7 +16,12 @@ index 00000000..ebfe18d8
 +    value: (String, Json),
 +    added_error: bool,
 +}
-+fn take_facet(document: &mut Json, name: &str, limit: usize) -> Vec<RemovedFacet> {
++#[derive(Clone, Copy)]
++enum Omission {
++    Capacity,
++    RedundantWithGraph,
++}
++fn take_facet(document: &mut Json, name: &str, limit: usize, why: Omission) -> Vec<RemovedFacet> {
 +    let mut removed = Vec::new();
 +    if let Json::Object(fields) = document {
 +        if let Some(Json::Array(functions)) = fields
@@ -25,10 +30,16 @@ index 00000000..ebfe18d8
 +        {
 +            for (function, record) in functions.iter_mut().enumerate() {
 +                if let Json::Object(fields) = record {
++                    if matches!(why, Omission::RedundantWithGraph)
++                        && !fields.iter().any(|(key, _)| key == "atomic_facts")
++                    {
++                        continue;
++                    }
 +                    if let Some(field) = fields.iter().position(|(key, _)| key == name) {
 +                        let value = fields.remove(field);
 +                        let error = format!("{name}_error");
-+                        let added_error = !fields.iter().any(|(key, _)| key == &error);
++                        let added_error = matches!(why, Omission::Capacity)
++                            && !fields.iter().any(|(key, _)| key == &error);
 +                        if added_error {
 +                            fields.push((error, Json::Str(format!("atomic encoded document exceeds {limit} byte capacity; {name} omitted, code retained"))));
 +                        }
@@ -72,24 +83,50 @@ index 00000000..ebfe18d8
 +    let budget = limit
 +        .checked_sub(1)
 +        .ok_or("atomic JSON output budget is zero")?;
++    // A full graph already owns these operation/value facts. Keep its bounded
++    // projection aside in case encoded size later makes that graph unavailable.
++    let projection = take_facet(
++        &mut document,
++        "atomic_projection",
++        limit,
++        Omission::RedundantWithGraph,
++    );
 +    if let Some(text) = bounded(&document, budget) {
 +        return Ok(text);
 +    }
-+    // Preserve existing graph availability if either facet alone would fit.
-+    let calls = take_facet(&mut document, "atomic_calls", limit);
++    let calls = take_facet(&mut document, "atomic_calls", limit, Omission::Capacity);
 +    if !calls.is_empty() {
 +        if let Some(text) = bounded(&document, budget) {
 +            return Ok(text);
 +        }
 +    }
 +    restore_facet(&mut document, calls);
-+    let graph = take_facet(&mut document, "atomic_facts", limit);
-+    if !graph.is_empty() {
-+        if let Some(text) = bounded(&document, budget) {
-+            return Ok(text);
-+        }
++    take_facet(&mut document, "atomic_facts", limit, Omission::Capacity);
++    restore_facet(&mut document, projection);
++    if let Some(text) = bounded(&document, budget) {
++        return Ok(text);
 +    }
-+    take_facet(&mut document, "atomic_calls", limit);
++    // Independent calls retain priority when the combined fallback is too big.
++    let projection = take_facet(
++        &mut document,
++        "atomic_projection",
++        limit,
++        Omission::Capacity,
++    );
++    if let Some(text) = bounded(&document, budget) {
++        return Ok(text);
++    }
++    restore_facet(&mut document, projection);
++    take_facet(&mut document, "atomic_calls", limit, Omission::Capacity);
++    if let Some(text) = bounded(&document, budget) {
++        return Ok(text);
++    }
++    take_facet(
++        &mut document,
++        "atomic_projection",
++        limit,
++        Omission::Capacity,
++    );
 +    bounded(&document, budget).ok_or_else(|| {
 +        format!("atomic JSON exceeds {limit} byte capacity even without recovered facets")
 +    })
@@ -168,6 +205,52 @@ index 00000000..ebfe18d8
 +        assert!(f["atomic_facts_error"].is_string() && f["atomic_calls_error"].is_string());
 +        assert_eq!(f["code"], "retained C");
 +        assert!(render(document(1, 1), 1).is_err());
++    }
++}
++
++#[cfg(test)]
++mod projection_tests {
++    use super::*;
++    fn document(graph: usize, calls: usize, projection: usize) -> Json {
++        Json::Object(vec![(
++            "functions".into(),
++            Json::Array(vec![Json::Object(vec![
++                ("code".into(), Json::Str("retained C".into())),
++                ("atomic_facts".into(), Json::Str("g".repeat(graph))),
++                ("atomic_calls".into(), Json::Str("c".repeat(calls))),
++                (
++                    "atomic_projection".into(),
++                    Json::Str("p".repeat(projection)),
++                ),
++            ])]),
++        )])
++    }
++    #[test]
++    fn full_graph_avoids_duplicate_projection_and_encoded_failure_restores_it() {
++        for (graph, retained) in [(10, "atomic_facts"), (3000, "atomic_projection")] {
++            let rendered = render(document(graph, 10, 10), 1024).unwrap();
++            let d: serde_json::Value = serde_json::from_str(&rendered).unwrap();
++            let f = &d["functions"][0];
++            assert!(f.get(retained).is_some());
++            assert!(f.get("atomic_calls").is_some());
++            assert_eq!(f["code"], "retained C");
++            if retained == "atomic_facts" {
++                assert!(f.get("atomic_projection").is_none());
++                assert!(f.get("atomic_projection_error").is_none());
++            }
++        }
++    }
++    #[test]
++    fn fallback_facets_survive_independently_without_losing_code() {
++        for (calls, projection, retained) in
++            [(3000, 10, "atomic_projection"), (10, 3000, "atomic_calls")]
++        {
++            let rendered = render(document(3000, calls, projection), 1024).unwrap();
++            let d: serde_json::Value = serde_json::from_str(&rendered).unwrap();
++            assert!(d["functions"][0].get(retained).is_some());
++            assert_eq!(d["functions"][0]["code"], "retained C");
++            assert!(rendered.len() <= 1024);
++        }
 +    }
 +}
 diff --git a/decompiler/crates/kuna-cli/src/decompile.rs b/decompiler/crates/kuna-cli/src/decompile.rs
@@ -308,7 +391,7 @@ index ad249b04..62074996 100644
          failure = Some(format!("--assert directive rejected in {}", args.binary));
      }
 diff --git a/decompiler/crates/kuna-cli/src/decompile_all.rs b/decompiler/crates/kuna-cli/src/decompile_all.rs
-index 698c7243..4309f5dc 100644
+index 698c7243..330c0f3f 100644
 --- a/decompiler/crates/kuna-cli/src/decompile_all.rs
 +++ b/decompiler/crates/kuna-cli/src/decompile_all.rs
 @@ -744,6 +744,7 @@ fn run_jobs_worker(args: &Args) -> Result<(), String> {
@@ -364,18 +447,19 @@ index 698c7243..4309f5dc 100644
  /// [`render_result_json`] plus the inventory `total` a NARROWED whole-binary run
  /// answers with.
  ///
-@@ -2152,6 +2168,10 @@ fn result_json(
+@@ -2152,6 +2168,11 @@ fn result_json(
                      // Always present, `[]` unless the option is on.
                      ("types".into(), types),
                  ];
 +                if let Some(detail) = f.detail.as_ref() {
 +                    append_atomic_facet(&mut record, "atomic_facts", detail.atomic_facts.as_ref());
 +                    append_atomic_facet(&mut record, "atomic_calls", detail.atomic_calls.as_ref());
++                    append_atomic_facet(&mut record, "atomic_projection", detail.atomic_projection.as_ref());
 +                }
                  if !f.stack_objects.is_empty() {
                      record.push(("stack_objects".into(), Json::Array(
                          f.stack_objects.iter().map(stack_object_json).collect(),
-@@ -3519,3 +3539,16 @@ mod triage_tests {
+@@ -3519,3 +3540,16 @@ mod triage_tests {
      }
 
  }
@@ -691,19 +775,20 @@ index e40b18c9..b8cae233 100644
      };
 
 diff --git a/decompiler/crates/kuna-console/src/inspect.rs b/decompiler/crates/kuna-console/src/inspect.rs
-index 74024b10..36fc51a1 100644
+index 74024b10..72e4ec24 100644
 --- a/decompiler/crates/kuna-console/src/inspect.rs
 +++ b/decompiler/crates/kuna-console/src/inspect.rs
-@@ -24,6 +24,8 @@ pub const FUNCTION_ROW_CAP: usize = 4096;
+@@ -24,6 +24,9 @@ pub const FUNCTION_ROW_CAP: usize = 4096;
  pub struct FuncDetail {
      pub tokens: Vec<CodeToken>,
      pub tokens_error: Option<String>,
 +    pub atomic_facts: Option<Result<kuna_decomp::atomic_facts::FunctionFacts, String>>,
 +    pub atomic_calls: Option<Result<kuna_decomp::atomic_calls::CallFacts, String>>,
++    pub atomic_projection: Option<Result<kuna_decomp::atomic_projection::Projection, String>>,
  }
 
  impl FuncDetail {
-@@ -40,13 +42,13 @@ impl FuncDetail {
+@@ -40,13 +43,13 @@ impl FuncDetail {
      ) -> Self {
          let mut tokens = kuna_srcmap::resolve(fd, var_refs, raw, untrimmed, variables);
          if let Err(error) = kuna_srcmap::verify(&tokens, code) {
@@ -720,7 +805,7 @@ index 74024b10..36fc51a1 100644
  }
 
 diff --git a/decompiler/crates/kuna-console/src/project.rs b/decompiler/crates/kuna-console/src/project.rs
-index bc401db2..a3c5fa95 100644
+index bc401db2..1b53ccf1 100644
 --- a/decompiler/crates/kuna-console/src/project.rs
 +++ b/decompiler/crates/kuna-console/src/project.rs
 @@ -245,6 +245,8 @@ pub struct DecompileOptions {
@@ -756,7 +841,7 @@ index bc401db2..a3c5fa95 100644
          want_pointer_arguments,
          ..
      } = *opts;
-@@ -838,11 +843,16 @@ pub fn decompile_pulled(
+@@ -838,11 +843,21 @@ pub fn decompile_pulled(
                          }
                      }
                      let var_refs = provenance.apply_to_variables_with_refs(&fd, &mut variables);
@@ -768,8 +853,13 @@ index bc401db2..a3c5fa95 100644
                      });
 +                    if want_atomic_facts {
 +                        let detail = detail.get_or_insert_with(Default::default);
-+                        detail.atomic_calls = Some(kuna_decomp::atomic_calls::collect_all(&fd));
-+                        detail.atomic_facts = Some(kuna_decomp::atomic_facts::collect(prog.arch(), &fd));
++                        let membership = kuna_decomp::atomic_membership::inspect(&fd);
++                        detail.atomic_calls = Some(membership.as_ref().map_err(Clone::clone)
++                            .and_then(|m| kuna_decomp::atomic_calls::collect_all(&fd, m)));
++                        detail.atomic_facts = Some(membership.as_ref().map_err(Clone::clone)
++                            .and_then(|m| kuna_decomp::atomic_facts::collect(prog.arch(), &fd, m)));
++                        detail.atomic_projection = Some(membership.as_ref().map_err(Clone::clone)
++                            .and_then(|m| kuna_decomp::atomic_projection::collect(prog.arch(), &fd, m)));
 +                    }
                      for variable in &mut variables {
                          for address in &mut variable.addresses {
@@ -793,19 +883,19 @@ index 40b093b6..8f03b654 100644
  [build-dependencies]
 diff --git a/decompiler/crates/kuna-decomp/src/substrate/atomic_calls.rs b/decompiler/crates/kuna-decomp/src/substrate/atomic_calls.rs
 new file mode 100644
-index 00000000..91ce7f60
+index 00000000..821ca6f0
 --- /dev/null
 +++ b/decompiler/crates/kuna-decomp/src/substrate/atomic_calls.rs
-@@ -0,0 +1,247 @@
+@@ -0,0 +1,216 @@
 +//! Recovered call relations. Argument values and passing storage are separate.
 +use crate::{
++    atomic_membership::{Membership, MAX_CALLS},
 +    atomic_values::{self, operation_id, value_id, ValueFact},
 +    context::OpId,
 +    fspec::{FuncCallSpecs, OFFSET_UNKNOWN},
 +    funcdata::Funcdata,
 +};
 +use kuna_base::address::Address;
-+use kuna_num::opcodes::OpCode;
 +use serde::Serialize;
 +use std::collections::{BTreeSet, HashMap};
 +
@@ -825,8 +915,7 @@ index 00000000..91ce7f60
 +    pub machine_call_equivalence: &'static str,
 +}
 +
-+pub fn collect_all(fd: &Funcdata) -> Result<CallFacts, String> {
-+    const MAX_CALLS: usize = 12_000;
++pub fn collect_all(fd: &Funcdata, membership: &Membership) -> Result<CallFacts, String> {
 +    const MAX_VALUES: usize = 36_000;
 +    const MAX_INPUTS: usize = 50_000;
 +    if fd.bblocks_get_size() <= 0 {
@@ -846,70 +935,40 @@ index 00000000..91ce7f60
 +    let mut keys = BTreeSet::new();
 +    let mut inputs = 0usize;
 +    let mut text_bytes = 0usize;
-+    let mut operations_examined = 0usize;
-+    for i in 0..fd.bblocks_get_size() {
-+        let block = fd.bblocks_get_block(i);
-+        let expected = fd.bb_op_len(block);
-+        let mut examined = 0;
-+        let mut cursor = fd.bb_op_head(block);
-+        // Walk native membership directly; do not allocate a Vec of every op in
-+        // a large block merely to select its calls. Length also detects cycles.
-+        while let Some(key) = cursor {
-+            if examined >= expected {
-+                return Err("cyclic native block operation list".into());
++    for &key in &membership.calls {
++        let op = fd.obank().get(key).ok_or("stale call operation")?;
++        inputs = inputs
++            .checked_add(op.num_input() as usize)
++            .ok_or("atomic call input count overflow")?;
++        if inputs > MAX_INPUTS {
++            return Err("atomic call input capacity exceeded".into());
++        }
++        let spec = specs.get(&key).copied();
++        if let Some(spec) = spec {
++            atomic_values::charge_text(&mut text_bytes, spec.get_name().len())?;
++            if spec.proto().has_model() {
++                atomic_values::charge_text(&mut text_bytes, spec.proto().get_model_name().len())?;
 +            }
-+            examined += 1;
-+            operations_examined += 1;
-+            let op = fd.obank().get(key).ok_or("stale block operation")?;
-+            if op.get_parent() != Some(block) {
-+                return Err("call scan block ownership mismatch".into());
-+            }
-+            cursor = op.basic_neighbours().1;
-+            if !matches!(op.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND) {
-+                continue;
-+            }
-+            if items.len() >= MAX_CALLS {
-+                return Err("atomic call capacity exceeded".into());
-+            }
-+            inputs = inputs
-+                .checked_add(op.num_input() as usize)
-+                .ok_or("atomic call input count overflow")?;
-+            if inputs > MAX_INPUTS {
-+                return Err("atomic call input capacity exceeded".into());
-+            }
-+            let spec = specs.get(&key).copied();
-+            if let Some(spec) = spec {
-+                atomic_values::charge_text(&mut text_bytes, spec.get_name().len())?;
-+                if spec.proto().has_model() {
-+                    atomic_values::charge_text(
-+                        &mut text_bytes,
-+                        spec.proto().get_model_name().len(),
-+                    )?;
-+                }
-+            }
-+            for index in 0..op.num_input() {
-+                if let Some(v) = op.get_in(index) {
-+                    keys.insert(v);
-+                }
-+            }
-+            if let Some(v) = op.get_out() {
++        }
++        for index in 0..op.num_input() {
++            if let Some(v) = op.get_in(index) {
 +                keys.insert(v);
 +            }
-+            if keys.len() > MAX_VALUES {
-+                return Err("atomic call value capacity exceeded".into());
-+            }
-+            items.push(collect(fd, key, spec)?);
 +        }
-+        if examined != expected {
-+            return Err("native block operation count mismatch".into());
++        if let Some(v) = op.get_out() {
++            keys.insert(v);
 +        }
++        if keys.len() > MAX_VALUES {
++            return Err("atomic call value capacity exceeded".into());
++        }
++        items.push(collect(fd, key, spec)?);
 +    }
 +    let values = atomic_values::collect(fd, keys, &mut text_bytes)?;
 +    Ok(CallFacts {
 +        schema_version: 1, items, values,
 +        coverage: CallCoverage {
 +            scope: "all recovered block-member CALL/CALLIND operations",
-+            blocks_examined: fd.bblocks_get_size(), operations_examined,
++            blocks_examined: membership.blocks_examined, operations_examined: membership.operations_examined,
 +            value_scope: "call inputs including target and outputs only; definitions may be outside this facet",
 +            machine_call_equivalence: "unknown",
 +        },
@@ -1046,15 +1105,17 @@ index 00000000..91ce7f60
 +}
 diff --git a/decompiler/crates/kuna-decomp/src/substrate/atomic_facts.rs b/decompiler/crates/kuna-decomp/src/substrate/atomic_facts.rs
 new file mode 100644
-index 00000000..3dfad1aa
+index 00000000..78d5fc50
 --- /dev/null
 +++ b/decompiler/crates/kuna-decomp/src/substrate/atomic_facts.rs
-@@ -0,0 +1,231 @@
+@@ -0,0 +1,155 @@
 +//! Opt-in, read-only export of the recovered function IR for the REA experiment.
 +//! IDs are local to this captured model; addresses alone are not SSA identities.
 +use crate::{
 +    architecture::Architecture,
-+    atomic_values::{self, operation_id, value_id, ValueFact},
++    atomic_membership::Membership,
++    atomic_operations::{OperationBudget, OperationFact},
++    atomic_values::{operation_id, value_id, ValueFact},
 +    funcdata::Funcdata,
 +};
 +use kuna_num::opcodes::OpCode;
@@ -1094,26 +1155,11 @@ index 00000000..3dfad1aa
 +    pub condition_value: Option<String>,
 +    pub condition_test: Option<&'static str>,
 +}
-+#[derive(Debug, Clone, Serialize)]
-+pub struct OperationFact {
-+    pub id: String,
-+    pub address: String,
-+    pub block: i32,
-+    pub opcode: String,
-+    pub statement: String,
-+    pub is_dead: bool,
-+    pub inputs: Vec<InputFact>,
-+    pub output: Option<String>,
-+}
-+#[derive(Debug, Clone, Serialize)]
-+pub struct InputFact {
-+    pub input_index: i32,
-+    pub value_id: Option<String>,
-+    pub phi_predecessor: Option<i32>,
-+    pub phi_predecessor_edge: Option<String>,
-+}
-+
-+pub fn collect(arch: &Architecture, fd: &Funcdata) -> Result<FunctionFacts, String> {
++pub fn collect(
++    arch: &Architecture,
++    fd: &Funcdata,
++    membership: &Membership,
++) -> Result<FunctionFacts, String> {
 +    // Bounds cover allocations before JSON serialization, independently of the
 +    // transport byte budget. Overflow is an unavailable facet, not clipped IR.
 +    const MAX_OPERATIONS: usize = 12_000;
@@ -1126,13 +1172,14 @@ index 00000000..3dfad1aa
 +    if fd.bblocks_get_size() > 12_000 {
 +        return Err("atomic block capacity exceeded".into());
 +    }
++    if membership.operations_examined > MAX_OPERATIONS {
++        return Err("atomic operation capacity exceeded".into());
++    }
 +    let mut blocks = Vec::new();
 +    let mut operations = Vec::new();
-+    let mut value_keys = BTreeSet::new();
 +    let mut retained_ops = BTreeSet::new();
-+    let mut input_count = 0usize;
 +    let mut edge_count = 0usize;
-+    let mut display_bytes = 0usize;
++    let mut budget = OperationBudget::new(MAX_VALUES, MAX_INPUTS, MAX_DISPLAY_BYTES);
 +    let mut coverage = Coverage {
 +        scope: "complete native recovered basic-block graph; block-member operations",
 +        machine_semantic_equivalence: "unknown",
@@ -1190,82 +1237,18 @@ index 00000000..3dfad1aa
 +            if operations.len() >= MAX_OPERATIONS {
 +                return Err("atomic operation capacity exceeded".into());
 +            }
-+            let op = fd.obank().get(key).ok_or("stale block operation")?;
-+            let id = operation_id(fd, key)?;
-+            if !retained_ops.insert(id.clone()) {
++            let op = budget.collect(arch, fd, key)?;
++            if !retained_ops.insert(op.id.clone()) {
 +                return Err("operation belongs to multiple recovered blocks".into());
 +            }
-+            if op.get_parent() != Some(block_key) {
-+                return Err("operation/block ownership mismatch".into());
++            if op.opcode == "CPUI_BRANCHIND" {
++                coverage.indirect_branch_operations.push(op.id.clone());
 +            }
-+            input_count = input_count
-+                .checked_add(op.num_input() as usize)
-+                .ok_or("atomic input count overflow")?;
-+            if input_count > MAX_INPUTS {
-+                return Err("atomic input-edge capacity exceeded".into());
-+            }
-+            if op.code() == OpCode::CPUI_BRANCHIND {
-+                coverage.indirect_branch_operations.push(id.clone());
-+            }
-+            let phi = op.code() == OpCode::CPUI_MULTIEQUAL;
-+            if phi && block.size_in() != op.num_input() {
-+                coverage
-+                    .issues
-+                    .push(format!("{id}: phi/predecessor count mismatch"));
-+            }
-+            let inputs = (0..op.num_input())
-+                .map(|index| {
-+                    let value = op.get_in(index);
-+                    if let Some(v) = value {
-+                        value_keys.insert(v);
-+                    }
-+                    InputFact {
-+                        input_index: index,
-+                        value_id: value.map(value_id),
-+                        phi_predecessor: if phi && block.size_in() == op.num_input() {
-+                            Some(fd.bblocks_ref().block(block.get_in(index)).get_index())
-+                        } else {
-+                            None
-+                        },
-+                        phi_predecessor_edge: if phi && block.size_in() == op.num_input() {
-+                            Some(format!(
-+                                "{}:{}",
-+                                fd.bblocks_ref().block(block.get_in(index)).get_index(),
-+                                block.get_in_rev_index(index)
-+                            ))
-+                        } else {
-+                            None
-+                        },
-+                    }
-+                })
-+                .collect();
-+            if let Some(v) = op.get_out() {
-+                value_keys.insert(v);
-+            }
-+            if value_keys.len() > MAX_VALUES {
-+                return Err("atomic value capacity exceeded".into());
-+            }
-+            let mut statement = String::new();
-+            crate::funcdata_printraw::render_op(&mut statement, arch, fd, key)?;
-+            display_bytes = display_bytes
-+                .checked_add(statement.len())
-+                .ok_or("atomic display count overflow")?;
-+            if display_bytes > MAX_DISPLAY_BYTES {
-+                return Err("atomic display capacity exceeded".into());
-+            }
-+            operations.push(OperationFact {
-+                id,
-+                address: format!("0x{:x}", op.get_seq_num().get_addr().get_offset()),
-+                block: block.get_index(),
-+                opcode: format!("{:?}", op.code()),
-+                statement,
-+                is_dead: op.is_dead(),
-+                inputs,
-+                output: op.get_out().map(value_id),
-+            });
++            operations.push(op);
 +        }
 +    }
-+    let values = atomic_values::collect(fd, value_keys, &mut display_bytes)?;
++    let values = budget.values(fd)?;
++    coverage.issues = budget.issues;
 +    let missing: BTreeSet<_> = values
 +        .iter()
 +        .filter_map(|v| v.definition.as_ref())
@@ -1279,6 +1262,332 @@ index 00000000..3dfad1aa
 +        operations,
 +        values,
 +        coverage,
++    })
++}
+diff --git a/decompiler/crates/kuna-decomp/src/substrate/atomic_membership.rs b/decompiler/crates/kuna-decomp/src/substrate/atomic_membership.rs
+new file mode 100644
+index 00000000..6628ddd7
+--- /dev/null
++++ b/decompiler/crates/kuna-decomp/src/substrate/atomic_membership.rs
+@@ -0,0 +1,64 @@
++//! One validated membership scan for independent recovered fact facets.
++use crate::{context::OpId, funcdata::Funcdata};
++use kuna_num::opcodes::OpCode;
++use std::collections::HashSet;
++
++pub const MAX_CALLS: usize = 12_000;
++// Bound the optional membership index separately from call discovery. Crossing
++// this resource budget disables projections, without discarding known calls.
++const MAX_INDEXED_OPERATIONS: usize = 65_536;
++pub struct Membership {
++    pub calls: Vec<OpId>,
++    pub members: Option<HashSet<OpId>>,
++    pub blocks_examined: i32,
++    pub operations_examined: usize,
++}
++pub fn inspect(fd: &Funcdata) -> Result<Membership, String> {
++    if fd.bblocks_get_size() <= 0 {
++        return Err("recovered block membership is unavailable".into());
++    }
++    let mut result = Membership {
++        calls: Vec::new(),
++        members: Some(HashSet::new()),
++        blocks_examined: fd.bblocks_get_size(),
++        operations_examined: 0,
++    };
++    for i in 0..fd.bblocks_get_size() {
++        let block = fd.bblocks_get_block(i);
++        let expected = fd.bb_op_len(block);
++        let mut examined = 0;
++        let mut cursor = fd.bb_op_head(block);
++        while let Some(key) = cursor {
++            if examined >= expected {
++                return Err("cyclic native block operation list".into());
++            }
++            examined += 1;
++            result.operations_examined = result
++                .operations_examined
++                .checked_add(1)
++                .ok_or("native operation count overflow")?;
++            let op = fd.obank().get(key).ok_or("stale block operation")?;
++            if op.get_parent() != Some(block) {
++                return Err("native block ownership mismatch".into());
++            }
++            cursor = op.basic_neighbours().1;
++            if let Some(members) = result.members.as_mut() {
++                if members.len() == MAX_INDEXED_OPERATIONS {
++                    result.members = None;
++                } else if !members.insert(key) {
++                    return Err("operation belongs to multiple recovered blocks".into());
++                }
++            }
++            if matches!(op.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND) {
++                if result.calls.len() >= MAX_CALLS {
++                    return Err("atomic call capacity exceeded".into());
++                }
++                result.calls.push(key);
++            }
++        }
++        if examined != expected {
++            return Err("native block operation count mismatch".into());
++        }
++    }
++    Ok(result)
++}
+diff --git a/decompiler/crates/kuna-decomp/src/substrate/atomic_operations.rs b/decompiler/crates/kuna-decomp/src/substrate/atomic_operations.rs
+new file mode 100644
+index 00000000..7d56cce5
+--- /dev/null
++++ b/decompiler/crates/kuna-decomp/src/substrate/atomic_operations.rs
+@@ -0,0 +1,127 @@
++//! Shared read-only operation/value normalization for full and selected facts.
++use crate::{
++    architecture::Architecture,
++    atomic_values::{self, operation_id, value_id, ValueFact},
++    context::{OpId, VarnodeId},
++    funcdata::Funcdata,
++};
++use kuna_num::opcodes::OpCode;
++use serde::Serialize;
++use std::collections::BTreeSet;
++
++#[derive(Debug, Clone, Serialize)]
++pub struct OperationFact {
++    pub id: String,
++    pub address: String,
++    pub block: i32,
++    pub opcode: String,
++    pub statement: String,
++    pub is_dead: bool,
++    pub inputs: Vec<InputFact>,
++    pub output: Option<String>,
++}
++#[derive(Debug, Clone, Serialize)]
++pub struct InputFact {
++    pub input_index: i32,
++    pub value_id: Option<String>,
++    pub phi_predecessor: Option<i32>,
++    pub phi_predecessor_edge: Option<String>,
++}
++pub struct OperationBudget {
++    max_values: usize,
++    max_inputs: usize,
++    max_display: usize,
++    keys: BTreeSet<VarnodeId>,
++    input_count: usize,
++    display_bytes: usize,
++    pub issues: Vec<String>,
++}
++impl OperationBudget {
++    pub fn new(max_values: usize, max_inputs: usize, max_display: usize) -> Self {
++        Self {
++            max_values,
++            max_inputs,
++            max_display,
++            keys: BTreeSet::new(),
++            input_count: 0,
++            display_bytes: 0,
++            issues: Vec::new(),
++        }
++    }
++    pub fn collect(
++        &mut self,
++        arch: &Architecture,
++        fd: &Funcdata,
++        key: OpId,
++    ) -> Result<OperationFact, String> {
++        let op = fd.obank().get(key).ok_or("stale operation")?;
++        let parent = op.get_parent().ok_or("operation has no recovered block")?;
++        let block = fd.bblocks_ref().block(parent);
++        let id = operation_id(fd, key)?;
++        if op.num_input() < 0 {
++            return Err("negative native input count".into());
++        }
++        self.input_count = self
++            .input_count
++            .checked_add(op.num_input() as usize)
++            .ok_or("atomic input count overflow")?;
++        if self.input_count > self.max_inputs {
++            return Err("atomic input-edge capacity exceeded".into());
++        }
++        let phi = op.code() == OpCode::CPUI_MULTIEQUAL;
++        let phi_bound = phi && block.size_in() == op.num_input();
++        if phi && !phi_bound {
++            self.issues
++                .push(format!("{id}: phi/predecessor count mismatch"));
++        }
++        let inputs = (0..op.num_input())
++            .map(|index| {
++                let value = op.get_in(index);
++                if let Some(v) = value {
++                    self.keys.insert(v);
++                }
++                InputFact {
++                    input_index: index,
++                    value_id: value.map(value_id),
++                    phi_predecessor: phi_bound
++                        .then(|| fd.bblocks_ref().block(block.get_in(index)).get_index()),
++                    phi_predecessor_edge: phi_bound.then(|| {
++                        format!(
++                            "{}:{}",
++                            fd.bblocks_ref().block(block.get_in(index)).get_index(),
++                            block.get_in_rev_index(index)
++                        )
++                    }),
++                }
++            })
++            .collect();
++        if let Some(v) = op.get_out() {
++            self.keys.insert(v);
++        }
++        if self.keys.len() > self.max_values {
++            return Err("atomic value capacity exceeded".into());
++        }
++        let mut statement = String::new();
++        crate::funcdata_printraw::render_op(&mut statement, arch, fd, key)?;
++        self.display_bytes = self
++            .display_bytes
++            .checked_add(statement.len())
++            .ok_or("atomic display count overflow")?;
++        if self.display_bytes > self.max_display {
++            return Err("atomic display capacity exceeded".into());
++        }
++        Ok(OperationFact {
++            id,
++            address: format!("0x{:x}", op.get_seq_num().get_addr().get_offset()),
++            block: block.get_index(),
++            opcode: format!("{:?}", op.code()),
++            statement,
++            is_dead: op.is_dead(),
++            inputs,
++            output: op.get_out().map(value_id),
++        })
++    }
++    pub fn values(&mut self, fd: &Funcdata) -> Result<Vec<ValueFact>, String> {
++        atomic_values::collect(fd, std::mem::take(&mut self.keys), &mut self.display_bytes)
++    }
++}
+diff --git a/decompiler/crates/kuna-decomp/src/substrate/atomic_projection.rs b/decompiler/crates/kuna-decomp/src/substrate/atomic_projection.rs
+new file mode 100644
+index 00000000..097b153a
+--- /dev/null
++++ b/decompiler/crates/kuna-decomp/src/substrate/atomic_projection.rs
+@@ -0,0 +1,117 @@
++//! Bounded backward SSA facts, independent of full CFG export availability.
++use crate::{
++    architecture::Architecture,
++    atomic_membership::Membership,
++    atomic_operations::{OperationBudget, OperationFact},
++    atomic_values::{operation_id, ValueFact},
++    funcdata::Funcdata,
++};
++use serde::Serialize;
++use std::collections::{BTreeMap, HashSet, VecDeque};
++
++#[derive(Debug, Clone, Serialize)]
++pub struct Projection {
++    pub schema_version: u32,
++    pub roots: Vec<String>,
++    pub operations: Vec<OperationFact>,
++    pub values: Vec<ValueFact>,
++    pub coverage: Coverage,
++}
++#[derive(Debug, Clone, Serialize)]
++pub struct Frontier {
++    pub definition: String,
++    pub reason: &'static str,
++}
++#[derive(Debug, Clone, Serialize)]
++pub struct Coverage {
++    pub scope: &'static str,
++    pub operation_budget: usize,
++    pub frontier: Vec<Frontier>,
++    pub issues: Vec<String>,
++    pub machine_semantic_equivalence: &'static str,
++}
++pub fn collect(
++    arch: &Architecture,
++    fd: &Funcdata,
++    membership: &Membership,
++) -> Result<Projection, String> {
++    const MAX_OPERATIONS: usize = 4096;
++    let members = membership
++        .members
++        .as_ref()
++        .ok_or("projection membership-index capacity exceeded")?;
++    if membership.calls.len() > MAX_OPERATIONS {
++        return Err("projection call-root capacity exceeded".into());
++    }
++    let roots = membership
++        .calls
++        .iter()
++        .map(|key| operation_id(fd, *key))
++        .collect::<Result<Vec<_>, _>>()?;
++    let mut queue: VecDeque<_> = membership.calls.iter().copied().collect();
++    let mut queued: HashSet<_> = membership.calls.iter().copied().collect();
++    let mut retained = HashSet::new();
++    let mut operations = Vec::new();
++    let mut budget = OperationBudget::new(12_288, 16_384, 2 * 1024 * 1024);
++    while let Some(key) = queue.pop_front() {
++        if !members.contains(&key) {
++            continue;
++        }
++        if retained.len() == MAX_OPERATIONS {
++            break;
++        }
++        if !retained.insert(key) {
++            continue;
++        }
++        operations.push(budget.collect(arch, fd, key)?);
++        let op = fd.obank().get(key).ok_or("stale projection operation")?;
++        for i in 0..op.num_input() {
++            if let Some(value) = op.get_in(i) {
++                let value = fd.vbank().get(value).ok_or("stale projection operand")?;
++                if let Some(definition) = value.get_def() {
++                    if queued.insert(definition) {
++                        queue.push_back(definition);
++                    }
++                }
++            }
++        }
++    }
++    let values = budget.values(fd)?;
++    let retained_ids: HashSet<_> = operations.iter().map(|op| op.id.as_str()).collect();
++    let mut reasons = BTreeMap::new();
++    for key in queued.difference(&retained) {
++        reasons.insert(
++            operation_id(fd, *key)?,
++            if members.contains(key) {
++                "operation-budget"
++            } else {
++                "outside-recovered-membership"
++            },
++        );
++    }
++    let missing: HashSet<_> = values
++        .iter()
++        .filter_map(|v| v.definition.as_ref())
++        .filter(|id| !retained_ids.contains(id.as_str()))
++        .cloned()
++        .collect();
++    let frontier = reasons
++        .into_iter()
++        .filter(|(id, _)| missing.contains(id))
++        .map(|(definition, reason)| Frontier { definition, reason })
++        .collect();
++    Ok(Projection {
++        schema_version: 1,
++        roots,
++        operations,
++        values,
++        coverage: Coverage {
++            scope:
++                "call-rooted bounded backward SSA definitions; not a CFG or complete use inventory",
++            operation_budget: MAX_OPERATIONS,
++            frontier,
++            issues: budget.issues,
++            machine_semantic_equivalence: "unknown",
++        },
 +    })
 +}
 diff --git a/decompiler/crates/kuna-decomp/src/substrate/atomic_values.rs b/decompiler/crates/kuna-decomp/src/substrate/atomic_values.rs
@@ -1371,24 +1680,27 @@ index 39927ceb..844950a6 100644
      let num_input = fd.obank().get(op).ok_or_else(|| "render_op: stale op".to_string())?.num_input();
      let in_at = |i: int4| -> Option<VarnodeId> { fd.obank().get(op).and_then(|o| o.get_in(i)) };
 diff --git a/decompiler/crates/kuna-decomp/src/substrate/mod.rs b/decompiler/crates/kuna-decomp/src/substrate/mod.rs
-index 00528cb5..96b10a6c 100644
+index 00528cb5..b019a174 100644
 --- a/decompiler/crates/kuna-decomp/src/substrate/mod.rs
 +++ b/decompiler/crates/kuna-decomp/src/substrate/mod.rs
-@@ -11,6 +11,9 @@ pub mod funcdata_block;
+@@ -11,6 +11,12 @@ pub mod funcdata_block;
  pub mod funcdata_encode;
  pub mod funcdata_op;
  pub mod funcdata_printraw;
 +pub mod atomic_facts;
 +pub mod atomic_calls;
++pub mod atomic_membership;
++pub mod atomic_operations;
++pub mod atomic_projection;
 +pub mod atomic_values;
  pub mod funcdata_varnode;
  pub mod dtype;
  pub mod context;
 diff --git a/docs/spec/00-overview.md b/docs/spec/00-overview.md
-index ce499c4f..976878d0 100644
+index ce499c4f..5a98b2c3 100644
 --- a/docs/spec/00-overview.md
 +++ b/docs/spec/00-overview.md
-@@ -3431,3 +3431,50 @@ Reserving it creates no analysis varnode and changes no physical mapping or
+@@ -3431,3 +3431,68 @@ Reserving it creates no analysis varnode and changes no physical mapping or
  emitted C. Ghidra receives temporary storage for the logical local, rather than
  a persistable ordinary stack-variable location; ordinary symbol storage and
  register-plus-stack parameter JOINs keep their existing encoding.
@@ -1415,7 +1727,7 @@ index ce499c4f..976878d0 100644
 +Atomic JSON uses the ordinary record producer and the shared compact ASCII-safe
 +writer. That writer checks each encoded write before growing its bounded output
 +buffer, including control/surrogate escaping and the final newline. A document
-+that cannot fit drops only its graph facet, reports `atomic_facts_error`, and
++that cannot fit omits unavailable recovered facets with named errors and
 +retains C, locations and ordinary metadata. If that base record also cannot fit,
 +the command reports failure instead of truncating it or analyzing the target
 +again. This flag requires `--atomic-facts --json`; ordinary output is unchanged.
@@ -1435,7 +1747,25 @@ index ce499c4f..976878d0 100644
 +and placeholders stay unknown. Input slots are not source parameter ordinals.
 +
 +The encoded writer attempts bounded facet alternatives without cloning their
-+contents. Oversized graph output preserves fitting calls; oversized calls
-+preserve a fitting graph. If neither fits, valid C and both failure reasons
-+remain. If C itself cannot fit, output fails explicitly without reanalysis.
-+Facet errors do not fabricate empty graph/call/value collections or change C.
++contents. A full graph omits its redundant operation projection; if encoded
++capacity makes that graph unavailable, the independent projection is restored.
++A fitting graph has priority, then fitting calls, then the projection. Failed
++facets retain named errors. If C itself cannot fit, output fails explicitly
++without reanalysis. Facet errors do not fabricate empty collections or change C.
++
++`atomic_membership.rs` owns one checked scan of recovered block membership and
++call roots. Its optional index is bounded at 65,536 native operation keys; calls
++remain readable beyond that index budget. `atomic_operations.rs` normalizes
++operands, phi bindings, origins, outputs, display and values for both full and
++selected exports. Full-graph operation capacity is checked before materializing
++its rows, after the common scan.
++
++The independent version-1 `atomic_projection` retains all recovered calls as
++roots, then follows backward operand definitions within a 4,096-operation,
++12,288-value, 16,384-input and 2 MiB text budget. Too many roots or unavailable
++membership make this facet unavailable. Omitted defining operations have exact
++IDs and `operation-budget` or `outside-recovered-membership` frontier reasons.
++This does not collect CFG or complete use lists, infer memory aliases, or prove
++runtime reachability. Collection uses the same live function after C rendering;
++no second decompilation is performed. Complete source Evidence keeps the native
++frontier while callers may select a compact summary and individual facts.

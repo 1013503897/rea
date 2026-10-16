@@ -153,7 +153,7 @@ try {
       },
     ]);
     assert.equal(vm.facets.calls.coverage.machine_call_equivalence, "unknown");
-    assert.equal(vm.facets.values.scope, "call-boundary-only");
+    assert.equal(vm.facets.values.scope, "call-rooted-definitions");
     const selectedCalls = await read("calls", {
       snapshot: vm.snapshot,
       origin_addresses: ["0xf238b", "0xf115c"],
@@ -174,7 +174,7 @@ try {
     ];
     const boundary = await read("values", { snapshot: vm.snapshot, ids });
     assert.equal(boundary.missing.length, 0);
-    assert.match(boundary.coverage.value_scope, /only/);
+    assert.equal(boundary.coverage.control_flow, "not-collected");
     for (const row of selectedCalls.items)
       assert.ok(
         boundary.items.some(
@@ -185,7 +185,7 @@ try {
         ),
       );
     const unavailable = await call("execute_javascript", {
-      code: `return await rea.operations({snapshot:${JSON.stringify(vm.snapshot)},limit:1});`,
+      code: `return await rea.blocks({snapshot:${JSON.stringify(vm.snapshot)},limit:1});`,
     });
     assert.equal(unavailable.value.ok, false);
     assert.equal(unavailable.value.error.code, "capability_unavailable");
