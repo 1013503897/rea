@@ -19,6 +19,11 @@ The [capability map](capability-map.md) distinguishes verified task coverage,
 experimental exporter requirements and remaining unknowns before interpreting
 adapter comparisons.
 
+The [AArch64 reference study](aarch64-xref-study.md) finds and fixes missing
+ADRP-based string and memory references before the next model comparison.
+Real SDK and traditional MCP preflights now agree with independent machine
+evidence; the shared bounded producer preserves space/width and uncertainty.
+
 The [architecture storage study](storage-study.md) adds exact native register-name
 and address-space queries, sharing one bounded immutable capture per lease.
 It separates coordinates, widths and native map misses from hardware absence,

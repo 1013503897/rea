@@ -97,3 +97,10 @@ Both real models complete the extended native storage/prototype/call task.
 Code Mode reduces cumulative/uncached input and wall time in that pair but uses
 more local CPU and more inner fact reads. The shared metadata capability is
 verified separately from this adapter observation; earlier mixed pairs remain.
+
+The [AArch64 reference study](aarch64-xref-study.md) corrects an observed native
+ADRP+ADD/LOAD/STORE gap through the shared PC-relative value owner. Real arm64
+SSH checks verify both warning owners, callers, selected machine words and
+77 GOT-slot reads. Coverage stays bounded and does not propagate live GOT
+contents. Traditional C/assembly preflight can answer the same new behavior-level
+question, avoiding a baseline missing necessary facts. Model trials are separate.

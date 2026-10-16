@@ -1,0 +1,30 @@
+Analyze {{artifact_path}} statically, starting from these observed formats:
+- REMOTE HOST IDENTIFICATION HAS CHANGED
+- Host key for %.200s has changed and you have requested strict checking.
+
+Find the function that supplies the banner format to a formatting/logging call,
+and the caller that owns the second diagnostic. Establish both from references
+and corroborating function facts; do not guess original source names. Show the
+selected direct call from that caller into the warning function. Trace its
+passed pointer into the warning function's first helper-call use, including
+machine passing locations and call targets. If using SSA, keep the snapshots'
+value identities separate; matching storage is not a general alias proof.
+
+Show how the banner format pointer is formed and passed to its formatting/
+logging call. Verify the essential address formation, register or stack passing
+location and transfer against selected machine instructions. Recovered origins
+or operand slots alone do not establish machine addresses or source ordinals.
+
+In the selected caller, after the warning call returns, identify the local test
+that chooses the strict-checking diagnostic versus continuation. Report the
+tested storage and width, both actual machine successors with zero/nonzero
+behavior, and the selected failure-cleanup path's low 32-bit return value.
+Distinguish machine addressing from any static model's global-address recovery;
+do not present an initial/model pointer as observed live memory. Does selecting
+the banner alone prove rejection? Does zero prove a connection will be accepted?
+
+Give a focused answer with function/instruction addresses, real Evidence IDs,
+target digest and necessary coverage. Prefer selected facts/windows; do not
+return full reports or inventories to model context. Preserve unknown runtime
+values, relocation/binding state, aliases, logging behavior, other paths and
+runtime feasibility. Do not execute the target. Close the target lease.
