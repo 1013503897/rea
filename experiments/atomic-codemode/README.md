@@ -23,6 +23,11 @@ The [AArch64 reference study](aarch64-xref-study.md) finds and fixes missing
 ADRP-based string and memory references before the next model comparison.
 Real SDK and traditional MCP preflights now agree with independent machine
 evidence; the shared bounded producer preserves space/width and uncertainty.
+All three real models now complete the behavior-level task. Code Mode takes
+151.3 seconds / 388,365 cumulative input tokens, Direct 164.9 / 515,929 and
+traditional 345.7 / 681,613. Code has more uncached input than traditional and
+more memory than Direct. A native BTI/PLT identity/no-return boundary remains
+under investigation.
 
 The [architecture storage study](storage-study.md) adds exact native register-name
 and address-space queries, sharing one bounded immutable capture per lease.

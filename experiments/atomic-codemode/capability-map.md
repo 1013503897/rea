@@ -103,4 +103,7 @@ ADRP+ADD/LOAD/STORE gap through the shared PC-relative value owner. Real arm64
 SSH checks verify both warning owners, callers, selected machine words and
 77 GOT-slot reads. Coverage stays bounded and does not propagate live GOT
 contents. Traditional C/assembly preflight can answer the same new behavior-level
-question, avoiding a baseline missing necessary facts. Model trials are separate.
+question, avoiding a baseline missing necessary facts. All three real models
+complete it, while token/time/resource tradeoffs remain mixed. All preserve the
+recovered no-return disagreement and use machine facts for the post-call path;
+a native BTI/veneer identity split is a concrete next investigation.

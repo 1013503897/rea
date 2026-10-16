@@ -127,9 +127,102 @@ dossier costs 95.291 s waiting for whole-program export; later assembly/dossier
 reads reuse that cache. Atomic selected-native profiles differ, so the planned
 comparison is a full workflow comparison, not a dispatch-only ablation.
 
-Real model outcomes and cumulative tokens will be recorded only after launch
-and complete answer/source verification. No Code Mode advantage or general
-complex-software superiority is established by this capability checkpoint.
+The runtime/question/oracle are frozen at
+`5eede35c978c76ff9215443ed0a0d5980bfbdfe1`. Execution order is traditional →
+Code Mode → direct. All request gpt-6.1-sol/high via Codex 0.161.0, with fresh
+isolated profiles/private caches and the same task. Both atomic catalogs are
+complete (22/4 tools); the traditional set contains every declared Kuna native
+operation and session/views (16 tools). Each client actually has JavaScript
+dispatch. This compares MCP workflows inside that common client surface.
+
+All three complete answers pass agent review against the frozen oracle. They
+identify both owners, the X27→X0 pointer/helper transfer, banner ADRP/ADD into
+X6, four-byte field/CBZ successors, static versus live pointer knowledge,
+cleanup/low return bits, Evidence/target identities, unknowns and close. The
+traditional answer uses native C recovery plus machine addressing for the static
+global; both atomic answers also read the selected loaded-image pointer bytes.
+No native-only representation is required to pass.
+
+Separate scripted checks verify all seven traditional, fifteen Code and fourteen
+Direct cited sources against delivered responses/traces and target/engine
+identities. Atomic retained source hashes/lengths agree; complete selected native
+function documents are identical between the two atomic lanes. Selected native
+argument/value/passing tuples and the PHI/input distinction match the delivered
+graphs/call facets. The independent ELF/GNU oracle checks the machine facts.
+Supplementary GNU checks corroborate the traditional answer's added logging
+wrapper call at `0x5ae6c → 0x5abb0`, with X6 unchanged. Source/fidelity checks
+are separate from agent review of the entire natural-language answers; neither
+constitutes human readiness or global machine-equivalence verification.
+
+| Whole completed task                                  | Traditional | Code Mode                     | Direct atomic   |
+| ----------------------------------------------------- | ----------- | ----------------------------- | --------------- |
+| Required answer                                       | pass        | pass                          | pass            |
+| Cumulative input tokens                               | 681,613     | 388,365                       | 515,929         |
+| Cached input, included above                          | 639,360     | 336,000                       | 436,224         |
+| Uncached input                                        | 42,253      | 52,365                        | 79,705          |
+| Output tokens                                         | 5,423       | 5,755                         | 6,529           |
+| Reasoning, included in output                         | 1,324       | 1,137                         | 1,934           |
+| Unique model responses                                | 23          | 13                            | 15              |
+| Client executor / wait calls                          | 16 / 6      | 12 / 0                        | 14 / 0          |
+| MCP attempts, including failures/discovery/open/close | 13          | 12                            | 31              |
+| Rejected MCP attempts                                 | 2           | 0                             | 0               |
+| Atomic fact reads                                     | n/a         | 25 inner reads                | 25 direct reads |
+| Native function dossiers / snapshot requests          | 4 dossiers  | 3 requests, 2 unique captures | 2 captures      |
+| Model wall seconds                                    | 345.676     | 151.264                       | 164.942         |
+| Family wall seconds                                   | 346.217     | 151.834                       | 165.421         |
+| Local family CPU seconds                              | 186.786767  | 41.152525                     | 43.116751       |
+| Kernel family peak MiB                                | 973.1       | 695.7                         | 600.4           |
+
+Both traditional rejections are instruction-interior addresses passed to exact
+procedure lookup. The inventory was available, the model used it and completed;
+this is not the earlier under-equipped baseline. All four traditional dossiers
+report the same ready project-export key, so the observation does not establish
+a broken project cache. Its extra logging-wrapper investigations and native
+profile add work beyond the two selected atomic captures. All attempts remain
+charged; failed/intermediate development checks are separate from model trials.
+
+Code uses 24.7% less cumulative input and less wall/CPU time than Direct in
+this pair, but more peak memory. Compared with traditional it uses 43.0% less
+cumulative input and less wall/CPU/memory, but **23.9% more uncached input** and
+more output. There are only two fewer model responses than Direct, despite
+nineteen fewer MCP requests. Same fact-read counts do not mean identical native
+work. This is one new architecture/version sample with uncontrolled OS/model
+caches, host contention, service build and remote compute, not a stable Code
+Mode advantage, a price claim or broad complex-software superiority.
+
+Unique per-response usage sums match the task totals. All target, engine and
+runtime fingerprints remain unchanged. All three profiles are removed; verified
+payload-exit observations show OOM 0 and descendant cleanup. The same resource
+bounds and kernel-memory interpretation as above apply.
+
+Raw model records are `arm-warning-{traditional,codemode,direct}-v1/` with sibling
+resource logs/configs; atomic traces and explicitly retained sources have matching
+prefixes. Derived records are `arm-model-costs.json`, `arm-answer-checks.json`,
+`arm-answer-review.json` and `arm-traditional-delivered-evidence.json`. Reviewed
+answer SHA-256 values are:
+
+- Traditional: `5312aa0757b35b8a28b8d1c60af652760e445b0463117eb41def1e2eeb5031eb`
+- Code: `e331df37f53e58a85bea61f37b5e3b7c6a6848af78a0225383df0d9a481121a7`
+- Direct: `792b613d25e9c5dfec4e4dd03c13d265f24937e0eafc817931bd5a563e496408`
+
+## Remaining native identity/control-flow question
+
+All answers detect the recovered caller's no-return treatment of the warning
+call and use machine instructions for the requested conditional post-call path.
+The recovered call facet omits the strict call. Complete recovered-graph coverage
+therefore does not establish a complete machine graph or a correct no-return
+inference. This is a concrete remaining backend/identity investigation.
+
+Supplementary static observations identify a suspicious boundary: the warning
+epilogue restores LR/SP and branches at `0x25858` to `0xbad0`. That address
+starts with BTI, followed by ADRP at `0xbad4` and a slot load at `0xbad8` from
+`0x10f390`. ELF `R_AARCH64_JUMP_SLOT` names that slot `free@GLIBC_2.17`.
+The native inventory instead exposes `sub_bad0` with size bound 4 and `free`
+at `0xbad4` with bound 20. GNU's synthetic PLT label at `0xbad0` says closedir,
+which the actual slot relocation contradicts; it must not be used as symbol
+identity. Whether the native BTI/veneer split causes the no-return propagation
+still needs a producing-boundary investigation and regression proof. No such
+fix or rerun is attributed to the frozen comparison above.
 
 Raw receipts live under `.cache/atomic-codemode/` as `arm-*`: initial missing
 xrefs, intermediate/final native test/build logs, SDK/source records, x86 fidelity
