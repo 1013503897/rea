@@ -16,7 +16,7 @@ import {
   parseKunaIncomingReferences,
   type KunaCallGraph,
   type KunaGraphNode,
-  type KunaIncomingReferences,
+  type KunaReferenceAddresses,
 } from "./KunaReferenceFiles.js";
 import { KUNA_PROVIDER_ID } from "./KunaRelease.js";
 import type { KunaPendingQuery, KunaQueryWork } from "./KunaQueryWork.js";
@@ -42,10 +42,10 @@ export class KunaReferenceQueries {
   /** Deterministic buffer failures belong to the same session as its graph. */
   #graphFailure: AnalysisError | undefined;
   #pendingGraph: KunaPendingQuery<KunaCallGraph> | undefined;
-  readonly #xrefs = new Map<string, KunaIncomingReferences>();
+  readonly #xrefs = new Map<string, KunaReferenceAddresses>();
   readonly #pendingXrefs = new Map<
     string,
-    KunaPendingQuery<KunaIncomingReferences>
+    KunaPendingQuery<KunaReferenceAddresses>
   >();
   #xrefBytes = 0;
   constructor(private readonly work: KunaQueryWork) {}
@@ -226,7 +226,7 @@ export class KunaReferenceQueries {
     installation: KunaInstallation,
     address: string,
     signal: AbortSignal | undefined,
-  ): Promise<Result<KunaIncomingReferences, AnalysisError>> {
+  ): Promise<Result<KunaReferenceAddresses, AnalysisError>> {
     const cached = this.#xrefs.get(address);
     if (cached !== undefined) {
       this.#xrefs.delete(address);
@@ -252,7 +252,7 @@ export class KunaReferenceQueries {
             { limit_queries: PENDING_XREF_QUERIES },
           ),
         );
-      pending = this.work.start<KunaIncomingReferences>(
+      pending = this.work.start<KunaReferenceAddresses>(
         async (producerSignal) => {
           const run = await this.work.run({
             installation,
@@ -285,7 +285,7 @@ export class KunaReferenceQueries {
     return this.work.wait(pending, signal, "xrefs");
   }
 
-  #cache(address: string, value: KunaIncomingReferences): void {
+  #cache(address: string, value: KunaReferenceAddresses): void {
     this.#xrefs.set(address, value);
     this.#xrefBytes += value.bytes + 256;
     while (

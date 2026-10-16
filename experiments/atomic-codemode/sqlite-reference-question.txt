@@ -1,0 +1,15 @@
+Audit static call references in {{artifact_path}}, returning aggregate results
+with focused supporting addresses and real Evidence references.
+
+For sqlite3Fts3ExprParse, compare the native outgoing known-target call-reference
+count with the retained recovered-IR call-operation count. Explain any difference
+and verify the differing call against selected machine instructions; absence from
+optimized IR must not be treated as absence from the executable.
+
+For sqlite3VdbeExec, report the number of selected native known-target call-site
+references, the number of distinct exact destination addresses, and the number
+that target 0x296c0. Verify the call site at 0xf238b. This part concerns references
+only: do not decompile the VM or return its instruction listing/source report.
+Compose selected pages locally and return the requested aggregates rather than
+all reference rows. State the limits for unresolved indirect calls, discovery,
+and runtime symbol binding. Do not execute the target.

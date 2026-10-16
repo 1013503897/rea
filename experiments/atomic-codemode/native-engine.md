@@ -261,3 +261,62 @@ and verifies the same bytes after the task. Changed/missing engines reject the
 comparison while retaining costs. Other provider trials keep this field unknown.
 Three regression tests cover missing/malformed pins, replacement and removal;
 a real driver invocation with a wrong pin rejects before output/profile creation.
+
+## Shallow outgoing references without decompilation
+
+Kuna already supplies native `xrefs --from`, including exact-instruction and
+owning-function queries. The shared `KunaReferenceFiles.ts` boundary now owns
+both directions, validates direction-dependent peer fields and query ownership,
+and preserves exact u64 endpoints and source-row occurrences. The old
+incoming-facts-only parser is removed; both experimental consumers use the same
+named query contract. Production incoming address-only queries keep their
+existing projection and bounded cache semantics.
+
+The experimental `references` method adds direction, explicit address/function
+scope, native kind filtering and fields. Incoming function scope is rejected;
+unknown outgoing function applicability, unattributed/excluded rows and unresolved
+indirect/discovery/runtime coverage remain explicit. Native source cache keys
+cover result-affecting query choices while scope, fields and pages reuse the same
+source. `reference-reads.mjs` owns protocol selection/projection; the resource
+owner and CLI/MCP adapters do not reinterpret native endpoint fields. Empty
+field selection now requests the existing always-retained identities, rather
+than being rejected without a format/resource reason.
+
+Real outgoing CLI probes return 396 VM call-reference rows in 205,432 bytes,
+versus one row/737 bytes for selected call site `0xf238b`. Four sequential probes
+(VM function/instruction and wrapper function/instruction) take 6.772 family wall
+/ 6.613 CPU seconds and 120.0 MiB peak. Each command takes about 1.6–1.7 seconds;
+these are native metadata-query measurements with warm uncontrolled file caches,
+not real-model speed/token results.
+
+Independent GNU objdump decoding over the exported VM symbol (`0xea6d0`, size
+`0x7e7e`) confirms all 396 `(origin,target)` pairs, 171 distinct exact targets,
+and 16 calls to `0x296c0`. It also finds 21 indirect calls, outside these
+known-target counts. In the wrapper, nine lifted machine call references compare
+with eight retained IR calls: machine `0x6534b -> 0x29370` is an omitted
+`__stack_chk_fail@plt` call. Its absence from optimized IR/C is not absence from
+the executable. No native analysis or C behavior is changed to repair that
+representation difference.
+
+The real Code Mode MCP verifier passes paging, identity-only fields, scope-cache
+reuse, exact sites, unknown applicability and local aggregation. It also captures
+the VM anew: C is available, IR fails with `atomic operation capacity exceeded`,
+and shallow references still work. This verifier takes 48.142 family wall /
+47.803 CPU seconds, 610.1 MiB peak; VM decompilation/source capture itself takes
+35.945 seconds. These are different requested capabilities, not an equivalent
+workflow speedup claim. The direct verifier passes the same reference contract
+without that VM decompilation (12.001 / 11.759 seconds, 256.8 MiB). Both verify
+cleanup and OOM 0. An earlier direct-verifier attempt incorrectly expected target
+metadata on an SDK input-validation error; the corrected verifier respects the
+SDK rejection boundary. That failed assertion receipt is retained.
+
+The exact focused boundary suites pass 38 tests, with a fresh strict production
+build; changed-test strict typechecking and 45 experimental JS tests also pass.
+Full lint/module boundaries and changed-file formatting pass. Repository lint
+warnings remain outside this change. The focused build/test scope peaks at
+3,030.6 MiB, below the 3 GiB early-stop line, with OOM 0. Two full `check:fast`
+attempts (including serial execution and Go runtime memory controls) reach that
+early-stop budget and are terminated before OOM; they are not reported as passed.
+The changed-test typecheck uses 70.1 MiB and standalone full lint 919.0 MiB.
+Full-repository typechecking and full upstream Kuna gates remain unverified.
+The [next question/oracle](reference-oracle.md) are committed before model trials.

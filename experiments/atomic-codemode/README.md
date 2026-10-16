@@ -103,6 +103,14 @@ links preserve snapshot identities, missing specifications, unknown storage and
 runtime-binding limits. The [cross-function task and oracle](call-oracle.md)
 are fixed before its real-model trials; the native wire format is now version 2.
 
+`references` now selects incoming exact-address references or outgoing
+instruction/function references, with native kind filtering, field selection and
+paging. Source Evidence plus `source_row` identifies an occurrence. Function
+applicability, excluded/unattributed rows, indirect targets and discovery stay
+explicit. `fields:[]` requests only the always-retained identity columns across
+projection contracts. The [reference question and independent oracle](reference-oracle.md)
+cover real SQLite VM aggregates and a machine call omitted from optimized IR.
+
 `bytes` reads explicit virtual-address ranges as native loaded-image hex without
 decoding them as instructions. Batched reads preserve short reads and individual
 failures, with 64 KiB aggregate selected-byte capacity to bound hex/bridge growth.

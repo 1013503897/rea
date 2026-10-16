@@ -150,11 +150,11 @@ complex-software superiority and provider parity remain unproven.
 
 Two remaining boundaries deserve independent experiments. First, calls currently
 live inside the full recovered IR facet: exceeding graph capacity loses a small
-call view that might otherwise fit. Second, native Kuna already has `xrefs
---from` over its shared reference index, while this prototype's reference reader
-exposes only incoming exact-address queries. That native support is source-verified,
-not yet a runtime/performance result here. A shallow outgoing-reference view
-should be measured before forcing function decompilation for a callee list;
-argument/value recovery remains a different, deeper request. Keeping those costs
+call view that might otherwise fit. Second, shallow outgoing references should serve a callee/reference list before
+requesting deeper argument/value recovery. The subsequent implementation now
+exposes Kuna's existing `xrefs --from` through the shared parser, with native kind
+filters, explicit scope and paging. Real VM known-target references match an
+independent disassembly pair set, and remain available when the full IR facet
+exceeds capacity. The next pre-pinned model question measures this use directly. Keeping those costs
 and coverage distinctions explicit is more useful than treating a smaller tool
 catalog as proof of better analysis.

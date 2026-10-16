@@ -4,7 +4,7 @@ import { normalizeKunaAddress } from "../../../../src/kuna/KunaAddress.js";
 import {
   parseKunaCallGraph,
   parseKunaIncomingReferences,
-  parseKunaIncomingReferenceFacts,
+  parseKunaReferenceFacts,
 } from "../../../../src/kuna/KunaReferenceFiles.js";
 
 const input = "/snapshot/program";
@@ -181,6 +181,133 @@ const xrefs = () => ({
   xrefs: [row(4100, 8192), row(4100, 8192), row(4200, 12288)],
 });
 
+const outgoing = () => ({
+  binary: input,
+  direction: "from",
+  count: 3,
+  target: { ...identity("caller", 4096), aliases: [] },
+  xrefs: [
+    [4100, 8192],
+    [4104, 12288],
+    [4096, 16384],
+  ].map(([from, to]) => ({
+    ...row(from!, to!),
+    address: `@${to}`,
+    address_hex: `0x${to!.toString(16)}`,
+  })),
+});
+
+it("separates outgoing function scope from an exact instruction, preserving native occurrence identity", () => {
+  const value = outgoing();
+  const fn = parseKunaReferenceFacts(wire(value), input, {
+    direction: "from",
+    scope: "function",
+    address: "0x1000",
+  });
+  expect(fn).toMatchObject({
+    ok: true,
+    value: {
+      functionScope: "established-by-rows",
+      rows: 3,
+      excludedScopeRows: 0,
+      unattributedScopeRows: 0,
+    },
+  });
+  if (!fn.ok) return;
+  expect(fn.value.facts.map((f) => [f.source_row, f.from, f.to])).toEqual([
+    [0, "0x1004", "0x2000"],
+    [1, "0x1008", "0x3000"],
+    [2, "0x1000", "0x4000"],
+  ]);
+  const exact = parseKunaReferenceFacts(wire(value), input, {
+    direction: "from",
+    scope: "address",
+    address: "0x1000",
+  });
+  expect(exact).toMatchObject({
+    ok: true,
+    value: {
+      functionScope: null,
+      excludedScopeRows: 2,
+      facts: [{ source_row: 2, from: "0x1000", to: "0x4000" }],
+    },
+  });
+});
+
+it("keeps missing or unresolved outgoing function applicability unknown", () => {
+  const value = outgoing();
+  value.xrefs = [];
+  value.count = 0;
+  expect(
+    parseKunaReferenceFacts(wire(value), input, {
+      direction: "from",
+      scope: "function",
+      address: "0x1000",
+    }),
+  ).toMatchObject({ ok: true, value: { functionScope: "unknown", facts: [] } });
+  const missingOwner = {
+    ...outgoing(),
+    count: 1,
+    xrefs: [{ ...outgoing().xrefs[2]!, from_function: null }],
+  };
+  expect(
+    parseKunaReferenceFacts(wire(missingOwner), input, {
+      direction: "from",
+      scope: "function",
+      address: "0x1000",
+    }),
+  ).toMatchObject({
+    ok: true,
+    value: { functionScope: "unknown", facts: [], unattributedScopeRows: 1 },
+  });
+  const instruction = {
+    ...outgoing(),
+    count: 1,
+    target: { ...identity("instruction", 4100), aliases: [] },
+    xrefs: [outgoing().xrefs[0]!],
+  };
+  expect(
+    parseKunaReferenceFacts(wire(instruction), input, {
+      direction: "from",
+      scope: "function",
+      address: "0x1004",
+    }),
+  ).toMatchObject({
+    ok: true,
+    value: { functionScope: "unknown", facts: [], excludedScopeRows: 1 },
+  });
+});
+
+it("rejects mismatched outgoing direction, peer, query source or kind without inventing empty results", () => {
+  const query = {
+    direction: "from",
+    scope: "function",
+    address: "0x1000",
+  } as const;
+  for (const change of [
+    (v: ReturnType<typeof outgoing>) => {
+      v.direction = "to";
+    },
+    (v: ReturnType<typeof outgoing>) => {
+      v.xrefs[0]!.address = "@4100";
+      v.xrefs[0]!.address_hex = "0x1004";
+    },
+    (v: ReturnType<typeof outgoing>) => {
+      v.xrefs[0]!.from_function = identity("other", 4097);
+    },
+  ]) {
+    const value = outgoing();
+    change(value);
+    expect(parseKunaReferenceFacts(wire(value), input, query).ok).toBe(false);
+  }
+  expect(
+    parseKunaReferenceFacts(wire(outgoing()), input, {
+      ...query,
+      kinds: ["data"],
+    }).ok,
+  ).toBe(false);
+});
+
 it("keeps exact endpoints, deduplicates sites and counts excluded forwarding aliases", () => {
   expect(
     parseKunaIncomingReferences(wire(xrefs()), input, "0x2000"),
@@ -193,11 +320,16 @@ it("keeps exact endpoints, deduplicates sites and counts excluded forwarding ali
 it("preserves typed relationships and explicit unknown ownership at the producing boundary", () => {
   const value = xrefs();
   value.xrefs[1]!.kind = "data";
-  const parsed = parseKunaIncomingReferenceFacts(wire(value), input, "0x2000");
+  const parsed = parseKunaReferenceFacts(wire(value), input, {
+    address: "0x2000",
+    direction: "to",
+    scope: "address",
+  });
   expect(parsed.ok).toBe(true);
   if (!parsed.ok) return;
   expect(parsed.value.facts).toEqual([
     {
+      source_row: 0,
       from: "0x1004",
       to: "0x2000",
       kind: "call",
@@ -206,6 +338,7 @@ it("preserves typed relationships and explicit unknown ownership at the producin
       instruction: "CALL",
     },
     {
+      source_row: 1,
       from: "0x1004",
       to: "0x2000",
       kind: "data",
@@ -217,9 +350,13 @@ it("preserves typed relationships and explicit unknown ownership at the producin
   const addresses = parseKunaIncomingReferences(wire(value), input, "0x2000");
   expect(addresses.ok && Object.hasOwn(addresses.value, "facts")).toBe(false);
   value.xrefs[2]!.from_address_hex = "0xdead";
-  expect(parseKunaIncomingReferenceFacts(wire(value), input, "0x2000").ok).toBe(
-    false,
-  );
+  expect(
+    parseKunaReferenceFacts(wire(value), input, {
+      address: "0x2000",
+      direction: "to",
+      scope: "address",
+    }).ok,
+  ).toBe(false);
 });
 
 it.each([

@@ -5,18 +5,13 @@ import { join } from "node:path";
 import { parseBinaryTarget } from "../../dist/application/BinaryTargetResolver.js";
 import { inspectKunaInstallation } from "../../dist/kuna/KunaInstallation.js";
 import { KunaTargetCommands } from "../../dist/kuna/KunaTargetCommands.js";
-import { parseKunaIncomingReferenceFacts } from "../../dist/kuna/KunaReferenceFiles.js";
+import { referenceReader } from "./reference-reads.mjs";
 import { PrivateRuntimeRoot } from "../../dist/process/PrivateRuntimeRoot.js";
 import { parseNativeIR } from "./native-ir.mjs";
 import { FactFailure, requireResult } from "./fact-error.mjs";
 import { windowReaders } from "./window-readers.mjs";
 import { NATIVE_OUTPUT_BYTES } from "./limits.mjs";
-import {
-  sourceSummary,
-  pageFacts,
-  projectFact,
-  readFactBatch,
-} from "./fact-reads.mjs";
+import { sourceSummary, projectFact, readFactBatch } from "./fact-reads.mjs";
 import { parseFunctionFacts, selectFunctionFacts } from "./function-facts.mjs";
 import { parseStringFacts, selectStringFacts } from "./string-facts.mjs";
 import {
@@ -221,30 +216,20 @@ export class KunaFactOwner {
   }
   async references(input, signal) {
     return readFactBatch(
-      input.addresses.map((address) => ({ address })),
-      ({ address }) =>
+      input.addresses.map((address) => referenceReader.query(input, address)),
+      (query) =>
         this.#native(
-          `xref:${address}`,
-          (path) => ["xrefs", path, "--to", address, "--json"],
+          referenceReader.key(query),
+          (path) => referenceReader.arguments(path, query),
           signal,
         ),
-      async (capture, { address }) => {
-        const parsed = requireResult(
-          parseKunaIncomingReferenceFacts(
-            await this.#sourceText(capture.source.evidence_id),
-            capture.input,
-            address,
-          ),
-          "invalid_provider_output",
-        );
-        return {
-          ...pageFacts(parsed.facts, input),
-          coverage: {
-            scope: "exact target address; not an object extent",
-            discovery: "unknown",
-          },
-        };
-      },
+      async (capture, query) =>
+        referenceReader.read(
+          await this.#sourceText(capture.source.evidence_id),
+          capture.input,
+          query,
+          input,
+        ),
     );
   }
   async snapshot(input, signal) {

@@ -12,7 +12,7 @@ import { inspectKunaInstallation } from "../../dist/kuna/KunaInstallation.js";
 import { KunaTargetCommands } from "../../dist/kuna/KunaTargetCommands.js";
 import { parseKunaJson } from "../../dist/kuna/KunaJson.js";
 import { parseKunaStringInventory } from "../../dist/kuna/KunaStringInventory.js";
-import { parseKunaIncomingReferenceFacts } from "../../dist/kuna/KunaReferenceFiles.js";
+import { parseKunaReferenceFacts } from "../../dist/kuna/KunaReferenceFiles.js";
 import {
   createVerifierRun,
   completeVerifierRun,
@@ -111,10 +111,10 @@ try {
         "--json",
       ]);
       // Consume the owning parser's facts, without reinterpreting raw JSON.
-      const validated = parseKunaIncomingReferenceFacts(
+      const validated = parseKunaReferenceFacts(
         result.stdout.text,
         result.input,
-        item.address,
+        { address: item.address, direction: "to", scope: "address" },
       );
       assert.ok(validated.ok, validated.error);
       const rows = validated.value.facts;

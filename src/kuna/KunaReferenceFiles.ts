@@ -148,7 +148,7 @@ const xrefRow = z.object({
 });
 const xrefsDocument = z.object({
   binary: z.string(),
-  direction: z.literal("to"),
+  direction: z.enum(["to", "from"]),
   count,
   target: z.object({
     address,
@@ -160,11 +160,16 @@ const xrefsDocument = z.object({
 });
 
 /** One owning interpretation of native endpoints, identities and alias scope. */
-const parseReferenceRow = (raw: unknown, aliases: ReadonlySet<string>) => {
+const parseReferenceRow = (
+  raw: unknown,
+  aliases: ReadonlySet<string>,
+  query: KunaReferenceQuery,
+) => {
   const row = xrefRow.parse(raw);
   if (
     row.address !== row.address_hex ||
-    row.address !== row.from_address ||
+    row.address !==
+      (query.direction === "to" ? row.from_address : row.to_address) ||
     row.from_address !== row.from_address_hex ||
     row.to_address !== row.to_address_hex
   )
@@ -174,14 +179,22 @@ const parseReferenceRow = (raw: unknown, aliases: ReadonlySet<string>) => {
   for (const fn of [row.from_function, row.to_function])
     if (fn !== null && fn.address !== fn.address_hex)
       throw new Error("xref function address disagrees with its hex field");
-  if (!aliases.has(row.to_address))
+  if (query.direction === "to" && !aliases.has(row.to_address))
     throw new Error(
       "xref row targets neither the requested address nor an advertised alias",
+    );
+  if (
+    query.direction === "from" &&
+    row.from_address !== query.address &&
+    row.from_function?.address !== query.address
+  )
+    throw new Error(
+      "outgoing xref has no source binding to the requested address or function",
     );
   return row;
 };
 
-export interface KunaIncomingReferences {
+export interface KunaReferenceAddresses {
   readonly addresses: readonly string[];
   readonly sha256: string;
   readonly bytes: number;
@@ -191,6 +204,7 @@ export interface KunaIncomingReferences {
 
 /** Experimental fact projection, owned by the native protocol parser. */
 export type KunaReferenceFact = {
+  readonly source_row: number;
   readonly from: string;
   readonly to: string;
   readonly kind: z.infer<typeof kind>;
@@ -205,22 +219,78 @@ export type KunaReferenceFact = {
   readonly instruction: string;
 };
 
-/** Native --to unifies aliases; these facts cover only the requested address. */
-const parseIncomingReferenceDocument = (
+export type KunaReferenceQuery = (
+  | {
+      readonly direction: "to";
+      readonly scope: "address";
+      readonly address: string;
+    }
+  | {
+      readonly direction: "from";
+      readonly scope: "address" | "function";
+      readonly address: string;
+    }
+) & { readonly kinds?: readonly z.infer<typeof kind>[] };
+
+export interface KunaReferenceFacts extends KunaReferenceAddresses {
+  readonly facts: readonly KunaReferenceFact[];
+  readonly excludedScopeRows: number;
+  readonly unattributedScopeRows: number;
+  readonly functionScope: "established-by-rows" | "unknown" | null;
+}
+
+const referenceSelection = (
+  row: z.infer<typeof xrefRow>,
+  query: KunaReferenceQuery,
+) => {
+  if (query.direction === "to")
+    return row.to_address === query.address ? "selected" : "alias";
+  if (query.scope === "address")
+    return row.from_address === query.address ? "selected" : "scope";
+  if (row.from_function === null) return "unattributed";
+  return row.from_function.address === query.address ? "selected" : "scope";
+};
+
+const referenceFact = (
+  row: z.infer<typeof xrefRow>,
+  source_row: number,
+): KunaReferenceFact => ({
+  source_row,
+  from: row.from_address,
+  to: row.to_address,
+  kind: row.kind,
+  fromFunction:
+    row.from_function === null
+      ? null
+      : {
+          address: row.from_function.address,
+          name: row.from_function.name,
+        },
+  toFunction:
+    row.to_function === null
+      ? null
+      : {
+          address: row.to_function.address,
+          name: row.to_function.name,
+        },
+  instruction: row.instruction,
+});
+
+/** One native-format boundary, with caller-selected endpoint/function scope. */
+const parseReferenceDocument = (
   text: string,
   input: string,
-  target: string,
+  query: KunaReferenceQuery,
   retainFacts: boolean,
-): Result<
-  KunaIncomingReferences & { readonly facts: readonly KunaReferenceFact[] },
-  string
-> => {
+): Result<KunaReferenceFacts, string> => {
   try {
+    const target = query.address;
     const document = xrefsDocument.parse(
       parseKunaJson(text, KUNA_XREF_OUTPUT_BYTES, addressKeys),
     );
     if (
       document.binary !== input ||
+      document.direction !== query.direction ||
       document.target.address !== target ||
       document.target.address_hex !== target
     )
@@ -235,38 +305,29 @@ const parseIncomingReferenceDocument = (
     }
     const addresses = new Set<string>();
     const facts: KunaReferenceFact[] = [];
-    let excludedAliasRows = 0;
-    for (const raw of document.xrefs) {
-      const row = parseReferenceRow(raw, aliases);
-      if (row.to_address === target) {
-        addresses.add(row.from_address);
-        if (retainFacts)
-          facts.push({
-            from: row.from_address,
-            to: row.to_address,
-            kind: row.kind,
-            fromFunction:
-              row.from_function === null
-                ? null
-                : {
-                    address: row.from_function.address,
-                    name: row.from_function.name,
-                  },
-            toFunction:
-              row.to_function === null
-                ? null
-                : {
-                    address: row.to_function.address,
-                    name: row.to_function.name,
-                  },
-            instruction: row.instruction,
-          });
-      } else excludedAliasRows += 1;
+    const excluded = { alias: 0, scope: 0, unattributed: 0 };
+    let functionScope: KunaReferenceFacts["functionScope"] =
+      query.scope === "function" ? "unknown" : null;
+    for (const [source_row, raw] of document.xrefs.entries()) {
+      const row = parseReferenceRow(raw, aliases, query);
+      if (query.kinds && !query.kinds.includes(row.kind))
+        throw new Error("xref row violates the caller-selected kind filter");
+      const selected = referenceSelection(row, query);
+      if (selected === "selected") {
+        addresses.add(
+          query.direction === "to" ? row.from_address : row.to_address,
+        );
+        if (query.scope === "function") functionScope = "established-by-rows";
+        if (retainFacts) facts.push(referenceFact(row, source_row));
+      } else excluded[selected] += 1;
     }
     return ok({
       addresses: [...addresses].sort(compareKunaAddresses),
       rows: document.xrefs.length,
-      excludedAliasRows,
+      excludedAliasRows: excluded.alias,
+      excludedScopeRows: excluded.scope,
+      unattributedScopeRows: excluded.unattributed,
+      functionScope,
       bytes: Buffer.byteLength(text),
       sha256: createHash("sha256").update(text).digest("hex"),
       facts,
@@ -276,22 +337,25 @@ const parseIncomingReferenceDocument = (
   }
 };
 
-export const parseKunaIncomingReferenceFacts = (
+export const parseKunaReferenceFacts = (
   text: string,
   input: string,
-  target: string,
-): Result<
-  KunaIncomingReferences & { readonly facts: readonly KunaReferenceFact[] },
-  string
-> => parseIncomingReferenceDocument(text, input, target, true);
+  query: KunaReferenceQuery,
+): Result<KunaReferenceFacts, string> =>
+  parseReferenceDocument(text, input, query, true);
 
 /** Existing address-only contract; richer facts do not enter its retained cache. */
 export const parseKunaIncomingReferences = (
   text: string,
   input: string,
   target: string,
-): Result<KunaIncomingReferences, string> => {
-  const parsed = parseIncomingReferenceDocument(text, input, target, false);
+): Result<KunaReferenceAddresses, string> => {
+  const parsed = parseReferenceDocument(
+    text,
+    input,
+    { direction: "to", scope: "address", address: target },
+    false,
+  );
   if (!parsed.ok) return parsed;
   const { addresses, sha256, bytes, rows, excludedAliasRows } = parsed.value;
   return ok({ addresses, sha256, bytes, rows, excludedAliasRows });

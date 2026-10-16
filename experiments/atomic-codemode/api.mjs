@@ -37,7 +37,6 @@ const fields = z
       "is_dead",
     ]),
   )
-  .min(1)
   .optional();
 const definition = (description, input, method, example) => ({
   description,
@@ -53,10 +52,7 @@ export const methods = {
       exact: z.boolean().default(false),
       case_sensitive: z.boolean().default(true),
       addresses: z.array(hex).max(128).optional(),
-      fields: z
-        .array(z.enum(["name", "aliases", "size"]))
-        .min(1)
-        .optional(),
+      fields: z.array(z.enum(["name", "aliases", "size"])).optional(),
       ...page,
     },
     "functions",
@@ -69,8 +65,20 @@ export const methods = {
     'await rea.strings({query:"incorrect header check"})',
   ),
   references: definition(
-    "Batch exact-address incoming xrefs, preserving kinds and owning-function identities. Interior string uses require a separate extent query.",
-    { addresses: z.array(hex).min(1).max(16), ...page },
+    "Batch incoming or outgoing lifted-code references without decompilation. Address scope selects exact target (incoming) or source instruction (outgoing); function scope selects outgoing native owning-function references and requires an entry address. Unknown function applicability stays unknown. Kind filtering is pushed to the native query; source rows, endpoints and Evidence identity remain. Recovered IR calls are a separate representation and may omit machine calls. Interior string references require a separate extent query.",
+    {
+      addresses: z.array(hex).min(1).max(16),
+      direction: z.enum(["incoming", "outgoing"]).default("incoming"),
+      scope: z.enum(["address", "function"]).default("address"),
+      kinds: z
+        .array(z.enum(["call", "jump", "data", "read", "write"]))
+        .min(1)
+        .optional(),
+      fields: z
+        .array(z.enum(["fromFunction", "toFunction", "instruction"]))
+        .optional(),
+      ...page,
+    },
     "references",
     'await rea.references({addresses:["0x2000"]})',
   ),
@@ -102,7 +110,6 @@ export const methods = {
         .max(16),
       fields: z
         .array(z.enum(["bytes", "text", "mnemonic", "operands"]))
-        .min(1)
         .optional(),
     },
     "instructions",
@@ -162,7 +169,6 @@ export const methods = {
             "type_name",
           ]),
         )
-        .min(1)
         .optional(),
       ...page,
     },
@@ -186,7 +192,6 @@ export const methods = {
             "stack_offset",
           ]),
         )
-        .min(1)
         .optional(),
       ...page,
     },
@@ -202,7 +207,6 @@ export const methods = {
         .array(
           z.enum(["origin_start", "operations", "predecessors", "successors"]),
         )
-        .min(1)
         .optional(),
       ...page,
     },
@@ -255,7 +259,7 @@ const returns = {
   strings:
     "data:{source:{evidence_id,sha256},items:[{address,value,string:{encoding,byte_length}}],total,next_offset,coverage}",
   references:
-    "data:{results:[{ok,address,source:{evidence_id},items:[{from,to,kind,fromFunction:{address,name}|null,toFunction:{address,name}|null,instruction}],total,next_offset,coverage}|{ok:false,address,error}]}",
+    "data:{results:[{ok,address,source:{evidence_id},items:[{source_row,from,to,kind,fromFunction:{address,name}|null,toFunction:{address,name}|null,instruction}],total,next_offset,coverage}|{ok:false,address,error}]}. source_row is the zero-based row in retained native xrefs; Evidence identity plus source_row identifies an occurrence. Coverage preserves examined/excluded/unattributed counts and unknown function scope/discovery. fields projects optional columns; endpoints/kind/source_row stay.",
   snapshot:
     "data:{snapshot:string,entry,source:{evidence_id,sha256},facets:{code:{availability},recovered_ir:{availability,error?}},coverage}. An unavailable graph has unknown/null counts, never a fabricated empty graph; code remains readable through the same handle.",
   operations:
@@ -303,6 +307,16 @@ methods.bytes.input = methods.bytes.input.superRefine((value, context) => {
       message: "Byte range end exceeds the native u64 address format",
     });
 });
+methods.references.input = methods.references.input.superRefine(
+  (value, context) => {
+    if (value.direction === "incoming" && value.scope !== "address")
+      context.addIssue({
+        code: "custom",
+        path: ["scope"],
+        message: "Incoming references require exact address scope",
+      });
+  },
+);
 methods.relations.input = methods.relations.input.superRefine(
   (value, context) => {
     const type = ["incoming", "outgoing", "controllers"].includes(value.kind)
