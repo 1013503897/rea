@@ -411,3 +411,40 @@ time. Prompt-cache state and model strategy remain uncontrolled, so no economic
 or general adapter ranking follows. The native byte-budget repair is a coverage
 fix, not a demonstrated Code Mode speedup. Private captures and the separate
 `round-9e1b393-ledger.json` retain these observations.
+
+The table-dispatch task pins `73db4fad5`, the same rebuilt engine and thirteen
+shared fact methods. This time direct runs first, followed serially by Code
+Mode; both use common envelope/stopping guidance, fresh analysis leases and
+isolated empty model profiles. Independent machine instructions and direct file
+table reads were committed as the oracle before model execution.
+
+| Measurement | Atomic direct table v1 | Code Mode table v1 |
+| --- | ---: | ---: |
+| MCP attempts / failures | 8 / 0 | 7 / 0 |
+| Unique model responses | 10 | 9 |
+| Client `exec` / `wait` calls | 9 / 0 | 8 / 0 |
+| Cumulative input tokens | 244,235 | 225,673 |
+| Included cached input | 200,704 | 190,848 |
+| Uncached input | 43,531 | 34,825 |
+| Output / included reasoning | 3,055 / 1,024 | 2,765 / 355 |
+| Model wall seconds | 108.774 | 101.033 |
+| Family wall seconds | 109.281 | 101.523 |
+| Family CPU seconds | 9.683 | 9.606 |
+| Kernel family peak MiB | 490.5 | 495.3 |
+
+Both models actually read the class and relative-jump tables through `bytes`.
+All six class values and destinations match the independent artifact oracle,
+including unsigned indexing for `0x80`, signed 32-bit displacement extension,
+the correct table base and the shared destination for `0x22` / `0x27`. They keep
+source IDs and complete-for-requested-range coverage, distinguish loaded-image
+observations from arithmetic derivations, and do not infer final token types,
+lengths or runtime feasibility. No decompilation is needed for these answers.
+Code Mode composes `functions`, `instructions` and two `bytes` reads.
+
+This is a successful example of composing small RE facts into a useful answer.
+Its Code Mode sample has lower observed task token counts and wall time; CPU is
+almost the same and memory is slightly higher. Each cell is still one stochastic
+sample, with uncontrolled prompt/OS caches and no traditional cell. It establishes
+neither a general cost ranking nor complex-program completeness. Target/runtime
+identities stay unchanged, cleanup verifies and OOM kills are zero. The private
+ledger is `round-73db4fa-ledger.json`.
