@@ -20,6 +20,13 @@ import {
 } from "../atomic-re-tools/kuna-ssa.mjs";
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
+const missingNativeFacet = () => ({
+  availability: "unavailable",
+  error: {
+    code: "capability_unavailable",
+    message: "Requires the pinned native exporter",
+  },
+});
 export class KunaFactOwner {
   #lifetime = new AbortController();
   #sources = new Map();
@@ -87,7 +94,7 @@ export class KunaFactOwner {
       engine_version: owner.#installation.version,
       address_space: "native-default",
       analysis_model: owner.#nativeIR
-        ? "experimental-native-ir-v2"
+        ? "experimental-native-ir-v3"
         : "diagnostic-ssa-1.833",
       profile: owner.#nativeIR
         ? "pinned engine with embedded specs; fresh private engine cache per lease; byte reads suppress global discovery; other native CLI defaults; no annotations"
@@ -274,6 +281,8 @@ export class KunaFactOwner {
       facets: parsed.facets ?? {
         code: { availability: "available" },
         recovered_ir: { availability: "available", coverage: "partial" },
+        calls: missingNativeFacet(),
+        values: missingNativeFacet(),
       },
     };
   }
@@ -402,10 +411,7 @@ export class KunaFactOwner {
   }
   async values(input) {
     this.#requireNativeIR(input.snapshot);
-    return this.#query(input, (model) => ({
-      ...model.values(input),
-      coverage: model.coverage,
-    }));
+    return this.#query(input, (model) => model.values(input));
   }
   async calls(input) {
     this.#requireNativeIR(input.snapshot);

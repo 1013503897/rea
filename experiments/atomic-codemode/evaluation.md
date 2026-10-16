@@ -148,9 +148,10 @@ with JavaScript dispatch. The evidence supports usable composable call/input
 facts, without proving that this server adapter is faster or cheaper. Broader
 complex-software superiority and provider parity remain unproven.
 
-Two remaining boundaries deserve independent experiments. First, calls currently
-live inside the full recovered IR facet: exceeding graph capacity loses a small
-call view that might otherwise fit. Second, shallow outgoing references should serve a callee/reference list before
+Two remaining boundaries deserve independent experiments. First, the initial call view lived inside full recovered IR, so graph capacity
+could hide a small otherwise useful call view. The next exporter revision now
+captures calls and their boundary values independently; real VM verification
+retains both while the graph exceeds capacity. Second, shallow outgoing references should serve a callee/reference list before
 requesting deeper argument/value recovery. The subsequent implementation now
 exposes Kuna's existing `xrefs --from` through the shared parser, with native kind
 filters, explicit scope and paging. Real VM known-target references match an

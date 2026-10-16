@@ -1,17 +1,19 @@
 // Native JSON decoding and resource admission; row-wise validation bounds errors.
 import { z } from "zod";
 import { FactFailure } from "./fact-error.mjs";
-import { ok, err } from "../../dist/domain/result.js";
 import { NATIVE_OUTPUT_BYTES } from "./limits.mjs";
-import { nativeCall } from "./native-calls.mjs";
-const requireFact = (condition, reason) => {
-  if (!condition) throw new FactFailure("invalid_provider_output", reason);
-};
-
-const hex = z.string().regex(/^0x(?:0|[1-9a-f][0-9a-f]{0,15})$/u);
-const ordinal = z.number().int().nonnegative().max(0x7fffffff);
-const valueId = z.string().regex(/^v[0-9a-f]{1,16}$/u);
-const operationId = z.string().regex(/^0x[0-9a-f]{1,16}:[0-9a-f]{1,8}$/u);
+import { readCallFacet } from "./native-call-contract.mjs";
+import {
+  hex,
+  ordinal,
+  valueId,
+  operationId,
+  value,
+  rowParser,
+  requireFact,
+  formatFailure,
+  readNativeFacet,
+} from "./native-contract.mjs";
 const edgeId = z.string().regex(/^\d+:\d+$/u);
 const edge = z.strictObject({
   id: edgeId,
@@ -38,19 +40,8 @@ const operation = z.strictObject({
   ),
   output: valueId.nullable(),
 });
-const value = z.strictObject({
-  id: valueId,
-  space: z.string().nullable(),
-  offset: hex,
-  size_bytes: z.number().int().positive().max(0x7fffffff),
-  is_constant: z.boolean(),
-  is_input: z.boolean(),
-  is_annotation: z.boolean(),
-  definition: operationId.nullable(),
-  type_name: z.string(),
-});
 const factsSchema = z.strictObject({
-  schema_version: z.literal(2),
+  schema_version: z.literal(3),
   blocks: z
     .array(
       z.strictObject({
@@ -65,7 +56,6 @@ const factsSchema = z.strictObject({
     .max(12000),
   operations: z.array(operation).max(12000),
   values: z.array(value).max(36000),
-  calls: z.array(nativeCall).max(12000),
   coverage: z.strictObject({
     scope: z.string(),
     machine_semantic_equivalence: z.literal("unknown"),
@@ -87,6 +77,8 @@ const documentSchema = z.object({
         error: z.null(),
         atomic_facts: z.unknown().optional(),
         atomic_facts_error: z.string().optional(),
+        atomic_calls: z.unknown().optional(),
+        atomic_calls_error: z.string().optional(),
       }),
     )
     .length(1),
@@ -94,21 +86,6 @@ const documentSchema = z.object({
 
 // Parse one row at a time: a bad provider must not expand thousands of malformed
 // records into a giant Zod issue list before the caller can reject the source.
-const rowParser = (schema, arrays) => {
-  const metadata = schema.omit(
-    Object.fromEntries(Object.keys(arrays).map((key) => [key, true])),
-  );
-  return (raw) => {
-    const fields = { ...raw };
-    for (const key of Object.keys(arrays)) delete fields[key];
-    const result = metadata.parse(fields);
-    for (const [key, parse] of Object.entries(arrays)) {
-      requireFact(Array.isArray(raw[key]), `Native ${key} must be an array`);
-      result[key] = raw[key].map(parse);
-    }
-    return result;
-  };
-};
 const nativeBlock = factsSchema.shape.blocks.element;
 const parseBlock = rowParser(nativeBlock, {
   operations: (id) => operationId.parse(id),
@@ -118,14 +95,10 @@ const parseBlock = rowParser(nativeBlock, {
 const parseOperation = rowParser(operation, {
   inputs: (row) => operation.shape.inputs.element.parse(row),
 });
-const parseCall = rowParser(nativeCall, {
-  arguments: (row) => nativeCall.shape.arguments.element.parse(row),
-});
 const parseFacts = rowParser(factsSchema, {
   blocks: parseBlock,
   operations: parseOperation,
   values: (row) => value.parse(row),
-  calls: parseCall,
 });
 
 function preflight(facts) {
@@ -134,8 +107,8 @@ function preflight(facts) {
     "Native atomic facts facet is unavailable; inspect the retained source for its reason and C",
   );
   requireFact(
-    facts.schema_version === 2,
-    "Unsupported native atomic facts schema version; expected 2",
+    facts.schema_version === 3,
+    "Unsupported native atomic facts schema version; expected 3",
   );
   requireFact(
     facts.blocks?.length > 0,
@@ -145,7 +118,6 @@ function preflight(facts) {
     ["blocks", 12000],
     ["operations", 12000],
     ["values", 36000],
-    ["calls", 12000],
   ])
     requireFact(
       Array.isArray(facts[key]) && facts[key].length <= limit,
@@ -168,60 +140,15 @@ function preflight(facts) {
     0,
   );
   requireFact(
-    inputs <= 50000 &&
-      members <= 12000 &&
-      edges <= 100000 &&
-      facts.calls.reduce(
-        (sum, call) =>
-          sum + (Array.isArray(call?.arguments) ? call.arguments.length : 0),
-        0,
-      ) <= 50000,
+    inputs <= 50000 && members <= 12000 && edges <= 100000,
     "Native relationships exceed resource capacity",
   );
 }
-const formatFailure = (error) => {
-  if (error instanceof FactFailure) return error;
-  const details =
-    error instanceof z.ZodError
-      ? {
-          issues: error.issues.slice(0, 8).map(({ path, code, message }) => ({
-            path,
-            code,
-            message: message.slice(0, 160),
-          })),
-        }
-      : { reason: String(error.message).slice(0, 256) };
-  return new FactFailure(
-    "invalid_provider_output",
-    "Native IR source does not match the declared format",
-    details,
-  );
-};
-
-const readGraph = (fn) => {
-  try {
-    if (fn.atomic_facts_error !== undefined) {
-      requireFact(
-        fn.atomic_facts === undefined,
-        "Native graph is both present and reported unavailable",
-      );
-      return err(
-        new FactFailure(
-          "capability_unavailable",
-          "Native recovered IR facet is unavailable",
-          {
-            native_error: fn.atomic_facts_error.slice(0, 1024),
-            native_error_truncated: fn.atomic_facts_error.length > 1024,
-          },
-        ),
-      );
-    }
-    preflight(fn.atomic_facts);
-    return ok(parseFacts(fn.atomic_facts));
-  } catch (error) {
-    return err(formatFailure(error));
-  }
-};
+const readGraph = (fn) =>
+  readNativeFacet(fn, "atomic_facts", "recovered IR", (raw) => {
+    preflight(raw);
+    return parseFacts(raw);
+  });
 
 export function parseNativeFunction(text, entry, expectedInput) {
   try {
@@ -247,7 +174,12 @@ export function parseNativeFunction(text, entry, expectedInput) {
         "subject_mismatch",
         "Native function entry differs from requested subject",
       );
-    return { code: fn.code, language: doc.language, facts: readGraph(fn) };
+    return {
+      code: fn.code,
+      language: doc.language,
+      facts: readGraph(fn),
+      calls: readCallFacet(fn),
+    };
   } catch (error) {
     throw formatFailure(error);
   }

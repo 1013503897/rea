@@ -1,0 +1,17 @@
+Analyze sqlite3VdbeExec in {{artifact_path}} statically. Use one retained function
+capture to inspect recovered call sites and their boundary values even if the
+complete recovered IR graph is unavailable. Report each facet's availability and
+the scope of any retained value set; do not treat it as a complete function graph.
+
+Aggregate the retained recovered calls by CALL versus CALLIND and known versus
+unknown target. At call origins 0xf115c and 0xf238b, report the resolved target,
+the input-zero value identity and its annotation/address-space facts, recovered
+argument slots and passing locations. Determine whether the first argument is
+the same retained SSA value at both sites and whether it is a function input.
+Verify the selected machine CALL targets and essential argument-register setup
+with focused instruction windows. Distinguish internal fspec offsets, SSA value
+locations, passing storage, and code addresses.
+
+Explain which definition/use or alias claims remain unavailable. Reuse the same
+capture for selected reads rather than reanalyzing the VM. Keep the answer focused
+and give real Evidence references, target digest and static/runtime limitations.

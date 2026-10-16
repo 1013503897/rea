@@ -101,7 +101,7 @@ separates argument SSA values from passing storage. `values(is_input:true)`
 selects retained callee inputs for exact storage comparisons. These candidate
 links preserve snapshot identities, missing specifications, unknown storage and
 runtime-binding limits. The [cross-function task and oracle](call-oracle.md)
-are fixed before its real-model trials; the native wire format is now version 2.
+are fixed before its real-model trials; the graph wire format is version 3, with independent version-1 call facts.
 
 `references` now selects incoming exact-address references or outgoing
 instruction/function references, with native kind filtering, field selection and
@@ -160,3 +160,9 @@ CLI/API also verifies the VM aggregates on unpatched stock Kuna 1.833. These are
 scoped positive results alongside the earlier mixed adapter comparisons, not
 proof of general superiority. Details and retained failed/partial attempts are
 in [trials.md](trials.md).
+
+Recovered calls and their boundary values now survive full-graph capacity
+failure. The real VM capture preserves 416 call operations and 1,294 boundary
+values while its graph remains unavailable. Values clearly state their partial
+scope; definition IDs do not imply readable defining operations. See the
+[boundary question and oracle](boundary-oracle.md) for the next pinned model task.

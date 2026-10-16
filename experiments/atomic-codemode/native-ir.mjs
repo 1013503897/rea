@@ -5,18 +5,20 @@ import { parseNativeFunction } from "./native-ir-contract.mjs";
 import { backwardSlice } from "../atomic-re-tools/kuna-ssa.mjs";
 import { controlDependencies } from "./control-dependence.mjs";
 import { freezeFacts as freeze } from "./fact-reads.mjs";
-import { indexCalls, callCoverage } from "./native-calls.mjs";
+import {
+  indexCallFacet,
+  validateCallGraph,
+  createCallViews,
+} from "./native-call-views.mjs";
+import { requireFact } from "./native-contract.mjs";
+import {
+  uniqueNative as unique,
+  nativePage as page,
+  readNativeIdentities as readIdentities,
+} from "./native-reads.mjs";
 const index = (map, key, row) => {
   if (!map.has(key)) map.set(key, []);
   map.get(key).push(row);
-};
-const unique = (rows) => {
-  const map = new Map();
-  for (const row of rows) {
-    if (map.has(row.id)) throw new Error(`Duplicate native identity ${row.id}`);
-    map.set(row.id, row);
-  }
-  return map;
 };
 const kind = (opcode) =>
   ({
@@ -30,35 +32,6 @@ const kind = (opcode) =>
     CPUI_BRANCHIND: "switch",
     CPUI_RETURN: "return",
   })[opcode] ?? "value";
-const page = (rows, { offset = 0, limit = 20, fields } = {}) => ({
-  items: rows
-    .slice(offset, offset + limit)
-    .map((row) =>
-      fields
-        ? Object.fromEntries(
-            [...new Set(["id", "origin_address", "block", ...fields])]
-              .filter((key) => Object.hasOwn(row, key))
-              .map((key) => [key, row[key]]),
-          )
-        : row,
-    ),
-  total: rows.length,
-  next_offset: offset + limit < rows.length ? offset + limit : null,
-});
-const requireFact = (condition, reason) => {
-  if (!condition) throw new FactFailure("invalid_provider_output", reason);
-};
-const readIdentities = (index, input, filter = () => true) => ({
-  ...page(
-    (input.ids
-      ? input.ids.flatMap((id) => index.get(id) ?? [])
-      : [...index.values()]
-    ).filter(filter),
-    input,
-  ),
-  missing: input.ids?.filter((id) => !index.has(id)) ?? [],
-});
-
 function validateBlocks(operations, values, blocks) {
   const membership = new Set();
   for (const block of blocks.values()) {
@@ -149,7 +122,6 @@ function indexNative(facts) {
   validateBlocks(operations, values, blocks);
   validateOperations(operations, values, blocks);
   validateValues(facts, operations, values);
-  const calls = indexCalls(facts.calls, operations);
   const users = new Map(),
     incoming = new Map(),
     outgoing = new Map(),
@@ -215,21 +187,12 @@ function indexNative(facts) {
     outgoing,
     constants,
     normalized,
-    calls,
   };
 }
 
 function createViews(facts, code, indexes) {
-  const {
-    values,
-    blocks,
-    users,
-    incoming,
-    outgoing,
-    constants,
-    normalized,
-    calls,
-  } = indexes;
+  const { values, blocks, users, incoming, outgoing, constants, normalized } =
+    indexes;
   const coverage = freeze({
     ...facts.coverage,
     operations: normalized.size,
@@ -254,35 +217,14 @@ function createViews(facts, code, indexes) {
         fields: ["kind", "statement", "definitions", "constants"],
         ...input,
       }),
-    values: (input) =>
-      readIdentities(
+    values: (input) => ({
+      ...readIdentities(
         values,
         input,
         (value) =>
           input.is_input === undefined || value.is_input === input.is_input,
       ),
-    calls: (input) => ({
-      ...readIdentities(
-        calls,
-        {
-          fields: [
-            "spec_available",
-            "opcode",
-            "target",
-            "target_name",
-            "arguments",
-            "output",
-          ],
-          ...input,
-          ...(input.fields && {
-            fields: ["spec_available", "opcode", ...input.fields],
-          }),
-        },
-        (row) =>
-          !input.origin_addresses ||
-          input.origin_addresses.includes(row.origin_address),
-      ),
-      coverage: callCoverage,
+      coverage,
     }),
     blocks: (input) => readIdentities(blocks, input),
     edges: (input) => {
@@ -380,50 +322,64 @@ const projectedFailure = (error) => ({
   details: error.details ?? {},
 });
 
+const captureFacets = (graph, calls, graphError, callError) =>
+  freeze({
+    code: { availability: "available" },
+    recovered_ir: graph
+      ? { availability: "available" }
+      : { availability: "unavailable", error: graphError },
+    calls: calls
+      ? { availability: "available", count: calls.count }
+      : { availability: "unavailable", error: callError },
+    values: graph
+      ? { availability: "available", scope: "complete-for-recovered-graph" }
+      : calls
+        ? {
+            availability: "available",
+            scope: "call-boundary-only",
+            count: calls.value_count,
+          }
+        : { availability: "unavailable", error: callError },
+  });
+
 export function parseNativeIR(text, entry, expectedInput) {
   const capture = parseNativeFunction(text, entry, expectedInput);
-  let graph = capture.facts;
-  if (graph.ok) {
+  let graph, graphIndex, graphError, calls, callError;
+  if (capture.facts.ok) {
     try {
-      freeze(graph.value);
-      const model = createViews(
-        graph.value,
-        capture.code,
-        indexNative(graph.value),
-      );
-      return Object.freeze({
-        ...model,
-        language: capture.language,
-        facets: freeze({
-          code: { availability: "available" },
-          recovered_ir: { availability: "available" },
-        }),
-      });
+      freeze(capture.facts.value);
+      graphIndex = indexNative(capture.facts.value);
+      graph = createViews(capture.facts.value, capture.code, graphIndex);
     } catch (error) {
-      graph = { ok: false, error };
+      graphError = projectedFailure(error);
     }
-  }
-  const error = projectedFailure(graph.error);
-  const unavailable = () => {
+  } else graphError = projectedFailure(capture.facts.error);
+  if (capture.calls.ok) {
+    try {
+      const callIndex = indexCallFacet(capture.calls.value);
+      if (graph && graphIndex) validateCallGraph(callIndex, graphIndex);
+      calls = createCallViews(capture.calls.value, callIndex);
+    } catch (error) {
+      callError = projectedFailure(error);
+    }
+  } else callError = projectedFailure(capture.calls.error);
+  const unavailable = (facet, error) => () => {
     throw new FactFailure(error.code, error.message, {
       ...error.details,
-      facet: "recovered_ir",
+      facet,
     });
   };
-  return Object.freeze({
+  const unavailableGraph = unavailable("recovered_ir", graphError ?? {});
+  const unavailableCalls = unavailable("calls", callError ?? {});
+  const fallback = {
     code: capture.code,
-    language: capture.language,
-    facets: freeze({
-      code: { availability: "available" },
-      recovered_ir: { availability: "unavailable", error },
-    }),
     coverage: freeze({
       scope: "native reconstructed code; recovered IR facet unavailable",
       operations: null,
       blocks: null,
       control_flow: "unknown",
       machine_semantic_equivalence: "unknown",
-      issues: [error.message],
+      issues: [graphError?.message],
     }),
     ...Object.fromEntries(
       [
@@ -433,12 +389,17 @@ export function parseNativeIR(text, entry, expectedInput) {
         "uses",
         "incoming",
         "select",
-        "values",
-        "calls",
         "blocks",
         "edges",
         "slice",
-      ].map((name) => [name, unavailable]),
+      ].map((name) => [name, unavailableGraph]),
     ),
+  };
+  return Object.freeze({
+    ...(graph ?? fallback),
+    language: capture.language,
+    calls: calls?.calls ?? unavailableCalls,
+    values: graph?.values ?? calls?.values ?? unavailableCalls,
+    facets: captureFacets(graph, calls, graphError, callError),
   });
 }

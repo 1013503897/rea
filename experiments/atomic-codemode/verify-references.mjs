@@ -142,6 +142,47 @@ try {
     assert.equal(vm.facets.code.availability, "available");
     assert.equal(vm.facets.recovered_ir.availability, "unavailable");
     assert.match(vm.facets.recovered_ir.error.details.native_error, /capacity/);
+    assert.equal(vm.facets.calls.availability, "available");
+    assert.equal(vm.facets.values.scope, "call-boundary-only");
+    const selectedCalls = await read("calls", {
+      snapshot: vm.snapshot,
+      origin_addresses: ["0xf238b", "0xf115c"],
+      fields: ["target", "target_value_id", "arguments"],
+    });
+    assert.equal(selectedCalls.total, 2);
+    assert.ok(selectedCalls.items.every((c) => c.target?.offset === "0x296c0"));
+    assert.ok(selectedCalls.coverage.operations_examined > 12000);
+    const ids = [
+      ...new Set(
+        selectedCalls.items
+          .flatMap((c) => [
+            c.target_value_id,
+            ...c.arguments.map((a) => a.value_id),
+          ])
+          .filter(Boolean),
+      ),
+    ];
+    const boundary = await read("values", { snapshot: vm.snapshot, ids });
+    assert.equal(boundary.missing.length, 0);
+    assert.match(boundary.coverage.value_scope, /only/);
+    for (const row of selectedCalls.items)
+      assert.ok(
+        boundary.items.some(
+          (v) =>
+            v.id === row.target_value_id &&
+            v.space === "fspec" &&
+            v.is_annotation,
+        ),
+      );
+    const unavailable = await call("execute_javascript", {
+      code: `return await rea.operations({snapshot:${JSON.stringify(vm.snapshot)},limit:1});`,
+    });
+    assert.equal(unavailable.value.ok, false);
+    assert.equal(unavailable.value.error.code, "capability_unavailable");
+    assert.equal(
+      (await read("snapshot", { entry: "0xea6d0" })).snapshot,
+      vm.snapshot,
+    );
   }
   assert.equal((await call("close_binary", {})).ok, true);
 } catch (error) {

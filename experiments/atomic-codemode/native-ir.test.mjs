@@ -53,8 +53,7 @@ function diamond() {
         error: null,
         code: "reconstructed C",
         atomic_facts: {
-          schema_version: 2,
-          calls: [],
+          schema_version: 3,
           blocks: [
             {
               id: 0,

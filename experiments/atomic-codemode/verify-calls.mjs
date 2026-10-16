@@ -56,7 +56,7 @@ try {
     opened.context.artifact_sha256,
     "2e6eef9a727f081f0d453b4e5e6cbd8b9ef8b6f86cbf7681cbad444d3b0b55c8",
   );
-  assert.equal(opened.context.analysis_model, "experimental-native-ir-v2");
+  assert.equal(opened.context.analysis_model, "experimental-native-ir-v3");
   const wrapper = await read("snapshot", { entry: "0x65180" });
   const selected = await read("calls", {
     snapshot: wrapper.snapshot,

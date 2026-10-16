@@ -42,8 +42,55 @@ const callOperations = () => [
     output: null,
   },
 ];
+const fixtureValues = () => [
+  value("v0", "fspec", "0x10000", { is_annotation: true }),
+  value("v1", "const", "0x2a", { is_constant: true }),
+  value("v2", "register", "0x30", { is_input: true }),
+];
 function fixture() {
-  const operations = callOperations();
+  const operations = callOperations(),
+    values = fixtureValues();
+  const rows = [
+    {
+      id: "0x1100:0",
+      spec_available: true,
+      target: { space: "ram", offset: "0x2000" },
+      target_name: "callee",
+      arguments: [
+        {
+          input_index: 1,
+          value_id: "v1",
+          storage: { space: "register", offset: "0x38", size_bytes: 8 },
+          storage_authority: "final-input-storage",
+        },
+        {
+          input_index: 2,
+          value_id: "v2",
+          storage: null,
+          storage_authority: null,
+        },
+      ],
+      output: null,
+      prototype: {
+        model: "__cdecl",
+        model_unknown: false,
+        inputs_locked: false,
+        variadic: false,
+        parameter_shift: 0,
+      },
+      stack_offset: null,
+    },
+    {
+      id: "0x1110:0",
+      spec_available: false,
+      target: null,
+      target_name: null,
+      arguments: [],
+      output: null,
+      prototype: null,
+      stack_offset: null,
+    },
+  ];
   return {
     binary: "/input",
     count: 1,
@@ -55,7 +102,7 @@ function fixture() {
         code: "retained code",
         error: null,
         atomic_facts: {
-          schema_version: 2,
+          schema_version: 3,
           blocks: [
             {
               id: 0,
@@ -66,58 +113,33 @@ function fixture() {
             },
           ],
           operations,
-          values: [
-            value("v0", "fspec", "0x10000", { is_annotation: true }),
-            value("v1", "const", "0x2a", { is_constant: true }),
-            value("v2", "register", "0x30", { is_input: true }),
-          ],
-          calls: [
-            {
-              id: "0x1100:0",
-              spec_available: true,
-              target: { space: "ram", offset: "0x2000" },
-              target_name: "callee",
-              arguments: [
-                {
-                  input_index: 1,
-                  value_id: "v1",
-                  storage: { space: "register", offset: "0x38", size_bytes: 8 },
-                  storage_authority: "final-input-storage",
-                },
-                {
-                  input_index: 2,
-                  value_id: "v2",
-                  storage: null,
-                  storage_authority: null,
-                },
-              ],
-              output: null,
-              prototype: {
-                model: "__cdecl",
-                model_unknown: false,
-                inputs_locked: false,
-                variadic: false,
-                parameter_shift: 0,
-              },
-              stack_offset: null,
-            },
-            {
-              id: "0x1110:0",
-              spec_available: false,
-              target: null,
-              target_name: null,
-              arguments: [],
-              output: null,
-              prototype: null,
-              stack_offset: null,
-            },
-          ],
+          values,
           coverage: {
             scope: "native graph",
             machine_semantic_equivalence: "unknown",
             indirect_branch_operations: [],
             omitted_definition_ids: [],
             issues: [],
+          },
+        },
+        atomic_calls: {
+          schema_version: 1,
+          items: rows.map((row, i) => ({
+            ...row,
+            origin_address: operations[i].address,
+            block: 0,
+            opcode: operations[i].opcode,
+            is_dead: false,
+            target_value_id: operations[i].inputs[0].value_id,
+          })),
+          values: structuredClone(values),
+          coverage: {
+            scope: "all recovered block-member CALL/CALLIND operations",
+            blocks_examined: 1,
+            operations_examined: 2,
+            value_scope:
+              "call inputs including target and outputs only; definitions may be outside this facet",
+            machine_call_equivalence: "unknown",
           },
         },
       },
@@ -163,6 +185,7 @@ test("selected call pages and function input values compose without full reports
       "block",
       "spec_available",
       "opcode",
+      "is_dead",
       "prototype",
     ].sort(),
   );
@@ -177,39 +200,88 @@ test("selected call pages and function input values compose without full reports
   assert.equal(model.values({ is_input: true, ids: ["v1"] }).total, 0);
 });
 
-test("missing, duplicate or forged call relations reject the graph while retaining code", () => {
+test("bad call facets preserve valid graph and code; cross-facet conflicts disable call composition", () => {
   const changes = [
-    (facts) => {
-      facts.calls.pop();
+    (f) => {
+      f.items.pop();
     },
-    (facts) => {
-      facts.calls.push(facts.calls[0]);
+    (f) => {
+      f.items.push(f.items[0]);
     },
-    (facts) => {
-      facts.calls[0].arguments[0].value_id = "v2";
+    (f) => {
+      f.items[0].arguments[0].value_id = "v2";
     },
-    (facts) => {
-      facts.calls[0].arguments[0].input_index = 0;
+    (f) => {
+      f.items[0].arguments[0].input_index = 0;
     },
-    (facts) => {
-      facts.calls[0].arguments[0].storage_authority = null;
+    (f) => {
+      f.items[0].arguments[0].storage_authority = null;
     },
-    (facts) => {
-      facts.calls[1].target = { space: "ram", offset: "0x2000" };
+    (f) => {
+      f.items[1].target = { space: "ram", offset: "0x2000" };
     },
-    (facts) => {
-      facts.schema_version = 1;
+    (f) => {
+      f.values[1].offset = "0x2b";
+    },
+    (f) => {
+      f.schema_version = 2;
     },
   ];
   for (const change of changes) {
     const doc = fixture();
-    change(doc.functions[0].atomic_facts);
+    change(doc.functions[0].atomic_calls);
     const model = parseNativeIR(JSON.stringify(doc), "0x1000");
     assert.equal(model.code, "retained code");
-    assert.equal(model.facets.recovered_ir.availability, "unavailable");
+    assert.equal(model.facets.recovered_ir.availability, "available");
+    assert.equal(model.facets.calls.availability, "unavailable");
     assert.throws(
       () => model.calls({}),
-      (error) => error.code === "invalid_provider_output",
+      (e) => e.code === "invalid_provider_output",
     );
+    assert.equal(model.values({ ids: ["v1"] }).items[0].offset, "0x2a");
   }
+});
+
+test("graph capacity failure retains calls, boundary values and explicit unreadable definitions", () => {
+  const doc = fixture(),
+    fn = doc.functions[0];
+  delete fn.atomic_facts;
+  fn.atomic_facts_error = "atomic operation capacity exceeded";
+  const model = parseNativeIR(JSON.stringify(doc), "0x1000");
+  assert.equal(model.facets.recovered_ir.availability, "unavailable");
+  assert.equal(model.facets.calls.availability, "available");
+  assert.equal(model.facets.values.scope, "call-boundary-only");
+  assert.equal(model.calls({}).total, 2);
+  const values = model.values({ ids: ["v0", "v1", "missing"] });
+  assert.equal(values.items[0].space, "fspec");
+  assert.equal(values.items[1].offset, "0x2a");
+  assert.deepEqual(values.missing, ["missing"]);
+  assert.match(values.coverage.value_scope, /only/);
+  assert.equal(values.coverage.scope, values.coverage.value_scope);
+  assert.throws(
+    () => model.select({}),
+    (e) => e.code === "capability_unavailable",
+  );
+  assert.equal(
+    model.calls({ ids: ["0x1110:0"], fields: ["target_value_id"] }).items[0]
+      .target_value_id,
+    "v2",
+  );
+});
+
+test("malformed graph is isolated from valid calls; call-only malformed identities still fail", () => {
+  const doc = fixture();
+  doc.functions[0].atomic_facts.operations[0].output = "vbad";
+  let model = parseNativeIR(JSON.stringify(doc), "0x1000");
+  assert.equal(model.facets.recovered_ir.availability, "unavailable");
+  assert.equal(model.facets.calls.availability, "available");
+  assert.equal(model.values({ is_input: true }).items[0].id, "v2");
+  doc.functions[0].atomic_calls.items[0].target_value_id = "vdead";
+  model = parseNativeIR(JSON.stringify(doc), "0x1000");
+  assert.equal(model.facets.calls.availability, "unavailable");
+  assert.throws(
+    () => model.values({}),
+    (e) => e.code === "invalid_provider_output",
+  );
+  assert.equal(model.code, "retained code");
 });

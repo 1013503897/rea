@@ -320,3 +320,69 @@ early-stop budget and are terminated before OOM; they are not reported as passed
 The changed-test typecheck uses 70.1 MiB and standalone full lint 919.0 MiB.
 Full-repository typechecking and full upstream Kuna gates remain unverified.
 The [next question/oracle](reference-oracle.md) are committed before model trials.
+
+## Independent call and boundary-value facets
+
+Graph schema 3 removes embedded call records. An independent `atomic_calls`
+version-1 facet now carries every retained block-member CALL/CALLIND, target-input
+SSA identity, origin/block/opcode/dead status, call specs and boundary values.
+`atomic_values.rs` owns common native value interpretation. The call scan walks
+native block membership without allocating an operation vector for every block;
+its own call/input/value/text budgets do not depend on the 12,000-op graph cap.
+The default native path still does not collect either facet and C analysis phases
+are unchanged. All captures occur after the same C rendering.
+
+The bounded serializer retains fitting facets independently and preserves ordinary
+C/metadata. It tries the full document, graph without calls, calls without graph,
+then the base record with both reasons. This keeps existing graph availability
+when both facets individually fit but their combination does not. Facet contents
+are moved for these bounded alternatives rather than cloned; no reanalysis or
+clipped collection labeled complete is introduced.
+
+The JS owner validates each facet independently with shared ID/value contracts
+and row-wise admission. When both parse, call identities, origins, operands,
+outputs and boundary values must agree with the graph owner. Bad call facts do
+not erase a valid graph; a bad/oversized graph does not erase valid calls. Code
+survives either failure. `values` uses the complete retained graph when present,
+otherwise the explicitly scoped call-boundary set; absent IDs in that set do not
+prove absence from the native function. Defining operation identities may remain
+unreadable, and source signatures, source parameter ordinals, aliases and runtime
+binding stay unknown. `is_dead` is always retained on call rows, like an
+instruction decode status. CLI, SDK and both MCP adapters share these views.
+
+The new preserved engine is
+`e7d3f0cc8d8aae814bd6a2625a567d6aaad96c3fe2405a4f08dc8e065b851588`.
+Its full rebuild took 315.815 family wall / 315.305 CPU seconds, 2,119.4 MiB
+kernel process-family peak. Four focused native atomic-JSON tests pass, including
+both overflow directions, both-overflow C preservation and graph preference when
+the combined document is too large (95.981 / 95.631 seconds including test-target
+compilation, 626.8 MiB). The final CLI rebuild after tests is 26.203 / 25.952
+seconds, 492.7 MiB. It is copied outside Cargo outputs and pinned by full digest.
+All these runs verify cleanup and OOM 0; full upstream gates remain unexecuted.
+
+Real public MCP verification keeps VM C available, reports graph operation
+capacity failure, and now exposes 416 calls plus 1,294 boundary values. The call
+scan examines 21,349 operations over 1,229 blocks. It preserves 395 direct known
+targets and 21 unresolved indirect calls; all direct pairs match independent
+machine pairs except the omitted `0xf2493 -> 0x29370` stack-check call. All 21
+indirect origin addresses also match independent disassembly. Selected
+`0xf115c`/`0xf238b` calls target `0x296c0`; their fspec inputs remain separate
+annotation values. Repeated snapshots reuse the same handle and source, and an
+explicit unavailable graph read fails without hiding these retained facts.
+
+The VM source grows from 273,703 to 793,791 bytes to retain this new data; the
+wrapper grows from 202,206 to 208,083 bytes. Their ordinary records, including C,
+variables and line mappings, are identical to the prior capture. The wrapper's
+blocks/operations/values/coverage also remain identical. These are fidelity and
+source-volume observations, not model-token or speed results.
+
+The real reference/VM verifier passes in 49.471 wall / 49.130 CPU seconds,
+615.8 MiB. The existing cross-function call/input verifier passes in 8.377 /
+8.094 seconds, 292.9 MiB; encoded Pragma/parser C/graph checks pass in 12.403 /
+12.195 seconds, 335.0 MiB. All verify cleanup and OOM 0. The updated contract
+suite passes 47 JS tests, including independent facet failure, cross-facet
+conflicts, input-zero identity and boundary-only value reads. `check-spec` passes
+in default lenient mode, lint and changed-file formatting pass, and the patch
+applies forward to the pinned upstream revision and reverses from the clone.
+Full repository typechecking retains its previously recorded resource limitation.
+The [boundary question/oracle](boundary-oracle.md) are fixed before model runs.
