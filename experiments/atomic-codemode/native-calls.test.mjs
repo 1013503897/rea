@@ -285,3 +285,51 @@ test("malformed graph is isolated from valid calls; call-only malformed identiti
   );
   assert.equal(model.code, "retained code");
 });
+
+test("capture call counts distinguish target knowledge from opcode and include dead rows", () => {
+  const doc = fixture(),
+    fn = doc.functions[0];
+  delete fn.atomic_facts;
+  fn.atomic_facts_error = "capacity";
+  const [direct, indirect] = fn.atomic_calls.items;
+  direct.target = null;
+  direct.is_dead = true;
+  indirect.target = { space: "ram", offset: "0x3000" };
+  indirect.spec_available = true;
+  indirect.prototype = direct.prototype;
+  const model = parseNativeIR(JSON.stringify(doc), "0x1000");
+  assert.deepEqual(model.facets.calls.by_opcode, [
+    { opcode: "CPUI_CALL", known_target_count: 0, unknown_target_count: 1 },
+    { opcode: "CPUI_CALLIND", known_target_count: 1, unknown_target_count: 0 },
+  ]);
+  assert.equal(model.facets.calls.count, 2);
+  assert.equal(model.facets.calls.coverage.machine_call_equivalence, "unknown");
+  assert.equal(model.calls({ ids: [direct.id], fields: [] }).total, 1);
+  assert.equal(model.facets.calls.count, 2);
+  assert.throws(() => {
+    model.facets.calls.by_opcode[0].known_target_count = 99;
+  }, TypeError);
+});
+
+test("an empty available call facet has zero counts; unavailable counts remain absent", () => {
+  const doc = fixture(),
+    fn = doc.functions[0];
+  delete fn.atomic_facts;
+  fn.atomic_facts_error = "capacity";
+  fn.atomic_calls.items = [];
+  fn.atomic_calls.values = [];
+  let model = parseNativeIR(JSON.stringify(doc), "0x1000");
+  assert.equal(model.facets.calls.availability, "available");
+  assert.equal(model.facets.calls.count, 0);
+  assert.ok(
+    model.facets.calls.by_opcode.every(
+      (r) => r.known_target_count === 0 && r.unknown_target_count === 0,
+    ),
+  );
+  delete fn.atomic_calls;
+  fn.atomic_calls_error = "capacity";
+  model = parseNativeIR(JSON.stringify(doc), "0x1000");
+  assert.equal(model.facets.calls.availability, "unavailable");
+  assert.equal(Object.hasOwn(model.facets.calls, "count"), false);
+  assert.equal(Object.hasOwn(model.facets.calls, "by_opcode"), false);
+});

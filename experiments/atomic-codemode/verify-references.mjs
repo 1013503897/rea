@@ -143,6 +143,16 @@ try {
     assert.equal(vm.facets.recovered_ir.availability, "unavailable");
     assert.match(vm.facets.recovered_ir.error.details.native_error, /capacity/);
     assert.equal(vm.facets.calls.availability, "available");
+    assert.equal(vm.facets.calls.count, 416);
+    assert.deepEqual(vm.facets.calls.by_opcode, [
+      { opcode: "CPUI_CALL", known_target_count: 395, unknown_target_count: 0 },
+      {
+        opcode: "CPUI_CALLIND",
+        known_target_count: 0,
+        unknown_target_count: 21,
+      },
+    ]);
+    assert.equal(vm.facets.calls.coverage.machine_call_equivalence, "unknown");
     assert.equal(vm.facets.values.scope, "call-boundary-only");
     const selectedCalls = await read("calls", {
       snapshot: vm.snapshot,

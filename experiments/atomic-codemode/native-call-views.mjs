@@ -94,6 +94,24 @@ export function validateCallGraph(callIndex, graphIndex) {
       "Native call operation omitted from call coverage",
     );
 }
+const summarizeCalls = (calls, coverage) => {
+  const counts = {
+    CPUI_CALL: { known_target_count: 0, unknown_target_count: 0 },
+    CPUI_CALLIND: { known_target_count: 0, unknown_target_count: 0 },
+  };
+  for (const row of calls.values())
+    counts[row.opcode][
+      row.target === null ? "unknown_target_count" : "known_target_count"
+    ]++;
+  return freezeFacts({
+    count: calls.size,
+    by_opcode: Object.entries(counts).map(([opcode, row]) => ({
+      opcode,
+      ...row,
+    })),
+    coverage,
+  });
+};
 export function createCallViews(facts, indexes) {
   const { calls, values } = indexes;
   freezeFacts(facts);
@@ -139,7 +157,7 @@ export function createCallViews(facts, indexes) {
       ),
       coverage: valueCoverage,
     }),
-    count: calls.size,
+    summary: summarizeCalls(calls, coverage),
     value_count: values.size,
   };
 }

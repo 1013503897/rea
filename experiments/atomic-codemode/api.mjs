@@ -83,7 +83,7 @@ export const methods = {
     'await rea.references({addresses:["0x2000"]})',
   ),
   snapshot: definition(
-    "Analyze an explicit function entry once; return a retained capture handle, facets and coverage. Reuses the source within this target lease. Code, recovered calls and call-boundary values remain independently available when full recovered IR exceeds capacity; inspect facets before reads.",
+    "Analyze an explicit function entry once; return a retained capture handle, facets and coverage. Reuses the source within this target lease. Code, recovered calls and call-boundary values remain independently available when full recovered IR exceeds capacity; inspect facets before reads. Available calls include compact by_opcode counts of known/unknown targets over the whole retained call facet; no paging is needed for these counts. Selected calls and complete Evidence remain readable.",
     { entry: hex },
     "snapshot",
     'await rea.snapshot({entry:"0x1000"})',
@@ -263,7 +263,7 @@ const returns = {
   references:
     "data:{results:[{ok,address,source:{evidence_id},items:[{source_row,from,to,kind,fromFunction:{address,name}|null,toFunction:{address,name}|null,instruction}],total,next_offset,coverage}|{ok:false,address,error}]}. source_row is the zero-based row in retained native xrefs; Evidence identity plus source_row identifies an occurrence. Coverage preserves examined/excluded/unattributed counts and unknown function scope/discovery. fields projects optional columns; endpoints/kind/source_row stay.",
   snapshot:
-    "data:{snapshot:string,entry,source:{evidence_id,sha256},facets:{code:{availability},recovered_ir:{availability,error?},calls:{availability,count?,error?},values:{availability,scope?,count?,error?}},coverage}. An unavailable graph has unknown/null counts, never a fabricated empty graph; code remains readable through the same handle.",
+    "data:{snapshot:string,entry,source:{evidence_id,sha256},facets:{code:{availability},recovered_ir:{availability,error?},calls:{availability,count?,by_opcode?:[{opcode,known_target_count,unknown_target_count}],coverage?,error?},values:{availability,scope?,count?,error?}},coverage}. Call counts cover all retained recovered calls, including is_dead rows, not complete machine/runtime calls; target knowledge comes from a non-null native target, independent of opcode. An unavailable facet omits counts; an available empty call facet reports zeros. An unavailable graph has unknown/null counts, never a fabricated empty graph; code remains readable through the same handle.",
   operations:
     "data:{items:[{id,origin_address,block,source_line,kind,statement,definitions,constants,inputs?,output?,opcode?}],total,next_offset,evidence_id,coverage}. Native inputs:[{input_index,value_id,phi_predecessor,phi_predecessor_edge}], output:value_id|null; definitions:[{definition,use,input_index,value_id,phi_predecessor,phi_predecessor_edge}]. Diagnostic definitions use printed occurrence instead. fields projects columns; identity remains.",
   relations:

@@ -168,4 +168,13 @@ scope; definition IDs do not imply readable defining operations. See the
 [boundary question and oracle](boundary-oracle.md) and its completed real-model
 pair in [trials.md](trials.md). Both answers pass, using one VM capture each.
 Code Mode's single-sample latency is lower, with mixed context costs; broader
-efficiency remains unproven. The current focused JS suite passes 47 tests.
+efficiency remains unproven. The current focused JS suite passes 49 tests.
+
+Available snapshot call facets now include `by_opcode` known/unknown-target
+counts and their own coverage. The owner derives them once from the same
+validated immutable calls used by selected reads, including dead operations;
+target knowledge is independent of opcode. Empty available facets report zeros,
+while unavailable facets omit counts. This small aggregate addresses an observed
+cost in the real boundary pair: paging the entire call set just to count it.
+The unchanged question/oracle will be rerun through both adapters; no speed or
+token improvement is assumed from this smaller data path alone.

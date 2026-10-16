@@ -14,6 +14,15 @@ higher. See the full costs and independent source checks in [trials.md](trials.m
 This verifies the narrower recovered-call capability; it does not supply selected
 definition bodies when the full graph is unavailable.
 
+The next comparison reuses that exact question and oracle after adding compact
+call counts to the shared snapshot facet. Both adapters receive the same new
+metadata, derived after native validation from the complete retained call set;
+the engine, fact methods and selection semantics are unchanged. The hypothesis
+is that avoiding full-set paging for these counts reduces task costs. Count
+coverage remains recovered block-member calls, not complete machine calls or
+runtime binding. No effect is assumed before the real-model rerun, and selected
+rows/full source Evidence remain available for composition and audit.
+
 The atomic direct and Code Mode lanes share the same method registry, provider
 owner, selectors, failures and retained sources. The traditional lane selects
 relevant production tools, including the discovery route advertised by its

@@ -329,7 +329,7 @@ const captureFacets = (graph, calls, graphError, callError) =>
       ? { availability: "available" }
       : { availability: "unavailable", error: graphError },
     calls: calls
-      ? { availability: "available", count: calls.count }
+      ? { availability: "available", ...calls.summary }
       : { availability: "unavailable", error: callError },
     values: graph
       ? { availability: "available", scope: "complete-for-recovered-graph" }

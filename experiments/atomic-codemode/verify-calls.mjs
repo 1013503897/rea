@@ -58,6 +58,10 @@ try {
   );
   assert.equal(opened.context.analysis_model, "experimental-native-ir-v3");
   const wrapper = await read("snapshot", { entry: "0x65180" });
+  assert.deepEqual(wrapper.facets.calls.by_opcode, [
+    { opcode: "CPUI_CALL", known_target_count: 8, unknown_target_count: 0 },
+    { opcode: "CPUI_CALLIND", known_target_count: 0, unknown_target_count: 0 },
+  ]);
   const selected = await read("calls", {
     snapshot: wrapper.snapshot,
     origin_addresses: ["0x65211"],
@@ -76,6 +80,10 @@ try {
   assert.equal(callerValue.items[0].is_input, false);
   assert.ok(callerValue.items[0].definition);
   const parser = await read("snapshot", { entry: parserCall.target.offset });
+  assert.deepEqual(parser.facets.calls.by_opcode, [
+    { opcode: "CPUI_CALL", known_target_count: 28, unknown_target_count: 0 },
+    { opcode: "CPUI_CALLIND", known_target_count: 0, unknown_target_count: 5 },
+  ]);
   const inputs = await read("values", {
     snapshot: parser.snapshot,
     is_input: true,

@@ -393,3 +393,26 @@ complete graph from the available call-boundary values. Source digests, target
 and preserved-engine pins, selected machine checks, cleanup and OOM-zero receipts
 verify. See [whole-task costs](trials.md): the capability survives real model use,
 but a single mixed-context-cost pair does not establish general efficiency.
+
+## Compact counts from the validated call owner
+
+The following API-only change keeps the preserved engine and native source
+format unchanged. Snapshot call metadata includes counts by recovered opcode
+and known/unknown native target, plus call coverage. The owner computes these
+once after validation, before the shared CLI/SDK/MCP views. Counts include dead
+rows and do not infer target knowledge from CALL versus CALLIND. Available empty
+sets have zeros; unavailable sets have no counts. Selected call reads do not
+change this whole-facet summary or require a new analysis.
+
+The focused suite passes 49 tests, including known indirect/unknown direct
+targets, dead rows, immutable summaries and empty/unavailable distinction.
+Both real MCP adapters verify the wrapper's eight direct calls and parser's
+28 direct/five unresolved indirect calls while preserving the existing
+cross-function checks and validating advertised schemas after SDK conversion.
+Code Mode verification takes 29.263 family wall / 21.548 CPU seconds, 283.9 MiB
+kernel family peak; direct takes 32.893 / 22.781 seconds, 280.6 MiB. Both have
+verified cleanup and OOM 0. These are validation runs, not a controlled speed
+comparison with previous verifier timings. An owner replay of the prior
+digest-verified VM source yields the expected 395/21 distribution; it is not
+relabeled as a fresh provider or model run. The identical boundary question and
+oracle are retained for subsequent real-model comparison.
