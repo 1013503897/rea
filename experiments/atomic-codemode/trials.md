@@ -515,3 +515,56 @@ uncached input and wall time are higher in this sample.
 Raw ledger: `.cache/atomic-codemode/ledger-call-round-01e5c59.json`. Each cell is
 one stochastic sample. The complete client already provides JavaScript dispatch
 in both lanes. No new traditional-provider cell is being claimed.
+
+## Cross-function call task: explicit return-path pair
+
+Both `sqlite-call-atomic-direct-v3` and `sqlite-call-codemode-v3` use `e9348df0c`
+and the clarified question, fixed before either lane starts. This time direct
+runs first. Engine, fourteen fact methods, model/effort request and common
+instruction settings match the prior pair. Runtime, selected engine and target
+bytes remain unchanged. Target leases and native caches are fresh; OS/page and
+remote prompt caches are not reset. Per-response token totals match runner usage,
+process/profile cleanup is verified, and OOM kills are zero.
+
+| Measurement                            | Atomic direct call v3 | Code Mode call v3 |
+| -------------------------------------- | --------------------: | ----------------: |
+| MCP requests / transport failures      |                30 / 0 |            12 / 0 |
+| Observed model responses               |                    16 |                14 |
+| Client exec calls                      |                    15 |                13 |
+| Model wall seconds                     |               147.424 |           156.821 |
+| Family wall seconds                    |               147.922 |           157.307 |
+| Family CPU seconds                     |                15.678 |            17.514 |
+| Family memory peak MiB                 |                 537.9 |             478.0 |
+| Cumulative input tokens                |               611,321 |           596,978 |
+| Cached input tokens                    |               544,256 |           528,768 |
+| Uncached input tokens                  |                67,065 |            68,210 |
+| Output tokens, including reasoning     |                 4,405 |             4,954 |
+| Reasoning tokens, included in output   |                   673 |             1,046 |
+| Largest observed response input tokens |                64,471 |            65,964 |
+
+Both answers meet the clarified question's context/field/control-flow and
+return-code requirements. They identify the exact caller/callee SSA and passing
+storage, independently verify the actual call/pointer setup, field updates and
+counter test, and distinguish helper returns 0, 1 and 18. Both correctly separate
+the wrapper depth diagnostic (argument 12) from the helper nesting limit 1000.
+They preserve memory-alias/traversal and runtime-feasibility uncertainty.
+The fspec ownership regression is separately verified at the producer/MCP
+boundary; neither answer claims a machine target from an annotation offset.
+All eight/nine cited sources respectively have matching retained-source digests,
+target identity and selected engine digest.
+
+This is a successful, correctness-equal example of the new call/input facts in
+real model work. It is not a general Code Mode efficiency win: cumulative input
+is only about 2.3% lower, while uncached input, output, maximum observed response
+input, CPU and elapsed time are higher. MCP requests fall 60%, but actual model
+responses fall only 12.5%. Peak process-family memory is lower in this sample.
+One stochastic cell per lane, differing chosen excerpts and uncontrolled caches
+cannot establish causality or a repeatable effect. The existing client offers
+JavaScript dispatch in both lanes; no new traditional-provider cell was run.
+
+Raw ledger: `.cache/atomic-codemode/ledger-call-round-e9348df.json`; independent
+answer/source review: `.cache/atomic-codemode/call-v3-answer-review.json`. The
+largest-response metric is the maximum observed per-response input usage,
+including cached tokens, rather than an estimate from serialized bytes. Memory
+is the kernel cgroup process-family peak, including charged file cache. Remote
+model CPU/memory, resolved server model build and monetary cost are unmeasured.

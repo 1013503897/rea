@@ -54,15 +54,15 @@ symbol inventory (`nm -D --defined-only`) identifies `sqlite3VdbeExec` at
 `0xea6d0`. Reconstructed C and printer line mappings help locate checks, but do
 not replace the physical instruction evidence:
 
-| Required local fact | Independently checked anchors |
-| --- | --- |
-| Open and release strings are distinct | `0x12c500` and `0x12c538`; loads at `0xf2381` and `0xf2437` |
-| Operation selector zero takes the open path | Load `[op+4]` at `0xedbe5`, test `0xedbf0`, `JNE 0xf0340` at `0xedbf2` |
-| Open is rejected for a positive signed counter | Load `[db+0xd8]` at `0xedbf8`, test `0xedbff`, `JG 0xf2372` at `0xedc01` |
+| Required local fact                                                         | Independently checked anchors                                                                                                                                                                   |
+| --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Open and release strings are distinct                                       | `0x12c500` and `0x12c538`; loads at `0xf2381` and `0xf2437`                                                                                                                                     |
+| Operation selector zero takes the open path                                 | Load `[op+4]` at `0xedbe5`, test `0xedbf0`, `JNE 0xf0340` at `0xedbf2`                                                                                                                          |
+| Open is rejected for a positive signed counter                              | Load `[db+0xd8]` at `0xedbf8`, test `0xedbff`, `JG 0xf2372` at `0xedc01`                                                                                                                        |
 | Release first resolves the named savepoint, then tests counter and selector | Chain `[db+0x2f0]` at `0xf0340`, links `+0x18` at `0xf0358`, name comparison `0xf036f`; signed `JLE` at `0xf0382` bypasses rejection, selector `==1` at `0xf0384` / `0xf0389` selects `0xf242d` |
-| Both use the same emission/error tail | Open falls to `sqlite3VdbeError@plt` call `0xf238b`; release jumps there at `0xf2446`; local status becomes `5` at `0xf239d`, then jumps to `0xea828` at `0xf23b8` |
-| Missing name differs | Null chain tests `0xf0347` / `0xf035f` reach `0xf1139`; separate format `"no such savepoint: %s"` and call `0xf115c` |
-| Static authority and coverage remain explicit | Counter/selector names are interpretations of offsets; runtime feasibility, actual dynamic binding and the final result after shared error processing require additional evidence |
+| Both use the same emission/error tail                                       | Open falls to `sqlite3VdbeError@plt` call `0xf238b`; release jumps there at `0xf2446`; local status becomes `5` at `0xf239d`, then jumps to `0xea828` at `0xf23b8`                              |
+| Missing name differs                                                        | Null chain tests `0xf0347` / `0xf035f` reach `0xf1139`; separate format `"no such savepoint: %s"` and call `0xf115c`                                                                            |
+| Static authority and coverage remain explicit                               | Counter/selector names are interpretations of offsets; runtime feasibility, actual dynamic binding and the final result after shared error processing require additional evidence               |
 
 The VM's real native-IR exporter exceeds its operation capacity. It retains
 3,654 lines of reconstructed C and complete source Evidence. This task tests
@@ -112,14 +112,49 @@ segment (`0x11a000..0x154bfc`). A Python `struct.unpack_from('<i', ...)` check o
 the actual table bytes gives these initial dispatch facts, before model trials:
 
 | Input byte | Class | Signed displacement | Initial machine destination |
-| --- | ---: | ---: | --- |
-| `0x2d` | 11 | -302928 | `0xe16b0` |
-| `0x2f` | 16 | -302144 | `0xe19c0` |
-| `0x27` | 8 | -302480 | `0xe1870` |
-| `0x22` | 8 | -302480 | `0xe1870` |
-| `0x3f` | 6 | -302272 | `0xe1940` |
-| `0x80` | 27 | -303440 | `0xe14b0` |
+| ---------- | ----: | ------------------: | --------------------------- |
+| `0x2d`     |    11 |             -302928 | `0xe16b0`                   |
+| `0x2f`     |    16 |             -302144 | `0xe19c0`                   |
+| `0x27`     |     8 |             -302480 | `0xe1870`                   |
+| `0x22`     |     8 |             -302480 | `0xe1870`                   |
+| `0x3f`     |     6 |             -302272 | `0xe1940`                   |
+| `0x80`     |    27 |             -303440 | `0xe14b0`                   |
 
 This oracle establishes static table/dispatch arithmetic, not final token
 semantics, future runtime table contents or a feasible SQL input. Models must
 retain those boundaries. This document is not supplied to measured models.
+
+## Cross-function facts work; adapter gains remain mixed
+
+The structured-call experiment closes an observed native export gap: the call's
+fspec annotation does not identify its target code address, and an argument's
+SSA storage is not its passing location. Reusing the native call-spec owner now
+allows a model to connect a caller value to a callee input without parsing a
+display string. Real SQLite answers support this connection with machine
+instructions, trace a shared parenthesis counter across two functions, and
+preserve the limits of recovered slots, aliases and runtime feasibility.
+
+The first question pair omitted oracle-required alternative return paths in both
+answers. Its wording was less explicit than its oracle, so that result stays a
+partial-coverage record. A new question clarification was committed before the
+next pair; both then satisfy the task. The failed engine-pin setup launch also
+remains recorded. No sample is silently converted into a completed task.
+
+In the correctness-equal pair, Code Mode uses 596,978 cumulative input tokens and
+156.821 seconds versus direct's 611,321 and 147.424 seconds. Uncached input,
+output, largest observed response input and family CPU are higher for Code Mode;
+family memory peak is lower. Both use the same fourteen fact methods and a client
+with JavaScript dispatch. The evidence supports usable composable call/input
+facts, without proving that this server adapter is faster or cheaper. Broader
+complex-software superiority and provider parity remain unproven.
+
+Two remaining boundaries deserve independent experiments. First, calls currently
+live inside the full recovered IR facet: exceeding graph capacity loses a small
+call view that might otherwise fit. Second, native Kuna already has `xrefs
+--from` over its shared reference index, while this prototype's reference reader
+exposes only incoming exact-address queries. That native support is source-verified,
+not yet a runtime/performance result here. A shallow outgoing-reference view
+should be measured before forcing function decompilation for a callee list;
+argument/value recovery remains a different, deeper request. Keeping those costs
+and coverage distinctions explicit is more useful than treating a smaller tool
+catalog as proof of better analysis.
