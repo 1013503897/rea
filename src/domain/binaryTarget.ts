@@ -200,7 +200,8 @@ const fatIdentityError = (
   return null;
 };
 
-const parseElf = (
+/** Parse a bounded ELF header prefix without I/O. */
+export const parseElf = (
   bytes: Buffer,
   fileSize: number,
 ): Result<ExecutableMetadata, string> => {

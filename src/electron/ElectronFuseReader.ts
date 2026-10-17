@@ -7,6 +7,7 @@ import {
   readMachoImage,
 } from "../artifacts/apple/MachoLoadCommandReader.js";
 import type { ReadAt } from "../artifacts/apple/MachoLoadCommandReader.js";
+import { parseElf, parsePeRecord } from "../domain/binaryTarget.js";
 import {
   electronFuseName,
   electronFuseState,
@@ -33,6 +34,10 @@ export const ELECTRON_FUSE_LIMITS = {
 
 const SENTINEL = Buffer.from(ELECTRON_FUSE_SENTINEL, "ascii");
 const FAT_MAGICS = new Set([0xcafebabe, 0xcafebabf, 0xbebafeca, 0xbfbafeca]);
+/** The ELF64 fixed header; it also covers the shorter ELF32 header. */
+const ELF64_HEADER_BYTES = 64;
+/** PE signature and COFF header plus the largest u16-declared optional header. */
+const PE_RECORD_BYTES = 24 + 0xffff;
 
 /** Container identity and per-slice fuse wires. Offsets are file-absolute. */
 export interface ElectronFuseImage {
@@ -214,12 +219,13 @@ const identifyContainer = async (
   if (isElf(head))
     return {
       format: "elf",
-      slices: [{ index: 0, fileOffset: 0, size, architecture: null }],
+      slices: wholeFile(size, await elfArchitecture(readAt, size)),
     };
-  if (await isPe(readAt, size))
+  const peOffset = await peHeaderOffset(readAt, size);
+  if (peOffset !== null)
     return {
       format: "pe",
-      slices: [{ index: 0, fileOffset: 0, size, architecture: null }],
+      slices: wholeFile(size, await peArchitecture(readAt, size, peOffset)),
     };
   throw new ElectronFuseFormatFailure(
     "unsupported",
@@ -458,11 +464,50 @@ const isFat = (head: Uint8Array): boolean => {
   return FAT_MAGICS.has(magic);
 };
 
-const isPe = async (readAt: ReadAt, size: number): Promise<boolean> => {
-  if (size < 64) return false;
+/**
+ * The executable-header parsers own architecture; a header they cannot decode
+ * leaves the architecture unknown without failing the fuse read.
+ */
+const elfArchitecture = async (
+  readAt: ReadAt,
+  size: number,
+): Promise<string | null> => {
+  const parsed = parseElf(
+    asBuffer(await readAt(0, Math.min(size, ELF64_HEADER_BYTES))),
+    size,
+  );
+  return parsed.ok ? parsed.value.architecture : null;
+};
+
+const peArchitecture = async (
+  readAt: ReadAt,
+  size: number,
+  offset: number,
+): Promise<string | null> => {
+  const parsed = parsePeRecord(
+    asBuffer(await readAt(offset, Math.min(size - offset, PE_RECORD_BYTES))),
+    undefined,
+  );
+  return parsed.ok ? parsed.value.architecture : null;
+};
+
+const wholeFile = (
+  size: number,
+  architecture: string | null,
+): readonly SliceRange[] => [{ index: 0, fileOffset: 0, size, architecture }];
+
+const asBuffer = (bytes: Uint8Array): Buffer =>
+  Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+
+/** Offset of a `PE\0\0` signature declared by the MZ header, or null. */
+const peHeaderOffset = async (
+  readAt: ReadAt,
+  size: number,
+): Promise<number | null> => {
+  if (size < 64) return null;
   const header = await readAt(0, 64);
   if (header.length < 64 || header[0] !== 0x4d || header[1] !== 0x5a)
-    return false;
+    return null;
   const offset = Buffer.from(
     header.buffer,
     header.byteOffset,
@@ -474,15 +519,15 @@ const isPe = async (readAt: ReadAt, size: number): Promise<boolean> => {
     offset > ELECTRON_FUSE_LIMITS.maximumPeHeaderOffset ||
     offset > size - 4
   )
-    return false;
+    return null;
   const signature = await readAt(offset, 4);
-  return (
-    signature.length === 4 &&
+  return signature.length === 4 &&
     signature[0] === 0x50 &&
     signature[1] === 0x45 &&
     signature[2] === 0 &&
     signature[3] === 0
-  );
+    ? offset
+    : null;
 };
 
 const isMissingPath = (cause: unknown): boolean =>
