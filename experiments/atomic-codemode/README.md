@@ -19,6 +19,12 @@ The [capability map](capability-map.md) distinguishes verified task coverage,
 experimental exporter requirements and remaining unknowns before interpreting
 adapter comparisons.
 
+The [string-span study](string-span-study.md) adds paged incoming occurrence
+queries for encoded object spans and independently verifies pooled suffix
+references on real SQLite. The same native sparse range index serves Kuna's
+existing string aggregates. Equivalent cold occurrence retrieval falls from
+48.1 to 1.8 seconds; this is shared analysis reuse, not a Code Mode result.
+
 The [AArch64 reference study](aarch64-xref-study.md) finds and fixes missing
 ADRP-based string and memory references before the next model comparison.
 Real SDK and traditional MCP preflights now agree with independent machine

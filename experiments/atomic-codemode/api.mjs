@@ -5,6 +5,7 @@ import { MAX_GRAPH_BLOCKS } from "./graph-limits.mjs";
 import { createReference } from "./reference.mjs";
 import { definition, hex, page, valueLocation } from "./api-contracts.mjs";
 import { storageMethods } from "./storage-contracts.mjs";
+import { referencesMethod } from "./reference-contracts.mjs";
 
 const snapshot = z.string().startsWith("snap_");
 const byteWindow = z.strictObject({
@@ -116,29 +117,7 @@ export const methods = {
     "strings",
     'await rea.strings({query:"incorrect header check"})',
   ),
-  references: definition(
-    {
-      summary:
-        "Read incoming exact-address or outgoing address/function xrefs with occurrence identity and ownership coverage.",
-      description:
-        "Batch incoming or outgoing lifted-code references without decompilation. Address scope selects exact target (incoming) or source instruction (outgoing); function scope selects outgoing native owning-function references and requires an entry address. Unknown function applicability stays unknown. Kind filtering is pushed to the native query; source rows, endpoints and Evidence identity remain. Recovered IR calls are a separate representation and may omit machine calls. Interior string references require a separate extent query.",
-    },
-    {
-      addresses: z.array(hex).min(1).max(16),
-      direction: z.enum(["incoming", "outgoing"]).default("incoming"),
-      scope: z.enum(["address", "function"]).default("address"),
-      kinds: z
-        .array(z.enum(["call", "jump", "data", "read", "write"]))
-        .min(1)
-        .optional(),
-      fields: z
-        .array(z.enum(["fromFunction", "toFunction", "instruction"]))
-        .optional(),
-      ...page,
-    },
-    "references",
-    'await rea.references({addresses:["0x2000"]})',
-  ),
+  references: referencesMethod,
   snapshot: definition(
     {
       summary:
@@ -436,15 +415,4 @@ methods.bytes.input = methods.bytes.input.superRefine((value, context) => {
       message: "Byte range end exceeds the native u64 address format",
     });
 });
-methods.references.input = methods.references.input.superRefine(
-  (value, context) => {
-    if (value.direction === "incoming" && value.scope !== "address")
-      context.addIssue({
-        code: "custom",
-        path: ["scope"],
-        message: "Incoming references require exact address scope",
-      });
-  },
-);
-
 export const reference = createReference(methods);

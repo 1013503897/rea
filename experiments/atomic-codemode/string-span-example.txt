@@ -1,0 +1,18 @@
+// Input for cli.mjs; the same named operations are used by both MCP adapters.
+const literals = ["no such table", "sqlite_schema"];
+const spans = [];
+for (const literal of literals) {
+  const inventory = await rea.strings({query: literal, limit: 128});
+  if (!inventory.ok) return inventory;
+  const exact = inventory.data.items.filter(row => row.value === literal);
+  if (exact.length !== 1 || inventory.data.next_offset !== null)
+    return {unknown: "Resolve the inventory ambiguity or remaining pages", literal};
+  const row = exact[0];
+  if (row.string.byte_length < 1)
+    return {unknown: "No nonempty encoded byte extent", literal};
+  spans.push({start: row.address,
+    end_inclusive: "0x" + (BigInt(row.address) + BigInt(row.string.byte_length) - 1n).toString(16)});
+}
+const references = await rea.references({ranges: spans, kinds: ["data"],
+  fields: ["fromFunction"], limit: 20});
+return references;

@@ -22,6 +22,13 @@ engine profiles and limitations in [the trial record](trials.md).
 | What machine bytes support the interpretation?          | Batched loaded-image bytes and selected linear instruction windows, each with source/coverage                                       | The case models independently derive signed relative targets. These windows do not establish runtime execution/alignment, a complete machine CFG, live memory or arbitrary file-offset mappings.                                                     |
 | Can the answer be audited without returning the report? | Snapshot/source identity, selected fields, batch reads, paging and retained raw/decoded Evidence                                    | Real CLI/MCP checks verify source access and capacity fallbacks. Scope/partial/unknown survive composition; a guest-derived answer keeps its own authority.                                                                                          |
 
+The [string-span experiment](string-span-study.md) extends exact xrefs with
+batched incoming target-coordinate spans. It preserves all eleven selected
+SQLite data occurrences, including nine pooled suffix pointers, with individual
+endpoints/owners and raw source rows. Kuna already had aggregate string-span
+counts; the new occurrence query shares its sparse index. Range membership alone
+does not establish whole-string use, access overlap or runtime behavior.
+
 The useful grain so far is an identified object plus a relation with its exact
 qualifiers: an operand needs its slot and PHI binding; a case/out-edge pair needs
 both identities; an address needs its artifact/address space; an optimized

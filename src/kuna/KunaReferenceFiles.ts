@@ -7,14 +7,20 @@ import { err, ok, type Result } from "../domain/result.js";
 import { compareKunaAddresses } from "./KunaAddress.js";
 import { parseKunaJson } from "./KunaJson.js";
 import { KunaJsonDocumentReader, parseKunaRow } from "./KunaJsonStream.js";
+import { KUNA_XREF_OUTPUT_BYTES } from "./KunaLimits.js";
 
-/** The raw xref budget also bounds its materialized rows. */
-export const KUNA_XREF_OUTPUT_BYTES = 16 * 1024 * 1024;
-
-const addressKeys = new Set(["address", "from_address", "to_address"]);
-const address = z.string().regex(/^0x(?:0|[1-9a-f][0-9a-f]{0,15})$/u);
-const count = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
-const kind = z.enum(["call", "jump", "data", "read", "write"]);
+import {
+  kunaReferenceAddressKeys as addressKeys,
+  kunaReferenceAddressSchema as address,
+  kunaReferenceCountSchema as count,
+  kunaReferenceKindSchema as kind,
+  kunaReferenceFunctionSchema as xrefFunction,
+  kunaReferenceRowSchema as xrefRow,
+  validateKunaReferenceRow,
+  kunaReferenceFact as referenceFact,
+  type KunaReferenceFact,
+} from "./KunaReferenceRows.js";
+export type { KunaReferenceFact } from "./KunaReferenceRows.js";
 
 const graphHeader = z.object({
   schemaVersion: z.literal(4),
@@ -206,23 +212,6 @@ export class KunaCallGraphReader extends KunaJsonDocumentReader<KunaCallGraph> {
   }
 }
 
-const xrefFunction = z.object({
-  name: z.string().min(1),
-  address,
-  address_hex: address,
-});
-const xrefRow = z.object({
-  address,
-  address_hex: address,
-  kind,
-  from_address: address,
-  from_address_hex: address,
-  to_address: address,
-  to_address_hex: address,
-  from_function: xrefFunction.nullable(),
-  to_function: xrefFunction.nullable(),
-  instruction: z.string(),
-});
 const xrefsDocument = z.object({
   binary: z.string(),
   direction: z.enum(["to", "from"]),
@@ -242,20 +231,7 @@ const parseReferenceRow = (
   aliases: ReadonlySet<string>,
   query: KunaReferenceQuery,
 ) => {
-  const row = xrefRow.parse(raw);
-  if (
-    row.address !== row.address_hex ||
-    row.address !==
-      (query.direction === "to" ? row.from_address : row.to_address) ||
-    row.from_address !== row.from_address_hex ||
-    row.to_address !== row.to_address_hex
-  )
-    throw new Error(
-      "xref endpoints disagree with numeric or directional fields",
-    );
-  for (const fn of [row.from_function, row.to_function])
-    if (fn !== null && fn.address !== fn.address_hex)
-      throw new Error("xref function address disagrees with its hex field");
+  const row = validateKunaReferenceRow(xrefRow.parse(raw), query.direction);
   if (query.direction === "to" && !aliases.has(row.to_address))
     throw new Error(
       "xref row targets neither the requested address nor an advertised alias",
@@ -280,22 +256,6 @@ export interface KunaReferenceAddresses {
 }
 
 /** Experimental fact projection, owned by the native protocol parser. */
-export type KunaReferenceFact = {
-  readonly source_row: number;
-  readonly from: string;
-  readonly to: string;
-  readonly kind: z.infer<typeof kind>;
-  readonly fromFunction: {
-    readonly address: string;
-    readonly name: string;
-  } | null;
-  readonly toFunction: {
-    readonly address: string;
-    readonly name: string;
-  } | null;
-  readonly instruction: string;
-};
-
 export type KunaReferenceQuery = (
   | {
       readonly direction: "to";
@@ -327,31 +287,6 @@ const referenceSelection = (
   if (row.from_function === null) return "unattributed";
   return row.from_function.address === query.address ? "selected" : "scope";
 };
-
-const referenceFact = (
-  row: z.infer<typeof xrefRow>,
-  source_row: number,
-): KunaReferenceFact => ({
-  source_row,
-  from: row.from_address,
-  to: row.to_address,
-  kind: row.kind,
-  fromFunction:
-    row.from_function === null
-      ? null
-      : {
-          address: row.from_function.address,
-          name: row.from_function.name,
-        },
-  toFunction:
-    row.to_function === null
-      ? null
-      : {
-          address: row.to_function.address,
-          name: row.to_function.name,
-        },
-  instruction: row.instruction,
-});
 
 /** One native-format boundary, with caller-selected endpoint/function scope. */
 const parseReferenceDocument = (

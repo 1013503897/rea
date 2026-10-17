@@ -51,6 +51,7 @@ for (const direct of [false, true]) {
     );
     const prefix = direct ? "facts_" : "rea.";
     const ids = [
+      "references",
       "spaces",
       "registers",
       "switches",
@@ -118,6 +119,30 @@ for (const direct of [false, true]) {
         assert.ok(catalog.tools.some((tool) => tool.name === method.name));
     }
     for (const [name, good, bad] of [
+      [
+        "references",
+        { addresses: ["0x1"], direction: "outgoing", scope: "function" },
+        { addresses: ["0x1"], direction: "incoming", scope: "function" },
+      ],
+      [
+        "references",
+        { addresses: ["0x1"] },
+        {
+          addresses: ["0x1"],
+          ranges: [{ start: "0x0", end_inclusive: "0x1" }],
+        },
+      ],
+      [
+        "references",
+        {
+          ranges: [{ start: "0x0", end_inclusive: "0xffffffffffffffff" }],
+          fields: [],
+        },
+        {
+          ranges: [{ start: "0x0", end_inclusive: "0x1" }],
+          direction: "outgoing",
+        },
+      ],
       ["spaces", { indices: [3], fields: ["kind"] }, { indices: ["3"] }],
       [
         "registers",

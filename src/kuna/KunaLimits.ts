@@ -5,3 +5,6 @@ export const KUNA_FUNCTION_TEXT_BYTES = 16 * 1024 * 1024;
 export const KUNA_DIAGNOSTIC_BYTES = 8 * 1024 * 1024;
 
 export const KUNA_STRING_MIN_LENGTH = 5;
+
+/** Buffered xref source bytes also bound the materialized native rows. */
+export const KUNA_XREF_OUTPUT_BYTES = 16 * 1024 * 1024;

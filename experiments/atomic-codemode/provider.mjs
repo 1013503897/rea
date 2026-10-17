@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { parseBinaryTarget } from "../../dist/application/BinaryTargetResolver.js";
 import { inspectNativeInstallation } from "./native-installation.mjs";
 import { KunaTargetCommands } from "../../dist/kuna/KunaTargetCommands.js";
-import { referenceReader } from "./reference-reads.mjs";
+import { NativeReferenceReads } from "./reference-reads.mjs";
 import { PrivateRuntimeRoot } from "../../dist/process/PrivateRuntimeRoot.js";
 import { parseNativeIR } from "./native-ir.mjs";
 import { NativeEvidenceReads } from "./native-evidence-reads.mjs";
@@ -40,6 +40,11 @@ export class KunaFactOwner {
   #installation;
   #retainedBytes = 0;
   #catalogs = new NativeCatalogReads(
+    (...args) => this.#native(...args),
+    (id) => this.#sourceText(id),
+    () => this.#requireNativeIR(),
+  );
+  #references = new NativeReferenceReads(
     (...args) => this.#native(...args),
     (id) => this.#sourceText(id),
     () => this.#requireNativeIR(),
@@ -203,22 +208,7 @@ export class KunaFactOwner {
     return this.#catalogs.registers(input, signal);
   }
   async references(input, signal) {
-    return readFactBatch(
-      input.addresses.map((address) => referenceReader.query(input, address)),
-      (query) =>
-        this.#native(
-          referenceReader.key(query),
-          (path) => referenceReader.arguments(path, query),
-          signal,
-        ),
-      async (capture, query) =>
-        referenceReader.read(
-          await this.#sourceText(capture.source.evidence_id),
-          capture.input,
-          query,
-          input,
-        ),
-    );
+    return this.#references.read(input, signal);
   }
   async snapshot(input, signal) {
     const capture = await this.#native(
@@ -468,6 +458,7 @@ export class KunaFactOwner {
     this.#work.clear();
     this.#snapshots.clear();
     this.#catalogs.clear();
+    this.#references.clear();
     this.#evidence.clear();
   }
   cancel() {

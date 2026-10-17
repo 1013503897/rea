@@ -2233,7 +2233,7 @@ index e0f09af5..f69ee298 100644
  mod kuna_ppclocalentry;
  mod kuna_switchtable;
 diff --git a/decompiler/crates/kuna-analysis/src/listing/xrefs.rs b/decompiler/crates/kuna-analysis/src/listing/xrefs.rs
-index b39058b1..9dc7ec0f 100644
+index b39058b1..f75c6537 100644
 --- a/decompiler/crates/kuna-analysis/src/listing/xrefs.rs
 +++ b/decompiler/crates/kuna-analysis/src/listing/xrefs.rs
 @@ -78,7 +78,7 @@ use object::SectionKind;
@@ -2245,7 +2245,25 @@ index b39058b1..9dc7ec0f 100644
  use super::kuna_poolref::PoolImage;
  use super::kuna_switchtable;
  use super::model::{FlowKind, RawOp};
-@@ -554,10 +554,13 @@ impl PcodeEmit for FullCapture {
+@@ -285,6 +285,17 @@ impl XrefIndex {
+         self.by_target.get(&vma).map_or(&[], Vec::as_slice)
+     }
+
++    /// Target-coordinate membership, without callable/slot alias expansion.
++    /// Inclusive endpoints cover the final u64 address without adding one.
++    /// Invalid order is unknown, not an empty reference set. Work follows
++    /// retained target buckets, never the number of bytes in the span.
++    pub fn refs_to_range(&self, start: u64, end: u64) -> Option<impl Iterator<Item = &Xref>> {
++        if start > end {
++            return None;
++        }
++        Some(self.by_target.range(start..=end).flat_map(|(_, rows)| rows.iter()))
++    }
++
+     /// Everything that references the *callable* `vma` names, rather than the
+     /// literal address: [`refs_to`](Self::refs_to) taken over `vma`'s whole
+     /// [`alias_class`](Self::alias_class), with the forwarding jumps that join
+@@ -554,10 +565,13 @@ impl PcodeEmit for FullCapture {
  #[derive(Default)]
  struct AsmCapture {
      text: String,
@@ -2259,7 +2277,7 @@ index b39058b1..9dc7ec0f 100644
          self.text.clear();
          self.text.push_str(mnem);
          if !body.is_empty() {
-@@ -698,6 +701,7 @@ fn descend(
+@@ -698,6 +712,7 @@ fn descend(
      // processor). `None` when the program has no data space: no varnode can
      // match it, so the direct-access projection simply contributes nothing.
      let data_space = arch.manage().get_default_data_space().cloned();
@@ -2267,7 +2285,7 @@ index b39058b1..9dc7ec0f 100644
 
      // (kuna) `picbase`: the module's PIC base register, when the program has one
      // this can prove. Detected before the walk because the base a function
-@@ -962,10 +966,10 @@ fn descend(
+@@ -962,10 +977,10 @@ fn descend(
          // body before any of it can be attributed (`kuna_picbase::scope`), and
          // buffering it costs nothing on the overwhelmingly common `None` path.
          let mut body: Vec<kuna_picbase::BaseCandidate> = Vec::new();
@@ -2280,7 +2298,7 @@ index b39058b1..9dc7ec0f 100644
          while let Some((vma, mode)) = insn_queue.pop_front() {
              if st.decoded.contains(&vma) {
                  continue; // already decoded (the VisitStat dedup)
-@@ -1031,26 +1035,26 @@ fn descend(
+@@ -1031,26 +1046,26 @@ fn descend(
                  let fall_through = vma.wrapping_add(len as u64);
                  data_refs(cap.ops(), data_space.as_ref(), &mapped, fall_through, pool.as_ref())
              };
@@ -2324,7 +2342,7 @@ index b39058b1..9dc7ec0f 100644
              };
 
              if cap.ops().iter().any(|op| op.opcode == OpCode::CPUI_CALLIND) {
-@@ -1150,7 +1154,7 @@ fn descend(
+@@ -1150,7 +1165,7 @@ fn descend(
                      // and a row whose instruction column is blank does not say
                      // which jump reached the case body.
                      if !cases.is_empty() && text.is_empty() {
@@ -2333,7 +2351,7 @@ index b39058b1..9dc7ec0f 100644
                      }
                      for target in cases {
                          st.file(vma, target, XrefKind::Jump, &text);
-@@ -1162,8 +1166,8 @@ fn descend(
+@@ -1162,8 +1177,8 @@ fn descend(
              for &(to, kind) in &drefs {
                  st.file(vma, to, kind, &text);
              }
@@ -2344,7 +2362,7 @@ index b39058b1..9dc7ec0f 100644
              }
              // Both halves the deferred base-relative pass needs are pure
              // functions of this instruction's ops, so they are computed here
-@@ -1201,7 +1205,7 @@ fn descend(
+@@ -1201,7 +1216,7 @@ fn descend(
                      // parse of the whole program on any image with a PIC base
                      // (an i386 `__x86.get_pc_thunk` binary: 154,608 renders to
                      // file 151 references).
@@ -2353,7 +2371,7 @@ index b39058b1..9dc7ec0f 100644
                      for &(to, kind) in &cand.refs {
                          st.file(cand.vma, to, kind, &text);
                      }
-@@ -1336,7 +1340,7 @@ fn render_fingerprints(
+@@ -1336,7 +1351,7 @@ fn render_fingerprints(
          let mut vma = entry;
          for _ in 0..2 {
              let Some(insn) = listing.insns.get_mut(&vma) else { break };
@@ -2362,7 +2380,7 @@ index b39058b1..9dc7ec0f 100644
              insn.mnemonic = text.split_whitespace().next().unwrap_or_default().to_string();
              vma = vma.wrapping_add(u64::from(insn.len));
          }
-@@ -1606,14 +1610,14 @@ pub(super) fn decode(
+@@ -1606,14 +1621,14 @@ pub(super) fn decode(
  /// will actually carry the text. On a 466 KB obfuscated i386 image (154,638
  /// instructions) rendering every decode cost 0.22 s of a 1.3 s walk, and the
  /// large majority of instructions file no reference at all.
@@ -2381,6 +2399,31 @@ index b39058b1..9dc7ec0f 100644
  }
 
  /// The data references one instruction's p-code carries.
+@@ -1864,6 +1879,24 @@ pub(super) fn range_union(mut ranges: Vec<(u64, u64)>) -> Vec<(u64, u64)> {
+
+ #[cfg(test)]
+ mod tests {
++    #[test]
++    fn physical_target_spans_cover_u64_without_aliases_or_byte_enumeration() {
++        let mut index=super::empty();
++        let edge=|from,to|super::Xref {from,to,kind:super::XrefKind::Data,instruction:String::new()};
++        index.by_target.insert(0,vec![edge(3,0)]);
++        index.by_target.insert(8,vec![edge(4,8),edge(5,8)]);
++        index.by_target.insert(u64::MAX,vec![edge(6,u64::MAX)]);
++        assert!(index.refs_to_range(9,8).is_none());
++        assert_eq!(index.refs_to_range(1,7).unwrap().count(),0);
++        assert_eq!(index.refs_to_range(0,u64::MAX).unwrap().map(|r|r.from).collect::<Vec<_>>(),[3,4,5,6]);
++        assert_eq!(index.refs_to_range(u64::MAX,u64::MAX).unwrap().next().unwrap().from,6);
++        assert_eq!(index.refs_to_range(8,8).unwrap().map(|r|(r.from,r.to)).collect::<Vec<_>>(),index.refs_to(8).iter().map(|r|(r.from,r.to)).collect::<Vec<_>>());
++        let aliases=import_index();
++        for &at in aliases.by_target.keys() {
++            assert_eq!(aliases.refs_to_range(at,at).unwrap().count(),aliases.refs_to(at).len());
++        }
++    }
++
+     use std::rc::Rc;
+
+     use kuna_base::space::{spacetype, AddrSpace};
 diff --git a/decompiler/crates/kuna-analysis/src/loader/elf_plt.rs b/decompiler/crates/kuna-analysis/src/loader/elf_plt.rs
 index 4ab6cbca..abcf8c5b 100644
 --- a/decompiler/crates/kuna-analysis/src/loader/elf_plt.rs
@@ -3633,13 +3676,13 @@ index 3eb2a6e4..2b951ba2 100644
      };
      decompile_callee_first(prog, args, targets, explicit, base)
 diff --git a/decompiler/crates/kuna-cli/src/jsonfmt.rs b/decompiler/crates/kuna-cli/src/jsonfmt.rs
-index 198b85a6..71bd9675 100644
+index 198b85a6..299e4a09 100644
 --- a/decompiler/crates/kuna-cli/src/jsonfmt.rs
 +++ b/decompiler/crates/kuna-cli/src/jsonfmt.rs
-@@ -28,6 +28,19 @@ pub enum Json {
+@@ -28,6 +28,26 @@ pub enum Json {
      Object(Vec<(String, Json)>),
  }
- 
+
 +impl From<serde_json::Value> for Json {
 +    fn from(value: serde_json::Value) -> Self {
 +        match value {
@@ -3647,8 +3690,15 @@ index 198b85a6..71bd9675 100644
 +            serde_json::Value::Bool(value) => Json::Bool(value),
 +            serde_json::Value::Number(value) => Json::Number(value.to_string()),
 +            serde_json::Value::String(value) => Json::Str(value),
-+            serde_json::Value::Array(values) => Json::Array(values.into_iter().map(Json::from).collect()),
-+            serde_json::Value::Object(values) => Json::Object(values.into_iter().map(|(key, value)| (key, Json::from(value))).collect()),
++            serde_json::Value::Array(values) => {
++                Json::Array(values.into_iter().map(Json::from).collect())
++            }
++            serde_json::Value::Object(values) => Json::Object(
++                values
++                    .into_iter()
++                    .map(|(key, value)| (key, Json::from(value)))
++                    .collect(),
++            ),
 +        }
 +    }
 +}
@@ -3656,44 +3706,82 @@ index 198b85a6..71bd9675 100644
  /// Render `v` exactly as CPython's `json.dumps(v, indent=2)` would (ASCII-safe
  /// string escaping, `", "`/`": "` item/key separators collapsed to the indent
  /// form: items separated by `,\n`, keys by `": "`).
-@@ -50,6 +63,12 @@ pub fn dumps_compact(v: &Json) -> String {
+@@ -50,6 +70,35 @@ pub fn dumps_compact(v: &Json) -> String {
      writer::render(v, Format::Compact)
  }
- 
+
 +/// Enforce the caller's encoded-byte budget before growing the output buffer.
 +/// Uses the same writer and escaping as the other modes; no length estimator.
 +pub fn dumps_compact_bounded(v: &Json, limit: usize) -> Option<String> {
 +    writer::render_bounded(v, Format::Compact, limit)
 +}
 +
++/// Stream selected records through the same bounded escaping owner. The caller
++/// need not construct a complete result tree before checking encoded growth.
++pub struct BoundedJsonWriter(writer::BoundedString);
++impl BoundedJsonWriter {
++    pub fn new(limit: usize) -> Self {
++        Self(writer::BoundedString::new(limit))
++    }
++    pub fn remaining(&self) -> usize {
++        self.0.remaining()
++    }
++    pub fn value(&mut self, value: &Json) -> std::fmt::Result {
++        writer::write_value(&mut self.0, value, 0, Format::Compact)
++    }
++    pub fn finish(self) -> String {
++        self.0.finish()
++    }
++}
++impl std::fmt::Write for BoundedJsonWriter {
++    fn write_str(&mut self, text: &str) -> std::fmt::Result {
++        std::fmt::Write::write_str(&mut self.0, text)
++    }
++}
++
  /// Extract the JSON array/object span out of a `decomp_dbg` console transcript.
  ///
  /// Port of `kuna/catalog.py::_extract_json`: drop the fixed `[decomp]>` prompt
 diff --git a/decompiler/crates/kuna-cli/src/jsonfmt/writer.rs b/decompiler/crates/kuna-cli/src/jsonfmt/writer.rs
-index c4eca1db..06b9d024 100644
+index c4eca1db..6a76bd3f 100644
 --- a/decompiler/crates/kuna-cli/src/jsonfmt/writer.rs
 +++ b/decompiler/crates/kuna-cli/src/jsonfmt/writer.rs
 @@ -1,7 +1,7 @@
  //! JSON layout and ASCII-safe escaping shared by all CLI output modes.
- 
+
  use super::Json;
 -use std::fmt::Write as _;
 +use std::fmt::{self, Write};
- 
+
  #[derive(Clone, Copy, PartialEq, Eq)]
  pub(super) enum Format {
-@@ -12,108 +12,142 @@ pub(super) enum Format {
- 
+@@ -12,108 +12,159 @@ pub(super) enum Format {
+
  pub(super) fn render(value: &Json, format: Format) -> String {
      let mut out = String::new();
 -    write_value(&mut out, value, 0, format);
 +    write_value(&mut out, value, 0, format).expect("String writer is infallible");
      out
  }
- 
-+struct BoundedString {
+
++pub(super) struct BoundedString {
 +    text: String,
 +    limit: usize,
++}
++
++impl BoundedString {
++    pub(super) fn new(limit: usize) -> Self {
++        Self {
++            text: String::new(),
++            limit,
++        }
++    }
++    pub(super) fn remaining(&self) -> usize {
++        self.limit - self.text.len()
++    }
++    pub(super) fn finish(self) -> String {
++        self.text
++    }
 +}
 +
 +impl Write for BoundedString {
@@ -3716,10 +3804,7 @@ index c4eca1db..06b9d024 100644
 +}
 +
 +pub(super) fn render_bounded(value: &Json, format: Format, limit: usize) -> Option<String> {
-+    let mut out = BoundedString {
-+        text: String::new(),
-+        limit,
-+    };
++    let mut out = BoundedString::new(limit);
 +    write_value(&mut out, value, 0, format).ok()?;
 +    Some(out.text)
 +}
@@ -3738,9 +3823,14 @@ index c4eca1db..06b9d024 100644
 +        Ok(())
      }
  }
- 
+
 -fn write_value(out: &mut String, value: &Json, indent: usize, format: Format) {
-+fn write_value(out: &mut impl Write, value: &Json, indent: usize, format: Format) -> fmt::Result {
++pub(super) fn write_value(
++    out: &mut impl Write,
++    value: &Json,
++    indent: usize,
++    format: Format,
++) -> fmt::Result {
      match value {
 -        Json::Null => out.push_str("null"),
 -        Json::Bool(true) => out.push_str("true"),
@@ -3784,7 +3874,7 @@ index c4eca1db..06b9d024 100644
          }
      }
  }
- 
+
  fn write_pairs<'a>(
 -    out: &mut String,
 +    out: &mut impl Write,
@@ -3821,7 +3911,7 @@ index c4eca1db..06b9d024 100644
 -    out.push('}');
 +    out.write_char('}')
  }
- 
+
 -fn write_string(out: &mut String, s: &str) {
 -    out.push('"');
 +fn write_string(out: &mut impl Write, s: &str) -> fmt::Result {
@@ -3869,10 +3959,40 @@ index c4eca1db..06b9d024 100644
 +    out.write_char('"')
  }
 diff --git a/decompiler/crates/kuna-cli/src/jsonfmt/writer_tests.rs b/decompiler/crates/kuna-cli/src/jsonfmt/writer_tests.rs
-index 6710e12a..ef90468c 100644
+index 6710e12a..d27b3964 100644
 --- a/decompiler/crates/kuna-cli/src/jsonfmt/writer_tests.rs
 +++ b/decompiler/crates/kuna-cli/src/jsonfmt/writer_tests.rs
-@@ -94,3 +94,21 @@ fn every_unicode_scalar_round_trips_through_ascii_output() {
+@@ -2,6 +2,29 @@ use super::*;
+
+ const RENDERERS: [fn(&Json) -> String; 3] = [dumps_compact, dumps_indent2, dumps_indent2_sorted];
+
++#[test]
++fn streamed_values_use_the_same_escaping_and_total_budget() {
++    use std::fmt::Write;
++    let value = Json::Str("a\n\"\\中文😀".into());
++    let expected = format!("[{},{}]", dumps_compact(&value), dumps_compact(&value));
++    for limit in 0..=expected.len() + 1 {
++        let mut stream = BoundedJsonWriter::new(limit);
++        let attempt = (|| -> std::fmt::Result {
++            stream.write_char('[')?;
++            stream.value(&value)?;
++            stream.write_char(',')?;
++            stream.value(&value)?;
++            stream.write_char(']')
++        })();
++        assert_eq!(attempt.is_ok(), limit >= expected.len());
++        let actual = stream.finish();
++        assert!(actual.len() <= limit);
++        if attempt.is_ok() {
++            assert_eq!(actual, expected);
++        }
++    }
++}
++
+ #[test]
+ fn nested_containers_and_numeric_spelling_are_byte_stable() {
+     let value = Json::Object(vec![
+@@ -94,3 +117,21 @@ fn every_unicode_scalar_round_trips_through_ascii_output() {
          assert_eq!(serde_json::from_str::<String>(&output).unwrap(), text);
      }
  }
@@ -4171,6 +4291,748 @@ index 00000000..b2a30345
 +        assert!(value[0]["name"].is_null());
 +        assert_eq!(value[0]["name_bytes_hex"], "ff00");
 +        assert_eq!(value[0]["offset"], "0xffffffffffffffff");
++    }
++}
+diff --git a/decompiler/crates/kuna-cli/src/strings.rs b/decompiler/crates/kuna-cli/src/strings.rs
+index ffe33667..d2412227 100644
+--- a/decompiler/crates/kuna-cli/src/strings.rs
++++ b/decompiler/crates/kuna-cli/src/strings.rs
+@@ -52,7 +52,7 @@ mod filter;
+
+ use filter::Regex;
+
+-use std::collections::BTreeMap;
++use std::collections::{BTreeMap, BTreeSet};
+
+ use kuna_analysis::strings::kuna_stringinv::{self, FoundString, Termination};
+
+@@ -132,12 +132,19 @@ pub(crate) fn query(args: &StringsArgs) -> Result<String, String> {
+         section: args.section.clone(),
+         termination: args.termination,
+     };
+-    let inv = match view.as_ref().filter(|v| v.bytes.as_ptr() == scanned.as_ptr()) {
++    let inv = match view
++        .as_ref()
++        .filter(|v| v.bytes.as_ptr() == scanned.as_ptr())
++    {
+         Some(view) => kuna_stringinv::inventory_in_image(&file, &query, &view.ranges),
+         None => kuna_stringinv::inventory(&file, &query),
+     };
+     if let Some(want) = &args.section {
+-        if !inv.regions.iter().any(|n| n == want || n.strip_prefix('.') == Some(want.as_str())) {
++        if !inv
++            .regions
++            .iter()
++            .any(|n| n == want || n.strip_prefix('.') == Some(want.as_str()))
++        {
+             let mut have: Vec<&str> = inv.regions.iter().map(String::as_str).collect();
+             have.dedup();
+             let have = if have.is_empty() {
+@@ -168,7 +175,11 @@ pub(crate) fn query(args: &StringsArgs) -> Result<String, String> {
+     let rows = if args.no_xrefs || found.is_empty() {
+         found
+             .into_iter()
+-            .map(|found| Row { found, xrefs_count: 0, functions: Vec::new() })
++            .map(|found| Row {
++                found,
++                xrefs_count: 0,
++                functions: Vec::new(),
++            })
+             .collect()
+     } else {
+         attribute(args, options, &file, found)?
+@@ -181,7 +192,10 @@ pub(crate) fn query(args: &StringsArgs) -> Result<String, String> {
+         );
+     }
+     Ok(if args.json {
+-        format!("{}\n", dumps_indent2(&result_json(args, inv.from_segments, &rows)))
++        format!(
++            "{}\n",
++            dumps_indent2(&result_json(args, inv.from_segments, &rows))
++        )
+     } else {
+         render_text(args, inv.from_segments, &rows)
+     })
+@@ -226,43 +240,53 @@ fn attribute(
+         .map(|e| (e.addr.get_offset(), e.name))
+         .collect();
+     let seeds: Vec<u64> = inventory.keys().copied().collect();
+-    let index = kuna_analysis::listing::xrefs::build(
+-        file,
+-        prog.arch(),
+-        prog.arch().translate(),
+-        &seeds,
+-    );
++    let index =
++        kuna_analysis::listing::xrefs::build(file, prog.arch(), prog.arch().translate(), &seeds);
+
+     // A name is looked up once per referencing function, not once per row: a
+     // prompt string referenced from twenty sites resolves one entry.
+     let mut names: BTreeMap<u64, String> = BTreeMap::new();
+-    Ok(found
++    found
+         .into_iter()
+         .map(|found| {
+             let mut xrefs_count = 0usize;
+             let mut functions: Vec<(u64, String)> = Vec::new();
+-            // A reference may land anywhere in the literal, not only on its first
+-            // byte — `lea rax,[fmt+4]` is still a use of `fmt`.
+-            for vma in found.addr..found.addr.saturating_add(u64::from(found.byte_len)) {
+-                for r in index.refs_to(vma) {
+-                    xrefs_count += 1;
+-                    let Some(entry) = owning_function(&prog, &index, r.from) else {
+-                        continue;
+-                    };
+-                    if functions.iter().any(|(e, _)| *e == entry) {
+-                        continue;
+-                    }
+-                    let name = names
+-                        .entry(entry)
+-                        .or_insert_with(|| function_name(&prog, &inventory, entry))
+-                        .clone();
+-                    functions.push((entry, name));
++            let mut seen = BTreeSet::new();
++            let end = found
++                .addr
++                .checked_add(
++                    u64::from(found.byte_len)
++                        .checked_sub(1)
++                        .ok_or("string has an empty encoded extent")?,
++                )
++                .ok_or("string encoded extent exceeds u64 addresses")?;
++            // Target coordinates inside the backing bytes also include pooled
++            // suffixes; membership does not establish use of the whole text.
++            for r in index
++                .refs_to_range(found.addr, end)
++                .ok_or("invalid string extent")?
++            {
++                xrefs_count += 1;
++                let Some(entry) = owning_function(&prog, &index, r.from) else {
++                    continue;
++                };
++                if !seen.insert(entry) {
++                    continue;
+                 }
++                let name = names
++                    .entry(entry)
++                    .or_insert_with(|| function_name(&prog, &inventory, entry))
++                    .clone();
++                functions.push((entry, name));
+             }
+             functions.sort();
+-            Row { found, xrefs_count, functions }
++            Ok(Row {
++                found,
++                xrefs_count,
++                functions,
++            })
+         })
+-        .collect())
++        .collect()
+ }
+
+ // --- rendering ---------------------------------------------------------------
+@@ -294,14 +318,32 @@ fn result_json(args: &StringsArgs, from_segments: bool, rows: &[Row]) -> Json {
+             .map(|row| {
+                 Json::Object(vec![
+                     ("address".into(), Json::Number(row.found.addr.to_string())),
+-                    ("address_hex".into(), Json::Str(format!("0x{:x}", row.found.addr))),
++                    (
++                        "address_hex".into(),
++                        Json::Str(format!("0x{:x}", row.found.addr)),
++                    ),
+                     ("text".into(), Json::Str(row.found.text.clone())),
+-                    ("length".into(), Json::Number(row.found.char_len.to_string())),
+-                    ("byte_length".into(), Json::Number(row.found.byte_len.to_string())),
+-                    ("nul_terminated".into(), Json::Bool(row.found.nul_terminated)),
+-                    ("encoding".into(), Json::Str(row.found.encoding.as_str().to_string())),
++                    (
++                        "length".into(),
++                        Json::Number(row.found.char_len.to_string()),
++                    ),
++                    (
++                        "byte_length".into(),
++                        Json::Number(row.found.byte_len.to_string()),
++                    ),
++                    (
++                        "nul_terminated".into(),
++                        Json::Bool(row.found.nul_terminated),
++                    ),
++                    (
++                        "encoding".into(),
++                        Json::Str(row.found.encoding.as_str().to_string()),
++                    ),
+                     ("section".into(), optional_str(row.found.section.as_deref())),
+-                    ("xrefs_count".into(), Json::Number(row.xrefs_count.to_string())),
++                    (
++                        "xrefs_count".into(),
++                        Json::Number(row.xrefs_count.to_string()),
++                    ),
+                     (
+                         "functions".into(),
+                         Json::Array(
+@@ -318,11 +360,23 @@ fn result_json(args: &StringsArgs, from_segments: bool, rows: &[Row]) -> Json {
+     Json::Object(vec![
+         ("binary".into(), Json::Str(args.binary.clone())),
+         ("encoding".into(), Json::Str(args.encoding_label.clone())),
+-        ("min_length".into(), Json::Number(args.min_length.to_string())),
+-        ("filter".into(), optional_str(args.filter.as_ref().map(|(p, _)| p.as_str()))),
++        (
++            "min_length".into(),
++            Json::Number(args.min_length.to_string()),
++        ),
++        (
++            "filter".into(),
++            optional_str(args.filter.as_ref().map(|(p, _)| p.as_str())),
++        ),
+         ("section".into(), optional_str(args.section.as_deref())),
+-        ("termination".into(), Json::Str(termination_label(args.termination).to_string())),
+-        ("scanned".into(), Json::Str(scanned_label(from_segments).to_string())),
++        (
++            "termination".into(),
++            Json::Str(termination_label(args.termination).to_string()),
++        ),
++        (
++            "scanned".into(),
++            Json::Str(scanned_label(from_segments).to_string()),
++        ),
+         ("xrefs".into(), Json::Bool(!args.no_xrefs)),
+         ("count".into(), Json::Number(rows.len().to_string())),
+         ("strings".into(), strings),
+@@ -367,7 +421,11 @@ fn render_text(args: &StringsArgs, from_segments: bool, rows: &[Row]) -> String
+         let functions = if row.functions.is_empty() {
+             "-".to_string()
+         } else {
+-            row.functions.iter().map(|(_, n)| n.as_str()).collect::<Vec<_>>().join(",")
++            row.functions
++                .iter()
++                .map(|(_, n)| n.as_str())
++                .collect::<Vec<_>>()
++                .join(",")
+         };
+         let _ = writeln!(
+             out,
+@@ -409,8 +467,9 @@ pub(crate) fn parse_args(argv: &[String]) -> Result<StringsArgs, String> {
+             "--json" => json = true,
+             "--min-length" => {
+                 let v = take(argv, &mut i, "--min-length")?;
+-                let n: usize =
+-                    v.parse().map_err(|_| format!("--min-length wants a number, not {v:?}"))?;
++                let n: usize = v
++                    .parse()
++                    .map_err(|_| format!("--min-length wants a number, not {v:?}"))?;
+                 if n == 0 {
+                     return Err("--min-length must be at least 1".into());
+                 }
+@@ -470,7 +529,9 @@ pub(crate) fn parse_args(argv: &[String]) -> Result<StringsArgs, String> {
+         "utf16" => (false, false, true),
+         "all" => (true, true, true),
+         other => {
+-            return Err(format!("unknown --encoding {other:?} (ascii, utf8, utf16, all)"))
++            return Err(format!(
++                "unknown --encoding {other:?} (ascii, utf8, utf16, all)"
++            ))
+         }
+     };
+     Ok(StringsArgs {
+diff --git a/decompiler/crates/kuna-cli/src/xrefs.rs b/decompiler/crates/kuna-cli/src/xrefs.rs
+index c351a097..ec20198c 100644
+--- a/decompiler/crates/kuna-cli/src/xrefs.rs
++++ b/decompiler/crates/kuna-cli/src/xrefs.rs
+@@ -3,6 +3,8 @@
+ //! ```text
+ //!   kuna xrefs <binary> --to <name|0xaddr>   [--json] [--kind k,k..] [--mode MODE]
+ //!   kuna xrefs <binary> --from <name|0xaddr> [--json] [--kind k,k..] [--mode MODE]
++//!   kuna xrefs <binary> --to-range 0xSTART:0xEND_INCLUSIVE.. --json
++//!              [--offset N] [--limit 1..128] [--output-bytes N]
+ //!              [--option N V].. [--isa auto|arm|thumb] [--slice ARCH] [--target T] [--sleighpath D]
+ //! ```
+ //!
+@@ -27,6 +29,9 @@
+
+ use std::collections::{BTreeMap, BTreeSet};
+
++mod ranges;
++mod row;
++
+ use kuna_analysis::listing::xrefs::{Xref, XrefIndex, XrefKind};
+ use kuna_console::engine::{ConsoleProgram, EntryLookupError, EntrySelector};
+
+@@ -56,6 +61,7 @@ impl Direction {
+ /// The parsed command line.
+ struct XrefArgs {
+     binary: String,
++    ranges: Option<ranges::RangeQuery>,
+     /// The `--to` / `--from` operand: a symbol name or an address.
+     spec: String,
+     direction: Direction,
+@@ -250,15 +256,24 @@ fn query(args: &XrefArgs) -> Result<String, String> {
+     // "no references" about the very address the caller named. A name several
+     // entries carry points the walk at all of them and is settled afterwards,
+     // because whether they are one callable is the walk's own finding.
+-    let resolution = target_address(&prog, &args.spec)?;
++    let resolution = if args.ranges.is_some() { None } else { Some(target_address(&prog, &args.spec)?) };
++    let focus = match (&resolution,&args.ranges) {
++        (Some(resolution),_) => resolution.focus(),
++        (_,Some(query)) => query.spans.iter().map(|span|span.start).collect(),
++        _ => return Err("xref query has no selection".into()),
++    };
+     let index = kuna_analysis::listing::xrefs::build_with_focus(
+         &file,
+         prog.arch(),
+         prog.arch().translate(),
+         &seeds,
+-        &resolution.focus(),
++        &focus,
+     );
+
++    if let Some(query)=&args.ranges {
++        return ranges::render(args,query,&prog,&index,&names);
++    }
++    let resolution=resolution.ok_or("xref query has no exact target")?;
+     let target = resolve_target(&prog, &file, &index, &names, resolution.settle(&index)?);
+     warn_other_entries(&index, &names, &target);
+     let rows = match args.direction {
+@@ -414,10 +429,14 @@ fn name_at(prog: &ConsoleProgram, index: &XrefIndex, names: &EntryNames, vma: u6
+ /// first (it knows which entry's descent reached the instruction), then the
+ /// engine's inventory for an address the walk never decoded.
+ fn owning_function(prog: &ConsoleProgram, index: &XrefIndex, names: &EntryNames, vma: u64) -> Option<(u64, String)> {
+-    let entry = index.function_containing(vma).or_else(|| names.at(vma).map(|(address, _)| address))?;
++    let entry = function_entry(index,names,vma)?;
+     Some((entry, function_name(prog, index, names, entry)))
+ }
+
++fn function_entry(index:&XrefIndex,names:&EntryNames,vma:u64)->Option<u64> {
++    index.function_containing(vma).or_else(||names.at(vma).map(|(address,_)|address))
++}
++
+ /// The display name for a function entry, falling back to the engine's own
+ /// placeholder (`sub_<addr>`) so a row is never nameless.
+ fn function_name(prog: &ConsoleProgram, index: &XrefIndex, names: &EntryNames, entry: u64) -> String {
+@@ -426,13 +445,6 @@ fn function_name(prog: &ConsoleProgram, index: &XrefIndex, names: &EntryNames, e
+
+ // --- rendering ---------------------------------------------------------------
+
+-fn optional_function_json(f: Option<(u64, String)>) -> Json {
+-    match f {
+-        Some((addr, name)) => function_json(&name, addr),
+-        None => Json::Null,
+-    }
+-}
+-
+ /// Build the `xrefs --json` document.
+ ///
+ /// Each row carries BOTH ends of the edge explicitly (`from_address` /
+@@ -448,34 +460,7 @@ fn result_json(
+     target: &Target,
+     rows: &[&Xref],
+ ) -> Json {
+-    let xrefs = Json::Array(
+-        rows.iter()
+-            .map(|r| {
+-                let other = match args.direction {
+-                    Direction::To => r.from,
+-                    Direction::From => r.to,
+-                };
+-                Json::Object(vec![
+-                    ("address".into(), Json::Number(other.to_string())),
+-                    ("address_hex".into(), Json::Str(format!("0x{other:x}"))),
+-                    ("kind".into(), Json::Str(r.kind.as_str().to_string())),
+-                    ("from_address".into(), Json::Number(r.from.to_string())),
+-                    ("from_address_hex".into(), Json::Str(format!("0x{:x}", r.from))),
+-                    ("to_address".into(), Json::Number(r.to.to_string())),
+-                    ("to_address_hex".into(), Json::Str(format!("0x{:x}", r.to))),
+-                    (
+-                        "from_function".into(),
+-                        optional_function_json(owning_function(prog, index, names, r.from)),
+-                    ),
+-                    (
+-                        "to_function".into(),
+-                        optional_function_json(owning_function(prog, index, names, r.to)),
+-                    ),
+-                    ("instruction".into(), Json::Str(r.instruction.clone())),
+-                ])
+-            })
+-            .collect(),
+-    );
++    let xrefs=Json::Array(rows.iter().map(|r|row::ReferenceRow::new(args.direction,prog,index,names,r).into_json()).collect());
+     Json::Object(vec![
+         ("binary".into(), Json::Str(args.binary.clone())),
+         (
+@@ -602,6 +587,11 @@ fn site_label(prog: &ConsoleProgram, index: &XrefIndex, names: &EntryNames, vma:
+ fn parse_args(argv: &[String]) -> Result<XrefArgs, String> {
+     let mut binary: Option<String> = None;
+     let mut spec: Option<(Direction, String)> = None;
++    let mut spans=Vec::new();
++    let mut offset=0;
++    let mut limit=20;
++    let mut output_bytes=ranges::OUTPUT_BYTES;
++    let mut range_options=false;
+     let mut json = false;
+     let mut kinds: Vec<XrefKind> = Vec::new();
+     let mut options: Vec<(String, String)> = Vec::new();
+@@ -616,7 +606,23 @@ fn parse_args(argv: &[String]) -> Result<XrefArgs, String> {
+         let a = argv[i].as_str();
+         match a {
+             "--json" => json = true,
++            "--to-range" => {
++                if spec.is_some() { return Err("--to-range cannot combine with --to/--from".into()); }
++                if spans.len()==ranges::MAX_RANGES {return Err("at most 16 target ranges per query".into());}
++                spans.push(ranges::Span::parse(&take(argv,&mut i,a)?)?);
++            }
++            "--offset" | "--limit" | "--output-bytes" => {
++                let value=take(argv,&mut i,a)?.parse::<usize>().map_err(|_|format!("{a} requires an unsigned integer"))?;
++                range_options=true;
++                match a {
++                    "--offset" => offset=value,
++                    "--limit" if (1..=ranges::MAX_PAGE).contains(&value) => limit=value,
++                    "--output-bytes" if value>0 => output_bytes=value,
++                    _ => return Err(format!("invalid {a} value")),
++                }
++            }
+             "--to" | "--from" => {
++                if !spans.is_empty() {return Err("--to/--from cannot combine with --to-range".into());}
+                 let dir = if a == "--to" { Direction::To } else { Direction::From };
+                 let v = take(argv, &mut i, a)?;
+                 if spec.is_some() {
+@@ -653,9 +659,19 @@ fn parse_args(argv: &[String]) -> Result<XrefArgs, String> {
+     }
+
+     let binary = binary.ok_or("xrefs requires <binary>")?;
+-    let (direction, spec) = spec.ok_or("xrefs requires --to <target> or --from <target>")?;
++    let ranges=if spans.is_empty() {
++        if range_options {return Err("range paging/output options require --to-range".into());}
++        None
++    } else {
++        if !json {return Err("--to-range requires --json".into());}
++        Some(ranges::RangeQuery {spans,offset,limit,output_bytes})
++    };
++    let (direction,spec)=if ranges.is_some() {(Direction::To,String::new())} else {
++        spec.ok_or("xrefs requires --to <target>, --from <target>, or --to-range START:END_INCLUSIVE")?
++    };
+     Ok(XrefArgs {
+         binary,
++        ranges,
+         spec,
+         direction,
+         json,
+@@ -691,6 +707,9 @@ fn usage() {
+          \x20       IAT/GOT slot it jumps through -- and both answer the same; target.aliases\n\
+          \x20       names the other one. A name also answers over the export's own PLT stub\n\
+          \x20       when the library calls it through one.\n\
++         --to-range START:END_INCLUSIVE selects physical target coordinates; repeat up to 16 times.\n\
++         \x20       Requires --json; --offset N and --limit 1..128 page each range separately.\n\
++         \x20       --output-bytes N bounds JSON before serialization growth (default 8 MiB).\n\
+          --from  everything the target references (its callees and the data it touches)\n\
+          \n\
+          --json emits {{binary,target:{{name,address,address_hex,aliases}},direction,count,\n\
+diff --git a/decompiler/crates/kuna-cli/src/xrefs/ranges.rs b/decompiler/crates/kuna-cli/src/xrefs/ranges.rs
+new file mode 100644
+index 00000000..f486b3e5
+--- /dev/null
++++ b/decompiler/crates/kuna-cli/src/xrefs/ranges.rs
+@@ -0,0 +1,216 @@
++//! Batched physical target-coordinate predicates over one native index.
++use super::*;
++use crate::jsonfmt::BoundedJsonWriter;
++use std::fmt::{self, Write};
++
++pub(super) const MAX_RANGES: usize = 16;
++pub(super) const MAX_PAGE: usize = 128;
++pub(super) const OUTPUT_BYTES: usize = 8 * 1024 * 1024;
++
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub(super) struct Span {
++    pub start: u64,
++    pub end: u64,
++}
++impl Span {
++    pub(super) fn parse(text: &str) -> Result<Self, String> {
++        let (start, end) = text
++            .split_once(':')
++            .ok_or("range requires 0xSTART:0xEND_INCLUSIVE")?;
++        let address = |value: &str| -> Result<u64, String> {
++            let digits = value
++                .strip_prefix("0x")
++                .ok_or("range endpoints require 0x hexadecimal addresses")?;
++            if digits.is_empty()
++                || digits.len() > 16
++                || !digits.bytes().all(|b| b.is_ascii_hexdigit())
++            {
++                return Err("range endpoint is not a u64 address".into());
++            }
++            u64::from_str_radix(digits, 16).map_err(|e| e.to_string())
++        };
++        let span = Self {
++            start: address(start)?,
++            end: address(end)?,
++        };
++        if span.start > span.end {
++            return Err("range start exceeds inclusive end".into());
++        }
++        Ok(span)
++    }
++}
++pub(super) struct RangeQuery {
++    pub spans: Vec<Span>,
++    pub offset: usize,
++    pub limit: usize,
++    pub output_bytes: usize,
++}
++struct Page<'a> {
++    span: Span,
++    total: usize,
++    rows: Vec<&'a Xref>,
++}
++
++fn pages<'a>(
++    query: &RangeQuery,
++    index: &'a XrefIndex,
++    kinds: &[XrefKind],
++) -> Result<Vec<Page<'a>>, String> {
++    query
++        .spans
++        .iter()
++        .map(|&span| {
++            let mut total = 0;
++            let mut rows = Vec::new();
++            let iter = index
++                .refs_to_range(span.start, span.end)
++                .ok_or("invalid native target range")?;
++            for row in iter.filter(|r| kinds.is_empty() || kinds.contains(&r.kind)) {
++                if total >= query.offset && rows.len() < query.limit {
++                    rows.push(row);
++                }
++                total += 1;
++            }
++            Ok(Page { span, total, rows })
++        })
++        .collect()
++}
++
++pub(super) fn render(
++    args: &XrefArgs,
++    query: &RangeQuery,
++    prog: &ConsoleProgram,
++    index: &XrefIndex,
++    names: &EntryNames,
++) -> Result<String, String> {
++    let pages = pages(query, index, &args.kinds)?;
++    let count: usize = pages.iter().map(|p| p.rows.len()).sum();
++    let metadata = Json::Array(
++        pages
++            .iter()
++            .enumerate()
++            .map(|(i, p)| {
++                let end = query.offset.saturating_add(p.rows.len());
++                Json::Object(vec![
++                    ("index".into(), Json::Number(i.to_string())),
++                    ("start".into(), Json::Str(format!("0x{:x}", p.span.start))),
++                    (
++                        "end_inclusive".into(),
++                        Json::Str(format!("0x{:x}", p.span.end)),
++                    ),
++                    ("offset".into(), Json::Number(query.offset.to_string())),
++                    ("limit".into(), Json::Number(query.limit.to_string())),
++                    ("total".into(), Json::Number(p.total.to_string())),
++                    ("count".into(), Json::Number(p.rows.len().to_string())),
++                    (
++                        "next_offset".into(),
++                        if end < p.total {
++                            Json::Number(end.to_string())
++                        } else {
++                            Json::Null
++                        },
++                    ),
++                ])
++            })
++            .collect(),
++    );
++    let mut out = BoundedJsonWriter::new(query.output_bytes);
++    let mut write = || -> fmt::Result {
++        out.write_str("{\"schema_version\":1,\"binary\":")?;
++        out.value(&Json::Str(args.binary.clone()))?;
++        out.write_str(",\"direction\":\"to\",\"ranges\":")?;
++        out.value(&metadata)?;
++        write!(out, ",\"count\":{count},\"xrefs\":[")?;
++        let mut first = true;
++        for (i, page) in pages.iter().enumerate() {
++            for r in &page.rows {
++                let row = row::ReferenceRow::new(Direction::To, prog, index, names, r);
++                if row.clone_bytes().is_none_or(|n| n > out.remaining()) {
++                    return Err(fmt::Error);
++                }
++                let Json::Object(mut fields) = row.into_json() else {
++                    return Err(fmt::Error);
++                };
++                fields.insert(0, ("range_index".into(), Json::Number(i.to_string())));
++                if !first {
++                    out.write_char(',')?;
++                }
++                first = false;
++                out.value(&Json::Object(fields))?;
++            }
++        }
++        out.write_str("]}\n")
++    };
++    write().map_err(|_| {
++        format!(
++            "xref range JSON exceeds {} encoded bytes",
++            query.output_bytes
++        )
++    })?;
++    Ok(out.finish())
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    fn arguments(values: &[&str]) -> Result<XrefArgs, String> {
++        super::super::parse_args(&values.iter().map(|s| s.to_string()).collect::<Vec<_>>())
++    }
++    #[test]
++    fn range_choices_are_explicit_and_cannot_silently_override_exact_queries() {
++        for flags in [
++            vec!["input", "--to-range", "0x0:0x1"],
++            vec!["input", "--json", "--to-range", "0x0:0x1", "--to", "0x0"],
++            vec!["input", "--json", "--from", "0x0", "--to-range", "0x0:0x1"],
++            vec!["input", "--json", "--to", "0x0", "--offset", "2"],
++            vec!["input", "--json", "--to-range", "0x0:0x1", "--limit", "0"],
++            vec!["input", "--json", "--to-range", "0x0:0x1", "--limit", "129"],
++            vec!["input", "--json", "--to-range", "0x0:0x1", "--offset", "-1"],
++        ] {
++            assert!(arguments(&flags).is_err(), "{flags:?}");
++        }
++        let valid = arguments(&[
++            "input",
++            "--json",
++            "--to-range",
++            "0x1:0x2",
++            "--to-range",
++            "0x1:0x2",
++            "--offset",
++            "3",
++            "--limit",
++            "1",
++        ])
++        .unwrap();
++        let query = valid.ranges.unwrap();
++        assert_eq!(query.spans.len(), 2);
++        assert_eq!(query.spans[0], query.spans[1]);
++        assert_eq!((query.offset, query.limit), (3, 1));
++        let mut flags = vec!["input", "--json"];
++        for _ in 0..MAX_RANGES {
++            flags.extend(["--to-range", "0x0:0x0"]);
++        }
++        assert!(arguments(&flags).is_ok());
++        flags.extend(["--to-range", "0x0:0x0"]);
++        assert!(arguments(&flags).is_err());
++    }
++    #[test]
++    fn inclusive_u64_spans_are_ordered_without_end_increment() {
++        assert_eq!(
++            Span::parse("0xffffffffffffffff:0xffffffffffffffff").unwrap(),
++            Span {
++                start: u64::MAX,
++                end: u64::MAX
++            }
++        );
++        for s in [
++            "0x2:0x1",
++            "0x0:0x10000000000000000",
++            "0x0:0x1:0x2",
++            "0:0x1",
++            "0x:0x1",
++        ] {
++            assert!(Span::parse(s).is_err(), "{s}");
++        }
++    }
++}
+diff --git a/decompiler/crates/kuna-cli/src/xrefs/row.rs b/decompiler/crates/kuna-cli/src/xrefs/row.rs
+new file mode 100644
+index 00000000..f680fbad
+--- /dev/null
++++ b/decompiler/crates/kuna-cli/src/xrefs/row.rs
+@@ -0,0 +1,81 @@
++//! One endpoint/function interpretation for exact and range wire rows.
++use super::*;
++use std::borrow::Cow;
++
++struct Function<'a> {
++    address: u64,
++    name: Cow<'a, str>,
++}
++fn owner<'a>(
++    prog: &ConsoleProgram,
++    index: &XrefIndex,
++    names: &'a EntryNames,
++    at: u64,
++) -> Option<Function<'a>> {
++    let address = function_entry(index, names, at)?;
++    let name = names
++        .at(address)
++        .map(|(_, name)| Cow::Borrowed(name))
++        .unwrap_or_else(|| Cow::Owned(function_name(prog, index, names, address)));
++    Some(Function { address, name })
++}
++fn function(value: Option<Function<'_>>) -> Json {
++    value
++        .map(|f| function_json(&f.name, f.address))
++        .unwrap_or(Json::Null)
++}
++
++pub(super) struct ReferenceRow<'a> {
++    direction: Direction,
++    reference: &'a Xref,
++    from: Option<Function<'a>>,
++    to: Option<Function<'a>>,
++}
++impl<'a> ReferenceRow<'a> {
++    pub(super) fn new(
++        direction: Direction,
++        prog: &ConsoleProgram,
++        index: &XrefIndex,
++        names: &'a EntryNames,
++        reference: &'a Xref,
++    ) -> Self {
++        Self {
++            direction,
++            reference,
++            from: owner(prog, index, names, reference.from),
++            to: owner(prog, index, names, reference.to),
++        }
++    }
++    /// Lower bound before cloning variable payload. Encoded escaping is checked
++    /// by the shared writer. Only one admitted row exists beside its buffer.
++    pub(super) fn clone_bytes(&self) -> Option<usize> {
++        self.reference
++            .instruction
++            .len()
++            .checked_add(self.from.as_ref().map_or(0, |f| f.name.len()))?
++            .checked_add(self.to.as_ref().map_or(0, |f| f.name.len()))
++    }
++    pub(super) fn into_json(self) -> Json {
++        let r = self.reference;
++        let other = if self.direction == Direction::To {
++            r.from
++        } else {
++            r.to
++        };
++        Json::Object(vec![
++            ("address".into(), Json::Number(other.to_string())),
++            ("address_hex".into(), Json::Str(format!("0x{other:x}"))),
++            ("kind".into(), Json::Str(r.kind.as_str().to_string())),
++            ("from_address".into(), Json::Number(r.from.to_string())),
++            (
++                "from_address_hex".into(),
++                Json::Str(format!("0x{:x}", r.from)),
++            ),
++            ("to_address".into(), Json::Number(r.to.to_string())),
++            ("to_address_hex".into(), Json::Str(format!("0x{:x}", r.to))),
++            ("from_function".into(), function(self.from)),
++            ("to_function".into(), function(self.to)),
++            ("instruction".into(), Json::Str(r.instruction.clone())),
++        ])
 +    }
 +}
 diff --git a/decompiler/crates/kuna-console/src/inspect.rs b/decompiler/crates/kuna-console/src/inspect.rs

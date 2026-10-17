@@ -10,13 +10,13 @@ import { ProviderAdapterError } from "../domain/providerAdapterError.js";
 import { err, ok, type Result } from "../domain/result.js";
 import type { KunaInstallation } from "./KunaInstallation.js";
 import {
-  KUNA_XREF_OUTPUT_BYTES,
   KunaCallGraphReader,
   parseKunaIncomingReferences,
   type KunaCallGraph,
   type KunaGraphNode,
   type KunaReferenceAddresses,
 } from "./KunaReferenceFiles.js";
+import { KUNA_XREF_OUTPUT_BYTES } from "./KunaLimits.js";
 import { KUNA_PROVIDER_ID } from "./KunaRelease.js";
 import type { KunaPendingQuery, KunaQueryWork } from "./KunaQueryWork.js";
 import { kunaUnavailable } from "./KunaUnavailable.js";

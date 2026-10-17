@@ -1,0 +1,25 @@
+Analyze {{artifact_path}} statically, starting with the exact encoded strings
+"no such table" and "sqlite_schema" (not longer messages that contain them).
+
+Find each retained encoded string's inclusive byte span, including its observed
+terminator when the inventory includes one. Find every retained incoming data
+reference whose target coordinate lies in either span, including interior
+targets. Report the distinct instruction occurrences, target offsets and owning
+function entries; group counts by target offset without merging repeated sites
+in the same function. State what the reference discovery actually covers.
+
+Explain whether each interior reference establishes use of the complete text.
+For the selected suffix use in sqlite3AlterRenameTable, verify the actual bytes,
+passed register and next direct call target. For the base-message use in
+sqlite3LocateTable, identify the local conditional message-pointer selection:
+the tested mask/storage, zero/nonzero behavior, alternate string, passing
+register and selected formatting/error call. Corroborate this with focused
+machine instructions; distinguish a message component from the separate format
+pointer. Do not infer runtime argument values, executed paths or symbol binding.
+If using recovered IR, distinguish its identities/model from machine facts.
+
+Give a focused answer with exact addresses, real Evidence IDs, target digest,
+coverage and unknowns. Prefer selected facts/windows; keep full reports and
+inventories out of model context. Static span membership alone proves neither
+memory-access overlap nor whole-string use. Do not execute the target. Close
+the target lease.
