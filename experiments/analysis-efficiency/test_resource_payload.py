@@ -29,13 +29,16 @@ class PayloadObservationTests(unittest.TestCase):
         spec = importlib.util.spec_from_file_location('resource_run', Path(__file__).with_name('resource-run.py'))
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-        arguments = ['resource-run.py', '--observe-payload-exit', '--task-ceiling', '1', '--', 'payload']
-        with patch.object(sys, 'argv', arguments), patch.object(sys, 'stderr', io.StringIO()), \
-                patch.object(module.subprocess, 'Popen') as spawn:
-            with self.assertRaises(SystemExit) as failure:
-                module.main()
-        self.assertEqual(failure.exception.code, 2)
-        spawn.assert_not_called()
+        for flags in [['--observe-payload-exit', '--task-ceiling', '1'],
+                      ['--early-stop-mib', '0'], ['--early-stop-mib', '3585']]:
+            with self.subTest(flags=flags), \
+                    patch.object(sys, 'argv', ['resource-run.py', *flags, '--', 'payload']), \
+                    patch.object(sys, 'stderr', io.StringIO()), \
+                    patch.object(module.subprocess, 'Popen') as spawn:
+                with self.assertRaises(SystemExit) as failure:
+                    module.main()
+            self.assertEqual(failure.exception.code, 2)
+            spawn.assert_not_called()
 
     def test_preserves_nonzero_status_kernel_peak_and_nonzero_events(self):
         with tempfile.TemporaryDirectory() as directory:

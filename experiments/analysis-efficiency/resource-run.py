@@ -68,10 +68,15 @@ def stop_owned_scope(unit, process, group):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--task-ceiling', type=int, default=192)
+    parser.add_argument('--early-stop-mib', type=int, default=3072,
+                        help='Memory pre-stop threshold; hard cap remains 4 GiB (default 3072 MiB)')
     parser.add_argument('--observe-payload-exit', action='store_true',
                         help='Observe payload-exit counters before the cgroup observer exits')
     parser.add_argument('command', nargs=argparse.REMAINDER)
     options = parser.parse_args()
+    if not 1 <= options.early_stop_mib <= 3584:
+        parser.error('--early-stop-mib must leave at least 512 MiB below the 4 GiB hard cap')
+    early_stop_bytes = options.early_stop_mib * 1024 * 1024
     if options.task_ceiling <= 0:
         parser.error('--task-ceiling must be positive')
     if options.observe_payload_exit and options.task_ceiling < 2:
@@ -95,7 +100,7 @@ def main():
     ]
     command = [
         'systemd-run', '--user', '--scope', '--unit=' + unit,
-        '-p', 'MemoryMax=4G', '-p', 'MemoryHigh=3G', '-p', 'MemorySwapMax=0',
+        '-p', 'MemoryMax=4G', '-p', f'MemoryHigh={early_stop_bytes}', '-p', 'MemorySwapMax=0',
         '-p', 'CPUQuota=100%', '-p', 'TasksMax=' + str(options.task_ceiling),
         'taskset', '-c', str(cpu), *payload,
     ]
@@ -158,7 +163,7 @@ def main():
                 except FileNotFoundError:
                     # A completed transient scope can disappear between reads.
                     pass
-            if peak > 3 * gib:
+            if peak > early_stop_bytes:
                 abort = 'scope_memory_early_stop'
             elif available_bytes() < 4 * gib:
                 abort = 'host_available_memory_early_stop'
@@ -184,7 +189,7 @@ def main():
             'resource_scope': unit, 'peak_cgroup_bytes_sampled': peak,
             'elapsed_seconds': round(time.monotonic() - started, 3),
             'abort': abort, 'hard_memory_bytes': 4 * gib,
-            'early_stop_bytes': 3 * gib, 'cpu_quota_percent': 100,
+            'early_stop_bytes': early_stop_bytes, 'cpu_quota_percent': 100,
             'cpu_affinity': [cpu],
             'task_ceiling': options.task_ceiling, 'peak_tasks_sampled': peak_tasks,
             'resource_events_last_observed': events,
