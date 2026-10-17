@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { NativeSourceStore } from "./native-source-store.mjs";
 import { NativeCaptureCache } from "./native-capture-cache.mjs";
 import { NativeStringQueryReads } from "./native-string-query.mjs";
+import { NativeByteBatchReads } from "./native-byte-batch.mjs";
 import { parseBinaryTarget } from "../../dist/application/BinaryTargetResolver.js";
 import { inspectNativeInstallation } from "./native-installation.mjs";
 import { KunaTargetCommands } from "../../dist/kuna/KunaTargetCommands.js";
@@ -42,6 +43,7 @@ export class KunaFactOwner {
   #root;
   #sourceFiles;
   #stringQueries;
+  #byteBatches;
   #commands;
   #target;
   #installation;
@@ -104,6 +106,23 @@ export class KunaFactOwner {
       );
     }
 
+    const byteMode = environment.REA_ATOMIC_NATIVE_BYTE_BATCH;
+    if (byteMode !== undefined && byteMode !== "0" && byteMode !== "1")
+      throw new FactFailure(
+        "invalid_configuration",
+        "REA_ATOMIC_NATIVE_BYTE_BATCH must be 0 or 1",
+      );
+    if (byteMode === "1") {
+      if (!owner.#nativeIR)
+        throw new FactFailure(
+          "capability_unavailable",
+          "Native byte batch experiment requires the pinned engine",
+        );
+      owner.#byteBatches = new NativeByteBatchReads(
+        (...args) => owner.#native(...args),
+        (id) => owner.#sourceText(id),
+      );
+    }
     if (!owner.#nativeIR && owner.#installation.version !== "1.833")
       throw new FactFailure(
         "unsupported_version",
@@ -135,6 +154,9 @@ export class KunaFactOwner {
       string_acquisition: owner.#stringQueries
         ? "native-query-v1"
         : "retained-inventory",
+      byte_acquisition: owner.#byteBatches
+        ? "native-batch-v1"
+        : "native-single-window",
       analysis_model: owner.#nativeIR
         ? "experimental-native-ir-v3"
         : "diagnostic-ssa-1.833",
@@ -223,6 +245,7 @@ export class KunaFactOwner {
     return {
       source,
       input: snapshot.input,
+      output_bytes: spool.limit,
       ...(reader ? { parsed: reader.finish(snapshot.input) } : {}),
     };
   }
@@ -302,7 +325,9 @@ export class KunaFactOwner {
     return this.#readWindows("instructions", input, signal);
   }
   async bytes(input, signal) {
-    return this.#readWindows("bytes", input, signal);
+    return this.#byteBatches
+      ? this.#byteBatches.read(input, signal)
+      : this.#readWindows("bytes", input, signal);
   }
   async #readWindows(name, input, signal) {
     const reader = windowReaders[name];
@@ -495,6 +520,7 @@ export class KunaFactOwner {
     this.#snapshots.clear();
     this.#catalogs.clear();
     this.#stringQueries?.clear();
+    this.#byteBatches?.clear();
     this.#references.clear();
     this.#evidence.clear();
   }

@@ -1,6 +1,6 @@
 // One named contract registry shared by SDK, CLI, direct MCP and Code Mode.
 import { z } from "zod";
-import { MAX_BYTE_BATCH_BYTES } from "./limits.mjs";
+import { MAX_BYTE_BATCH_BYTES, MAX_BYTE_WINDOWS } from "./limits.mjs";
 import { MAX_GRAPH_BLOCKS } from "./graph-limits.mjs";
 import { createReference } from "./reference.mjs";
 import { definition, hex, page, valueLocation } from "./api-contracts.mjs";
@@ -140,10 +140,10 @@ export const methods = {
       summary:
         "Read batched static loaded-image byte ranges with source identity and per-window partial outcomes.",
       description:
-        "Read selected native loaded-image bytes without instruction decoding. Batch up to 16 exact virtual-address windows and 64 KiB total selected bytes; hex uses twice that space before provenance. Short reads remain partial. These are not live process memory or an original-file-offset mapping. Global code discovery is not performed.",
+        "Read selected native loaded-image bytes without instruction decoding. Batch up to 16 exact virtual-address windows and 64 KiB total selected bytes; hex uses twice that space before provenance. Short reads remain partial. A shared source can contain several windows; source_row, when present, identifies its zero-based native window row. Repeated exact ranges can reuse that source. These are not live process memory or an original-file-offset mapping. Global code discovery is not performed.",
     },
     {
-      windows: z.array(byteWindow).min(1).max(16),
+      windows: z.array(byteWindow).min(1).max(MAX_BYTE_WINDOWS),
     },
     "bytes",
     'await rea.bytes({windows:[{address:"0x2000",length:32}]})',

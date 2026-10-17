@@ -33,6 +33,7 @@ export const parseKunaJson = (
   text: string,
   limit: number,
   addressKeys: ReadonlySet<string>,
+  integerKeys?: ReadonlySet<string>,
 ): unknown => {
   if (Buffer.byteLength(text) > limit)
     throw new Error("Kuna JSON exceeds its buffered capacity");
@@ -43,6 +44,11 @@ export const parseKunaJson = (
       value: unknown,
       context?: { readonly source?: string },
     ): unknown => {
+      if (typeof value === "number" && integerKeys?.has(key)) {
+        if (context?.source === undefined)
+          throw new Error(`missing numeric token in ${key}`);
+        return kunaSafeIntegerFromJsonNumber(context.source, key);
+      }
       if (!addressKeys.has(key) || value === null) return value;
       if (typeof value !== "number")
         throw new Error(`invalid numeric address in ${key}`);

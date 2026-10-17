@@ -65,6 +65,15 @@ verify reuse and readable partial Evidence; cancellation/cleanup uncertainty
 remain uncached. The first Code Mode precondition failure and its cost remain in
 the record. Larger-target inventory coverage is still unresolved.
 
+The later [native query study](native-string-query-study.md) makes selected LLVM
+and Node string queries answerable without retaining a whole oversized inventory.
+Both frozen LLVM model answers pass; Code Mode uses fewer input tokens in that
+pair, with only a modest wall-time difference. The [shared byte checkpoint](byte-batch-study.md)
+then batches missing byte windows through one native program while retaining
+per-window facts and Evidence. A same-engine SDK toggle reduces ten-window cold
+retrieval from about 94.3 to 8.5 seconds. Real provider preflight passes; new model
+trials for this byte change were not run because the user cleared the goal.
+
 The [AArch64 reference study](aarch64-xref-study.md) finds and fixes missing
 ADRP-based string and memory references before the next model comparison.
 Real SDK and traditional MCP preflights now agree with independent machine

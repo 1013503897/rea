@@ -8,6 +8,7 @@ export const MAX_BRIDGE_BYTES = 2 * 1024 * 1024;
 export const MAX_MCP_RESULT_BYTES = 1024 * 1024;
 // Aggregate selected bytes keep hex at 128 KiB, with headroom for provenance.
 export const MAX_BYTE_BATCH_BYTES = 64 * 1024;
+export const MAX_BYTE_WINDOWS = 16;
 
 // Shared execution defaults/resource bounds and MCP timeout admission policy.
 const executionWallMs = 120_000;

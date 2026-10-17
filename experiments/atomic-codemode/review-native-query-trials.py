@@ -43,9 +43,22 @@ for trial in args.trials:
             query = bytes.fromhex(doc["query_utf16le_hex"]).decode("utf-16-le", errors="surrogatepass")
             queries.setdefault(query, []).append((path.stem, doc))
         elif source["arguments"][0] == "read":
-            assert doc["kind"] == "data"
-            assert doc["bytes"] == len(bytes.fromhex(doc["hex"]))
-            reads.append((path.stem, doc))
+            if "--atomic-windows" in source["arguments"]:
+                assert doc["schema_version"] == 1 and doc["program_loads"] == 1
+                assert doc["window_count"] == len(doc["windows"])
+                parts = []
+                for index, row in enumerate(doc["windows"]):
+                    assert row["source_row"] == index
+                    if row["ok"]:
+                        assert row["result"]["start_hex"] == row["request_address_hex"]
+                        assert row["result"]["bytes"] <= row["requested_bytes"]
+                        parts.append(row["result"])
+            else:
+                parts = [doc]
+            for part in parts:
+                assert part["kind"] == "data" and part["binary"] == source["arguments"][1]
+                assert part["bytes"] == len(bytes.fromhex(part["hex"]))
+                reads.append((path.stem, part))
     assert cited <= sources.keys()
     for query in ["undefined symbol", "Invalid bitcode signature"]:
         expected = [row for row in machine["objects"] if row["query"] == query]

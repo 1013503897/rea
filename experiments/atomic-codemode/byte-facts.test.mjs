@@ -102,3 +102,27 @@ test("byte input capacity, malformed addresses and u64 end overflow reject befor
     await session.close();
   }
 });
+
+test("byte aliases and kept counters are validated from exact numeric source tokens", () => {
+  const raw = JSON.stringify({
+    ...make(),
+    start: "9007199254740993",
+    end: "9007199254740997",
+    target: { address: "9007199254740993", address_hex: request.address },
+    rows: [{ ...make().rows[0], address: "9007199254740993" }],
+  })
+    .replaceAll('"9007199254740993"', "9007199254740993")
+    .replaceAll('"9007199254740997"', "9007199254740997");
+  assert.equal(parseByteFacts(raw, "/input", request).returned_bytes, 4);
+  for (const invalid of [
+    raw.replace('"count":1', '"count":1.0000000000000000001'),
+    raw.replace('"bytes":4', '"bytes":4e0'),
+    raw.replace('"size":4', '"size":4.0000000000000000001'),
+    raw.replace('"start":9007199254740993', '"start":9007199254740992'),
+    raw.replace('"end":9007199254740997', '"end":9007199254740996'),
+    raw.replace('"address":9007199254740993', '"address":9007199254740992'),
+  ])
+    assert.throws(() => parseByteFacts(invalid, "/input", request), {
+      code: "invalid_provider_output",
+    });
+});

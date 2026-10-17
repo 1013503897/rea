@@ -3675,6 +3675,333 @@ index 3eb2a6e4..2b951ba2 100644
          want_pointer_arguments: true,
      };
      decompile_callee_first(prog, args, targets, explicit, base)
+diff --git a/decompiler/crates/kuna-cli/src/disassemble.rs b/decompiler/crates/kuna-cli/src/disassemble.rs
+index 635109c6..2d2e29dd 100644
+--- a/decompiler/crates/kuna-cli/src/disassemble.rs
++++ b/decompiler/crates/kuna-cli/src/disassemble.rs
+@@ -97,6 +97,8 @@ use crate::decompile::looks_like_addr;
+ use crate::decompile_all::{load_program, mode_options_for_binary, Args, DriverDefaults};
+ use crate::jsonfmt::{dumps_indent2, Json};
+
++mod kuna_batch;
++
+ /// How much to list from an address that lies inside no known function extent:
+ /// an unmapped-by-the-inventory blob, a decrypted payload dumped to a file, a
+ /// region the decompiler refused. Enough to see what is there, small enough to
+@@ -253,6 +255,9 @@ pub fn run(argv: &[String]) -> i32 {
+ /// the command for it is spelled `disassemble`. An explicit `--as code` still
+ /// wins, because the two spellings are one command.
+ pub fn run_read(argv: &[String]) -> i32 {
++    if argv.iter().any(|arg| arg == "--atomic-windows") {
++        return kuna_batch::run(argv);
++    }
+     run_as(argv, ViewRequest::Data)
+ }
+
+diff --git a/decompiler/crates/kuna-cli/src/disassemble/kuna_batch.rs b/decompiler/crates/kuna-cli/src/disassemble/kuna_batch.rs
+new file mode 100644
+index 00000000..a37ebbd7
+--- /dev/null
++++ b/decompiler/crates/kuna-cli/src/disassemble/kuna_batch.rs
+@@ -0,0 +1,298 @@
++//! Opt-in exact byte windows sharing one unchanged loaded ConsoleProgram.
++use std::fmt::Write;
++
++use crate::jsonfmt::BoundedJsonWriter;
++
++const MAX_WINDOWS: usize = 16;
++const MAX_SELECTED_BYTES: u64 = 64 * 1024;
++const MAX_OUTPUT_BYTES: usize = 8 * 1024 * 1024;
++
++struct Window {
++    address: u64,
++    length: u64,
++}
++struct Query {
++    binary: String,
++    windows: Vec<Window>,
++    output_bytes: usize,
++}
++
++fn parse(argv: &[String]) -> Result<Query, String> {
++    let mut binary = None;
++    let mut selection = None;
++    let mut output_bytes = None;
++    let mut json = false;
++    let mut index = 0;
++    while index < argv.len() {
++        match argv[index].as_str() {
++            "--atomic-windows" => {
++                let value = crate::args::take_value(argv, &mut index, "--atomic-windows")?;
++                if selection.replace(value).is_some() {
++                    return Err("duplicate --atomic-windows".into());
++                }
++            }
++            "--atomic-output-bytes" => {
++                let value = crate::args::take_value(argv, &mut index, "--atomic-output-bytes")?;
++                let value = value
++                    .parse::<usize>()
++                    .map_err(|_| "invalid output budget")?;
++                if output_bytes.replace(value).is_some() {
++                    return Err("duplicate --atomic-output-bytes".into());
++                }
++            }
++            "--json" if !json => json = true,
++            value if !value.starts_with('-') && binary.is_none() => {
++                binary = Some(value.to_string())
++            }
++            value => return Err(format!("unsupported atomic byte query argument {value:?}")),
++        }
++        index += 1;
++    }
++    if !json {
++        return Err("atomic byte queries require --json".into());
++    }
++    let output_bytes = output_bytes.unwrap_or(MAX_OUTPUT_BYTES);
++    if !(1..=MAX_OUTPUT_BYTES).contains(&output_bytes) {
++        return Err("atomic byte output budget must be 1..8388608".into());
++    }
++    let mut windows = Vec::new();
++    let mut total = 0u64;
++    for part in selection.ok_or("missing --atomic-windows")?.split(',') {
++        if windows.len() == MAX_WINDOWS {
++            return Err("atomic byte query accepts at most 16 windows".into());
++        }
++        let (address, length) = part.split_once(':').ok_or("expected 0xaddress:length")?;
++        let address = address
++            .strip_prefix("0x")
++            .ok_or("expected 0xaddress:length")?;
++        if address.is_empty()
++            || address.len() > 16
++            || !address.bytes().all(|b| b.is_ascii_hexdigit())
++        {
++            return Err("invalid byte window address".into());
++        }
++        let address =
++            u64::from_str_radix(address, 16).map_err(|_| "invalid byte window address")?;
++        let length = length
++            .parse::<u64>()
++            .map_err(|_| "invalid byte window length")?;
++        if length == 0 || length > MAX_SELECTED_BYTES || address.checked_add(length).is_none() {
++            return Err("byte window must be nonempty and have a representable u64 end".into());
++        }
++        total = total
++            .checked_add(length)
++            .ok_or("byte batch length overflow")?;
++        if total > MAX_SELECTED_BYTES {
++            return Err("atomic byte query selects at most 65536 bytes".into());
++        }
++        windows.push(Window { address, length });
++    }
++    Ok(Query {
++        binary: binary.ok_or("missing binary")?,
++        windows,
++        output_bytes,
++    })
++}
++
++fn args(query: &Query, window: &Window) -> Result<super::DisArgs, String> {
++    super::parse_args(&[
++        query.binary.clone(),
++        format!(
++            "0x{:x}..0x{:x}",
++            window.address,
++            window.address + window.length
++        ),
++        "--as".into(),
++        "data".into(),
++        "--json".into(),
++        "--option".into(),
++        "listing".into(),
++        "off".into(),
++        "--option".into(),
++        "fast_funcdisc".into(),
++        "off".into(),
++    ])
++}
++
++fn render(query: &Query) -> Result<String, String> {
++    let first = args(query, &query.windows[0])?;
++    let options = super::mode_options_for_binary(None, &query.binary, first.options.clone())?;
++    let load = super::load_args(&first, super::windowed_options(&options, &first.options));
++    let program = super::load_program(&load, super::DriverDefaults::Inventory)?;
++    encode(query, |window| {
++        let args = args(query, window)?;
++        let region = super::resolve_region(&program, &args)?;
++        super::listing_for(&args, &program, region).map(|listing| listing.text)
++    })
++}
++
++fn encode(
++    query: &Query,
++    mut read: impl FnMut(&Window) -> Result<String, String>,
++) -> Result<String, String> {
++    let mut out = BoundedJsonWriter::new(query.output_bytes);
++    let encoded = (|| -> std::fmt::Result {
++        write!(out, "{{\"schema_version\":1,\"binary\":")?;
++        out.string(&query.binary)?;
++        write!(
++            out,
++            ",\"window_count\":{},\"program_loads\":1,\"output_bytes\":{},\"windows\":[",
++            query.windows.len(),
++            query.output_bytes
++        )?;
++        for (source_row, window) in query.windows.iter().enumerate() {
++            if source_row > 0 {
++                write!(out, ",")?;
++            }
++            write!(
++                out,
++                "{{\"source_row\":{source_row},\"request_address_hex\":"
++            )?;
++            out.string(&format!("0x{:x}", window.address))?;
++            write!(out, ",\"requested_bytes\":{},", window.length)?;
++            match read(window) {
++                Ok(result) => {
++                    write!(out, "\"ok\":true,\"result\":{result}}}")?;
++                }
++                Err(message) => {
++                    write!(
++                        out,
++                        "\"ok\":false,\"error\":{{\"code\":\"window_unavailable\",\"message\":"
++                    )?;
++                    out.string(&message)?;
++                    write!(out, "}}}}")?;
++                }
++            }
++        }
++        write!(out, "]}}\n")
++    })();
++    encoded.map_err(|_| {
++        format!(
++            "atomic byte report exceeds its {} byte encoded budget",
++            query.output_bytes
++        )
++    })?;
++    Ok(out.finish())
++}
++
++pub(super) fn run(argv: &[String]) -> i32 {
++    let query = match parse(argv) {
++        Ok(query) => query,
++        Err(error) => {
++            eprintln!("error: {error}");
++            return 2;
++        }
++    };
++    match render(&query) {
++        Ok(text) => crate::output::emit_with_status(&text, 0),
++        Err(error) => {
++            eprintln!("error: {error}");
++            1
++        }
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    fn parse_parts(parts: &[&str]) -> Result<Query, String> {
++        parse(&parts.iter().map(|p| p.to_string()).collect::<Vec<_>>())
++    }
++    #[test]
++    fn admission_bounds_exact_windows_and_rejects_ignored_choices() {
++        for parts in [
++            vec!["/binary", "--atomic-windows", "0x1:16"],
++            vec!["/binary", "--json", "--atomic-windows", ""],
++            vec!["/binary", "--json", "--atomic-windows", "1:16"],
++            vec!["/binary", "--json", "--atomic-windows", "0x1:0"],
++            vec!["/binary", "--json", "--atomic-windows", "0x1:65537"],
++            vec![
++                "/binary",
++                "--json",
++                "--atomic-windows",
++                "0xffffffffffffffff:1",
++            ],
++            vec![
++                "/binary",
++                "--json",
++                "--atomic-windows",
++                "0x1:32769,0x2:32768",
++            ],
++            vec![
++                "/binary",
++                "--json",
++                "--atomic-windows",
++                "0x1:1",
++                "--as",
++                "code",
++            ],
++            vec![
++                "/binary",
++                "--json",
++                "--atomic-windows",
++                "0x1:1",
++                "--atomic-output-bytes",
++                "0",
++            ],
++            vec![
++                "/binary",
++                "--json",
++                "--atomic-windows",
++                "0x1:1",
++                "--atomic-output-bytes",
++                "8388609",
++            ],
++            vec![
++                "/binary",
++                "--json",
++                "--atomic-windows",
++                "0x1:1",
++                "--atomic-windows",
++                "0x2:1",
++            ],
++        ] {
++            assert!(parse_parts(&parts).is_err(), "{parts:?}");
++        }
++        let many = (0..17).map(|_| "0x1:1").collect::<Vec<_>>().join(",");
++        assert!(parse_parts(&["/binary", "--json", "--atomic-windows", &many]).is_err());
++        let q = parse_parts(&[
++            "/binary",
++            "--json",
++            "--atomic-windows",
++            "0xfffffffffffeffff:65536",
++        ])
++        .unwrap();
++        assert_eq!(q.windows[0].address + q.windows[0].length, u64::MAX);
++    }
++    #[test]
++    fn complete_report_preserves_order_duplicates_and_per_window_failures() {
++        let q =
++            parse_parts(&["/binary", "--json", "--atomic-windows", "0x3:1,0x1:1,0x3:1"]).unwrap();
++        let mut calls = 0;
++        let text = encode(&q, |window| {
++            calls += 1;
++            if window.address == 1 {
++                Err("unmapped\n\"address\"".into())
++            } else {
++                Ok("{\"binary\":\"/binary\"}".into())
++            }
++        })
++        .unwrap();
++        let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
++        assert_eq!(calls, 3);
++        assert_eq!(doc["program_loads"], 1);
++        assert_eq!(doc["windows"][0]["request_address_hex"], "0x3");
++        assert_eq!(doc["windows"][1]["ok"], false);
++        assert_eq!(
++            doc["windows"][1]["error"]["message"],
++            "unmapped\n\"address\""
++        );
++        assert_eq!(doc["windows"][2]["source_row"], 2);
++        assert_eq!(doc["windows"][2]["ok"], true);
++        let tiny = Query {
++            output_bytes: 1,
++            ..q
++        };
++        assert!(encode(&tiny, |_| panic!("must stop before doing a read")).is_err());
++    }
++}
 diff --git a/decompiler/crates/kuna-cli/src/jsonfmt.rs b/decompiler/crates/kuna-cli/src/jsonfmt.rs
 index 198b85a6..cf995841 100644
 --- a/decompiler/crates/kuna-cli/src/jsonfmt.rs
@@ -6920,10 +7247,25 @@ index 00528cb5..4330ff1c 100644
  pub mod dtype;
  pub mod context;
 diff --git a/docs/cli.md b/docs/cli.md
-index 2bdf122e..97070358 100644
+index 2bdf122e..def64200 100644
 --- a/docs/cli.md
 +++ b/docs/cli.md
-@@ -2553,6 +2553,17 @@ no emitted C changes.
+@@ -2515,6 +2515,14 @@ an address with nothing mapped behind it is `1` with the reason on stderr (on a
+ packed image, run `kuna unpack` first — the original addresses do not exist until
+ you do); a malformed command line is `2` with the usage block.
+
++Experimental byte batching: `kuna read ./a.out --atomic-windows
++0x1000:16,0x2000:8 --json` shares one program initialization, keeps per-window
++data reports or window_unavailable errors, and preserves caller order. Select
++up to 16 windows / 65536 bytes; `--atomic-output-bytes 1..8388608` bounds the
++encoded envelope. It uses the existing loaded-image data renderer with global
++discovery disabled. These are static loaded-image bytes, not live memory or
++original-file offsets. The default read command remains unchanged.
++
+ ## `kuna strings` — the string inventory
+
+ ```bash
+@@ -2553,6 +2561,17 @@ no emitted C changes.
 
  ### Flags
 
@@ -6942,10 +7284,10 @@ index 2bdf122e..97070358 100644
  own 1-byte width. **`utf16` is not a convenience** — a UTF-16LE literal read at
  1-byte width ends at the NUL after its first character, which is exactly why a
 diff --git a/docs/spec/00-overview.md b/docs/spec/00-overview.md
-index ce499c4f..234650dd 100644
+index ce499c4f..51083dd6 100644
 --- a/docs/spec/00-overview.md
 +++ b/docs/spec/00-overview.md
-@@ -3431,3 +3431,125 @@ Reserving it creates no analysis varnode and changes no physical mapping or
+@@ -3431,3 +3431,144 @@ Reserving it creates no analysis varnode and changes no physical mapping or
  emitted C. Ghidra receives temporary storage for the logical local, rather than
  a persistable ordinary stack-variable location; ordinary symbol storage and
  register-plus-stack parameter JOINs keep their existing encoding.
@@ -7071,3 +7413,22 @@ index ce499c4f..234650dd 100644
 +and a null lower bound apply. Metadata overflow fails rather than clipping rows.
 +Limits are 128 selected rows and 64 MiB encoded output. The default command and
 +its legacy inventory schema remain unchanged without the explicit selector.
++
++### Opt-in batched byte windows
++
++`read <binary> --atomic-windows 0xaddress:length,... --json` loads one
++`ConsoleProgram` for up to 16 exact windows and 65536 selected bytes. It uses
++the existing bounded-read defaults (listing and fast_funcdisc off), range
++resolution, mapped-end clipping and data renderer. No target executes or
++changes. The prototype accepts only these explicit selectors and optional
++`--atomic-output-bytes 1..8388608`; other analysis choices are rejected.
++
++The schema-1 envelope records binary, output budget, program_loads (one),
++window_count and windows in caller order. A row retains source_row,
++request_address_hex and requested_bytes. Success embeds the unchanged data
++report; window_unavailable retains the producing reason without discarding
++other windows. Short data reports remain partial. A bounded writer checks
++encoded report growth and fails instead of clipping rows. Global load failure
++fails the command. This shares initialization, not a different file-byte
++interpretation, and does not claim original-file mapping or live memory.
++Without --atomic-windows the original read path and schema remain unchanged.
