@@ -1,7 +1,7 @@
 // Native protocols stay here. API and execution adapters consume parsed facts.
 import { createHash, randomUUID } from "node:crypto";
-import { writeFile, readFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
+import { NativeSourceStore } from "./native-source-store.mjs";
 import { parseBinaryTarget } from "../../dist/application/BinaryTargetResolver.js";
 import { inspectNativeInstallation } from "./native-installation.mjs";
 import { KunaTargetCommands } from "../../dist/kuna/KunaTargetCommands.js";
@@ -11,7 +11,11 @@ import { parseNativeIR } from "./native-ir.mjs";
 import { NativeEvidenceReads } from "./native-evidence-reads.mjs";
 import { NativeCatalogReads } from "./native-catalog-reads.mjs";
 import { DEFAULT_NATIVE_OPERATION_FIELDS } from "./native-operation-views.mjs";
-import { FactFailure, requireResult } from "./fact-error.mjs";
+import {
+  FactFailure,
+  requireResult,
+  projectFactFailure,
+} from "./fact-error.mjs";
 import { windowReaders } from "./window-readers.mjs";
 import { NATIVE_OUTPUT_BYTES } from "./limits.mjs";
 import { sourceSummary, projectFact, readFactBatch } from "./fact-reads.mjs";
@@ -30,15 +34,14 @@ const missingNativeFacet = () => ({
 });
 export class KunaFactOwner {
   #lifetime = new AbortController();
-  #sources = new Map();
   #snapshots = new Map();
   #work = new Map();
   #loaded = new Map();
   #root;
+  #sourceFiles;
   #commands;
   #target;
   #installation;
-  #retainedBytes = 0;
   #catalogs = new NativeCatalogReads(
     (...args) => this.#native(...args),
     (id) => this.#sourceText(id),
@@ -49,11 +52,10 @@ export class KunaFactOwner {
     (id) => this.#sourceText(id),
     () => this.#requireNativeIR(),
   );
-  #captureDirectory;
-  #evidence = new NativeEvidenceReads(async (id) => ({
-    text: await this.#sourceText(id),
-    source: this.#sources.get(id).source,
-  }));
+  #evidence = new NativeEvidenceReads({
+    readText: async (id) => this.#sourceFiles.read(id),
+    readWindow: async (id, window) => this.#sourceFiles.read(id, window),
+  });
   #nativeIR = false;
   context;
   static async open(path, { environment = process.env, fileResources }) {
@@ -97,7 +99,6 @@ export class KunaFactOwner {
     owner.#commands = new KunaTargetCommands(owner.#target, {
       signal: owner.#lifetime.signal,
     });
-    owner.#captureDirectory = environment.REA_ATOMIC_EVIDENCE_DIR;
     owner.context = Object.freeze({
       lease: randomUUID(),
       artifact_sha256: owner.#target.sha256,
@@ -114,16 +115,16 @@ export class KunaFactOwner {
         ? "pinned engine with embedded specs; fresh private engine cache per lease; byte/storage metadata reads suppress global discovery; other native CLI defaults; no annotations"
         : "byte reads suppress global discovery; other native CLI defaults, no annotations; external spec cache freshness is not fingerprinted",
     });
+    owner.#sourceFiles = new NativeSourceStore({
+      root: owner.#root.path,
+      context: owner.context,
+      captureDirectory: environment.REA_ATOMIC_EVIDENCE_DIR,
+    });
     return owner;
   }
-  async #native(key, arguments_, signal) {
+  async #native(key, arguments_, signal, readerFactory) {
     if (this.#work.has(key)) return this.#work.get(key);
-    if (this.#sources.size >= 128)
-      throw new FactFailure(
-        "capacity",
-        "Session source capacity reached; close and reopen the target",
-      );
-    const work = this.#capture(arguments_, signal);
+    const work = this.#capture(arguments_, signal, readerFactory);
     this.#work.set(key, work);
     try {
       return await work;
@@ -132,68 +133,80 @@ export class KunaFactOwner {
       throw error;
     }
   }
-  async #capture(arguments_, signal) {
+  async #capture(arguments_, signal, readerFactory) {
     const start = performance.now();
-    const snapshot = requireResult(
-      await this.#commands.run({
-        installation: this.#installation,
-        operation: "experiment:atomic-facts",
-        arguments: arguments_,
-        outputBytes: NATIVE_OUTPUT_BYTES,
-        timeoutMs: 120000,
-        signal: AbortSignal.any([signal, this.#lifetime.signal]),
-      }),
+    const reader = readerFactory?.();
+    const remaining = this.#sourceFiles.remainingBytes;
+    const spool = await this.#sourceFiles.spool(
+      reader ? remaining : Math.min(remaining, NATIVE_OUTPUT_BYTES),
+      reader,
     );
-    const actualArguments = arguments_(snapshot.input);
-    const id = `ev_${sha256(JSON.stringify([this.context.lease, actualArguments, sha256(snapshot.stdout.text)]))}`;
-    const bytes = Buffer.byteLength(snapshot.stdout.text);
-    if (this.#retainedBytes + bytes > 64 * 1024 * 1024)
-      throw new FactFailure(
-        "capacity",
-        "64 MiB retained-source budget reached; close and reopen",
+    let snapshot, actualArguments, captureInput, primary;
+    try {
+      snapshot = requireResult(
+        await this.#commands.run({
+          installation: this.#installation,
+          operation: "experiment:atomic-facts",
+          arguments: (input) => {
+            captureInput = input;
+            return (actualArguments = arguments_(input));
+          },
+          outputBytes: NATIVE_OUTPUT_BYTES,
+          stdout: spool,
+          timeoutMs: 120000,
+          signal: AbortSignal.any([
+            signal,
+            this.#lifetime.signal,
+            spool.rejected,
+          ]),
+        }),
       );
-    const file = join(this.#root.path, id);
-    await writeFile(file, snapshot.stdout.text, { flag: "wx" });
-    const source = Object.freeze({
-      evidence_id: id,
-      sha256: sha256(snapshot.stdout.text),
-      bytes: Buffer.byteLength(snapshot.stdout.text),
-      arguments: Object.freeze(actualArguments),
-      display_arguments: Object.freeze(
-        actualArguments.map((s) =>
-          s === snapshot.input ? this.#target.path : s,
-        ),
-      ),
-      elapsed_ms: performance.now() - start,
-    });
-    this.#sources.set(id, { source, file });
-    this.#retainedBytes += bytes;
-    if (this.#captureDirectory) {
-      await mkdir(this.#captureDirectory, { recursive: true, mode: 0o700 });
-      await writeFile(
-        join(this.#captureDirectory, `${id}.txt`),
-        snapshot.stdout.text,
-        { flag: "wx", mode: 0o600 },
-      );
-      await writeFile(
-        join(this.#captureDirectory, `${id}.json`),
-        JSON.stringify({ context: this.context, source }),
-        { flag: "wx", mode: 0o600 },
-      );
+    } catch (error) {
+      const failure = projectFactFailure(error);
+      primary = new FactFailure(failure.code, failure.message, failure.details);
+      if (spool.failure) {
+        primary = new FactFailure(failure.code, failure.message, {
+          ...failure.details,
+          source_capture_failure: projectFactFailure(spool.failure),
+        });
+      }
+      if (
+        spool.failure &&
+        failure.code === "cancelled" &&
+        !signal.aborted &&
+        !this.#lifetime.signal.aborted
+      )
+        primary = spool.failure;
+    } finally {
+      await spool.close(primary);
     }
-    return { source, input: snapshot.input };
+    if (primary && !spool.bytes) {
+      await spool.discard();
+      throw primary;
+    }
+    const source = await this.#sourceFiles.retain(spool, {
+      arguments: actualArguments,
+      input: captureInput,
+      started: start,
+      complete: !primary,
+    });
+    if (primary) {
+      const failure = projectFactFailure(primary);
+      throw new FactFailure(failure.code, failure.message, {
+        ...failure.details,
+        evidence_id: source.evidence_id,
+        source_retained: true,
+        source_complete: false,
+      });
+    }
+    return {
+      source,
+      input: snapshot.input,
+      ...(reader ? { parsed: reader.finish(snapshot.input) } : {}),
+    };
   }
   async #sourceText(id) {
-    const record = this.#sources.get(id);
-    if (!record)
-      throw new FactFailure(
-        "unknown_evidence",
-        "Evidence is not owned by this target lease",
-      );
-    const text = await readFile(record.file, "utf8");
-    if (sha256(text) !== record.source.sha256)
-      throw new FactFailure("evidence_changed", "Retained source changed");
-    return text;
+    return (await this.#sourceFiles.read(id)).text;
   }
   async strings(input, signal) {
     return this.#catalogs.strings(input, signal);
@@ -295,7 +308,7 @@ export class KunaFactOwner {
         "Snapshot is not owned by the current target lease",
       );
     if (!this.#loaded.has(id)) {
-      const { source } = this.#sources.get(descriptor.evidence_id);
+      const source = this.#sourceFiles.source(descriptor.evidence_id);
       if (
         source.bytes > (this.#nativeIR ? NATIVE_OUTPUT_BYTES : 2 * 1024 * 1024)
       )
@@ -452,9 +465,9 @@ export class KunaFactOwner {
     this.#lifetime.abort();
     // A failed Result retains native cleanup owners; leave this lease retryable.
     requireResult(await this.#commands.close());
+    await this.#sourceFiles.close();
     await this.#root.close();
     this.#loaded.clear();
-    this.#sources.clear();
     this.#work.clear();
     this.#snapshots.clear();
     this.#catalogs.clear();

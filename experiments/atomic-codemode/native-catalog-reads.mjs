@@ -1,9 +1,10 @@
 // Fixed per-lease catalogs share source admission; queries do not create cache keys.
 import { parseFunctionFacts, selectFunctionFacts } from "./function-facts.mjs";
-import { parseStringFacts, selectStringFacts } from "./string-facts.mjs";
+import { selectStringFacts } from "./string-facts.mjs";
 import { parseNativeStorageMap } from "./native-storage-map.mjs";
-import { sourceSummary } from "./fact-reads.mjs";
-import { FactFailure } from "./fact-error.mjs";
+import { freezeFacts, sourceSummary } from "./fact-reads.mjs";
+import { FactFailure, requireResult } from "./fact-error.mjs";
+import { KunaStringInventoryReader } from "../../dist/kuna/KunaStringInventory.js";
 
 const catalogs = {
   functions: {
@@ -23,7 +24,7 @@ const catalogs = {
       "any",
       "--no-xrefs",
     ],
-    parse: parseStringFacts,
+    reader: () => new KunaStringInventoryReader(),
   },
   storage: {
     arguments: (path) => ["storage-map", path, "--json"],
@@ -41,12 +42,30 @@ export class NativeCatalogReads {
     if (name === "storage") this.requireStorage();
     if (!this.#loaded.has(name)) {
       const definition = catalogs[name],
-        capture = await this.capture(name, definition.arguments, signal);
-      try {
-        const facts = await definition.parse(
-          await this.readSource(capture.source.evidence_id),
-          capture.input,
+        capture = await this.capture(
+          name,
+          definition.arguments,
+          signal,
+          definition.reader,
         );
+      try {
+        const facts = definition.reader
+          ? freezeFacts(
+              requireResult(capture.parsed, "invalid_provider_output"),
+            )
+          : await definition.parse(
+              await this.readSource(capture.source.evidence_id),
+              capture.input,
+            );
+        if (
+          definition.reader &&
+          (facts.sha256 !== capture.source.sha256 ||
+            facts.bytes !== capture.source.bytes)
+        )
+          throw new FactFailure(
+            "invalid_provider_output",
+            "Parsed inventory and retained source identities disagree",
+          );
         this.#loaded.set(name, {
           facts,
           source: Object.freeze(sourceSummary(capture.source)),

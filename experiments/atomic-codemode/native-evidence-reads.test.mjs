@@ -38,7 +38,13 @@ function captured(text) {
 test("decoded Evidence pages preserve their own byte identity and raw source provenance", async () => {
   const logical = "{malformed JSON with 中文 and 😀",
     source = captured(logical);
-  const reader = new NativeEvidenceReads(async () => source);
+  const reader = new NativeEvidenceReads({
+    readText: async () => source,
+    readWindow: async (_id, { offset, limit }) => ({
+      source: source.source,
+      text: source.text.slice(offset, offset + limit),
+    }),
+  });
   const raw = await reader.read({ evidence_id: "ev_owned", limit: 1e5 });
   assert.equal(raw.text, source.text);
   assert.equal(raw.view, undefined);
@@ -62,10 +68,12 @@ test("decoded view reuse still requires source-owner validation and follows cont
   let source = captured('{"schema_version":3}'),
     failure = false,
     reads = 0;
-  const reader = new NativeEvidenceReads(async () => {
-    reads++;
-    if (failure) throw new Error("source_changed");
-    return source;
+  const reader = new NativeEvidenceReads({
+    readText: async () => {
+      reads++;
+      if (failure) throw new Error("source_changed");
+      return source;
+    },
   });
   const query = { evidence_id: "ev_owned", component: "recovered_ir" };
   await reader.read(query);

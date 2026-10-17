@@ -9,11 +9,18 @@ export function freezeFacts(value) {
   return value;
 }
 
-export const sourceSummary = ({ evidence_id, sha256, bytes, elapsed_ms }) => ({
+export const sourceSummary = ({
   evidence_id,
   sha256,
   bytes,
   elapsed_ms,
+  capture_complete,
+}) => ({
+  evidence_id,
+  sha256,
+  bytes,
+  elapsed_ms,
+  ...(capture_complete === undefined ? {} : { capture_complete }),
 });
 
 export const projectFact = (row, fields, identity) =>

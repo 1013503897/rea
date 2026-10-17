@@ -51,6 +51,10 @@ retrieves correct data but labels two 17-byte prefixes as 16, failing the exact
 reporting criterion. Both use metadata selection without sending full blobs.
 Code Mode uses less input but more wall time; the differing correctness and byte
 window choices prevent a matched-quality efficiency ranking. All runs remain.
+The [streamed inventory study](streamed-inventory-study.md) then restores real
+FFmpeg queries whose complete native source exceeds 8 MiB, using the production
+streaming parser and bounded retained files. Real SDK/MCP lanes pass; LLVM and
+Node still exceed the existing 64 MiB budget. Those failures remain explicit.
 
 The [AArch64 reference study](aarch64-xref-study.md) finds and fixes missing
 ADRP-based string and memory references before the next model comparison.
@@ -166,10 +170,12 @@ and complete sources outside the model workspace when explicitly selected by the
 evaluator. The ambient environment and credentials are not logged.
 
 Current bounds: 64 MiB guest heap, 32 KiB code and script value/error payloads, 64 host calls per execution,
-120 seconds wall deadline and 2 seconds of guest synchronous execution; native requests have existing supervision, an 8 MiB
-capture budget and 1 GiB function-memory limit. Retained source storage is 64 MiB
-per target, with two resident indexes (each derived from at most 2 MiB diagnostic
-or 8 MiB native wire source). Compressed native graphs admit at most 32 MiB decoded
+120 seconds wall deadline and 2 seconds of guest synchronous execution. Native
+requests use existing supervision and a 1 GiB function-memory limit. Buffered
+formats and diagnostics keep an 8 MiB bound; string inventories stream through
+the production reader into the existing 64 MiB per-target source budget, without
+an aggregate stdout string. Two resident function indexes each derive from at
+most 2 MiB diagnostic or 8 MiB native wire source. Compressed native graphs admit at most 32 MiB decoded
 JSON plus independent row/text/relationship bounds. One decoded Evidence text view
 up to 32 MiB is also retained per lease; these source bounds are not parsed-heap
 size guarantees. Sources are

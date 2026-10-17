@@ -1,0 +1,14 @@
+Analyze {{artifact_path}} statically. Find the retained encoded strings containing
+these exact texts: "Invalid extradata size: %d" and "Unsupported codec version!".
+
+For each match establish the address, encoding, encoded byte length, inclusive
+end and provider-reported NUL termination. Corroborate exactly the first 16 and
+final 8 bytes with focused loaded-image windows; preserve the returned byte
+counts when reporting hex. Establish whether both queries share one complete
+retained source, its byte size, and verify a small readable Evidence window.
+Cite real Evidence IDs and the target/engine identity.
+
+Keep unknown discovery and ambiguous matches explicit. Use compact selections;
+do not fetch the full string inventory into model context. Distinguish encoded
+spans from original source objects, reference/runtime use and live memory.
+No target execution. Close the target lease.
