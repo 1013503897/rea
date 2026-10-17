@@ -61,6 +61,8 @@ export class KunaTargetCommands {
     readonly owner: ProviderProcessSupervisor | undefined;
     readonly releaseRun: KunaRunRelease | undefined;
   }[] = [];
+  /** Stopped process failures that still name the unreleased workspace root. */
+  readonly #stopped: ProviderCleanupError[] = [];
   readonly #roots: PrivateRuntimeRoot[] = [];
   #workspace: Promise<Result<Workspace, AnalysisError>> | undefined;
   #closing = false;
@@ -176,6 +178,7 @@ export class KunaTargetCommands {
       if (stopped !== undefined && stopped.status !== "incomplete") {
         retained.releaseRun?.();
         this.#retained.splice(this.#retained.indexOf(retained), 1);
+        this.#stopped.push(retained.error);
       }
     }
     failures.push(...this.#retained.map(({ error }) => error));
@@ -201,6 +204,9 @@ export class KunaTargetCommands {
             ),
           );
         }
+      // Each retained failure owned its process tree and this workspace root.
+      if (this.#roots.length === 0)
+        for (const error of this.#stopped.splice(0)) error.resolveCleanup();
     }
     return failures.length === 0
       ? ok(null)

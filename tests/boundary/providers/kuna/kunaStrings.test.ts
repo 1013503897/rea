@@ -3,6 +3,7 @@ import { readKunaConfiguration } from "../../../../src/kuna/KunaConfiguration.js
 import { KUNA_DIAGNOSTIC_BYTES } from "../../../../src/kuna/KunaLimits.js";
 import { projectAnalysisError } from "../../../../src/domain/analysisErrorProjection.js";
 import { ProviderCleanupError } from "../../../../src/domain/providerCleanupError.js";
+import type { AnalysisError } from "../../../../src/domain/analysisErrorBase.js";
 
 import { fakeKunaCalls, setFakeKunaBehavior } from "./fakeKuna.js";
 import { run, session, unprovenCleanupLauncher } from "./kunaSessionFixture.js";
@@ -236,6 +237,7 @@ it("retains metadata admission until a string process stop is proven", async () 
   );
   const client = open();
   const abort = new AbortController();
+  let callerError: AnalysisError | undefined;
   try {
     const pending = client.execute(
       "list_strings",
@@ -244,9 +246,19 @@ it("retains metadata admission until a string process stop is proven", async () 
     );
     await vi.waitFor(async () => expect(await scans(kuna)).toHaveLength(1));
     abort.abort();
-    expect(await pending).toMatchObject({
+    const stopped = await pending;
+    expect(stopped).toMatchObject({
       ok: false,
       error: expect.any(ProviderCleanupError),
+    });
+    if (stopped.ok) throw new Error("stopped scan unexpectedly passed");
+    callerError = stopped.error;
+    // The caller copy keeps the shared scan as its cleanup owner.
+    expect(callerError).toMatchObject({
+      operation: "list_strings",
+      cleanupIncomplete: true,
+      diagnostics: { producer_operation: "kuna:strings" },
+      cause: { operation: "kuna:strings", cleanupIncomplete: true },
     });
     const queuedAbort = new AbortController();
     const queued = client.execute(
@@ -272,6 +284,11 @@ it("retains metadata admission until a string process stop is proven", async () 
     cleanup.release();
     expect(await client.close()).toEqual({ ok: true, value: null });
   }
+  // Confirmed producer cleanup must clear every caller-specific diagnostic.
+  expect(callerError).toMatchObject({
+    cleanupIncomplete: false,
+    cause: { cleanupIncomplete: false },
+  });
 });
 
 it("uses the whole-program deadline independently of the single-function budget", async () => {
