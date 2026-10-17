@@ -55,6 +55,10 @@ The [streamed inventory study](streamed-inventory-study.md) then restores real
 FFmpeg queries whose complete native source exceeds 8 MiB, using the production
 streaming parser and bounded retained files. Real SDK/MCP lanes pass; LLVM and
 Node still exceed the existing 64 MiB budget. Those failures remain explicit.
+Both real models now complete the FFmpeg task with all cited raw captures
+verified. Code Mode uses less cumulative input but more uncached input and time.
+The study also retains two evaluator namespace failures and their full costs;
+the corrected pair uses actual registered tool discovery.
 
 The [AArch64 reference study](aarch64-xref-study.md) finds and fixes missing
 ADRP-based string and memory references before the next model comparison.

@@ -126,3 +126,108 @@ The [model question](streamed-inventory-question.txt) and oracle are frozen befo
 actual isolated Direct/Code Mode trials. Record their original full answers and
 whole-task costs separately; this prerequisite repair is not itself evidence
 that Code Mode improves complex reverse-engineering reasoning.
+
+## Actual model outcomes
+
+Runtime facts are frozen at `0c8b7c29a4878f03b28c8b94e2352f2b6dce3dca`.
+The first isolated pair does not reach MCP: `--server-name rea-codemode` is
+configured, but the evaluator's enabled-tool hint hard-codes `mcp__rea__...`.
+Both answers truthfully report unavailable tools, no lease and unknown facts.
+Their exit code zero is **not** an analysis pass. The original answers, three
+model responses / two client execs each, zero dispatched MCP calls and all costs
+are retained. No provider or analysis-oracle failure is inferred from this.
+
+`35d93e21f` repairs the producing hint: it gives the configured server label and
+base names and asks discovery to use actual registered callable metadata. It no
+longer guesses a namespace. The same unchanged question/oracle is then run once
+per adapter at that revision, Direct before Code Mode, fresh isolated profiles,
+same pinned Node/engine/FFmpeg, requested `gpt-6.1-sol` / high. This is a paired
+setup correction, not an answer repair or rerun selected for a winner. Resolved
+remote model builds, remote computation and cache state remain unmeasured.
+
+Both corrected original answers pass the full frozen oracle. Each finds one
+ASCII match per query, reports both 28-byte encoded spans and exact inclusive
+ends, requests/reports exactly sixteen head and eight tail bytes, and keeps the
+four unread middle bytes explicit. Each confirms shared source identity,
+16,810,900 bytes / `capture_complete:true`, reads a small source window and closes
+the lease. Both distinguish complete capture from unknown artifact-wide
+recognition, encoded spans from source-language objects, and static observations
+from references/runtime use/live memory. Full answers and actual calls were
+reviewed; this is agent review, not human readiness.
+
+All five cited IDs per answer match real traces and retained raw captures. Every
+capture's target/engine/hash/length validates; each lane has exactly one inventory
+and four byte-window captures. Source hashes in the answers match those files.
+Code Mode actually executes two `execute_javascript` requests containing four
+fact reads. Direct makes four fact requests. Both clients have the common
+JavaScript executor; the difference is the server composition interface. Both
+select only the two short matching values and bounded bytes/Evidence, so the
+complete inventory stays outside model context. Code Mode's statement that
+Evidence expires on close concerns lease handles; explicit evaluator copies
+remain on disk.
+
+| Completed corrected-task metric |    Direct | Code Mode |
+| ------------------------------- | --------: | --------: |
+| Full semantic/source review     |      pass |      pass |
+| Cumulative input tokens         |   135,330 |   118,641 |
+| Cached input, included above    |   111,360 |    86,656 |
+| Uncached input                  |    23,970 |    31,985 |
+| Output tokens                   |     2,032 |     1,981 |
+| Reasoning, included in output   |       355 |       227 |
+| Unique model responses          |         7 |         8 |
+| Client exec / wait calls        |     6 / 0 |     7 / 0 |
+| MCP attempts                    |         7 |         6 |
+| Help / fact reads               |     1 / 4 |     2 / 4 |
+| Rejections / capacity retries   |     0 / 0 |     0 / 0 |
+| Native captures                 |         5 |         5 |
+| Model wall s                    |    53.155 |    64.064 |
+| Whole-family wall s             |    53.686 |    64.565 |
+| Local family CPU s              | 10.047733 | 10.418055 |
+| Kernel family peak MiB          |     710.8 |     627.1 |
+
+Unique per-response usage sums match summaries. Cache input and reasoning are
+included as labeled, not added twice. All corrected and failed-setup payload
+receipts verify OOM=0, complete owned cleanup and removed profiles; target,
+engine and relevant runtime fingerprints are unchanged within each run.
+
+The configuration failures cost real resources and are not discarded:
+
+| Failed setup metric              |                  Direct |                Code Mode |
+| -------------------------------- | ----------------------: | -----------------------: |
+| Input / cached / uncached tokens | 36,422 / 32,768 / 3,654 | 35,458 / 23,168 / 12,290 |
+| Output / reasoning tokens        |               720 / 293 |                640 / 401 |
+| Model / family wall s            |         24.604 / 25.197 |          26.637 / 27.102 |
+| Family CPU s                     |                3.921968 |                 3.779782 |
+| Family peak MiB                  |                   414.2 |                    416.9 |
+
+Including setup failure plus its corrected attempt, Direct uses 171,752 input
+(27,624 uncached), 2,752 output, 77.759 model-wall / 78.883 family-wall seconds
+and 13.969701 local CPU seconds. Code Mode uses 154,099 input (44,275 uncached),
+2,621 output, 90.701 model-wall / 91.667 family-wall seconds and 14.197837 CPU
+seconds. Peaks are maxima across attempts, not added memory. This total describes
+the experiment's actual attempts, not a single clean profile or causal adapter
+penalty.
+
+Code Mode lowers cumulative input in this completed pair but uses more uncached
+input, more model responses, longer wall and slightly more CPU; peak family
+memory is lower. Discovery and remote cache state differ. This is mixed scoped
+evidence, with matched answer correctness after the shared tool repair. It does
+not establish a stable Code Mode advantage or complex-program reasoning
+superiority. The larger-target native inventory gap remains.
+
+Answer SHA-256:
+
+- Direct corrected: `bc2a5b503f10e5813c04d38af245ba3985c835338b3c784d827cc436ddcfc139`
+- Code Mode corrected: `bf5082807d7fd8e37d939bc93933902cdefb7136f7eb86351dfedc7ae2bac9db`
+
+Local artifact SHA-256 (raw provider documents remain uncommitted):
+
+- `ffmpeg-inventory-failed-setup-costs.json`: `e088057e0b0222c9258141800d25d708145337c6b53f80cea87ce7f175e2e9b3`
+- `ffmpeg-inventory-model-costs.json`: `c1a0cd325787759ae2dc5d46fc40b6fd0f972d28f6bd440a3eeb6ff4038009e1`
+- `ffmpeg-inventory-answer-review.json`: `f7d3d1a627cf4ee21a38b5eb80997f4432078623c824e0ba6ed2373ee4c1ae66`
+- `ffmpeg-inventory-direct-v1.log`: `8c8fa6b091869ce2fbca1bccf500a1b5fd12ce98699bc0cea0052e31db1e4779`
+- `ffmpeg-inventory-codemode-v1.log`: `bc1e5aa17687db7a7c8562c35e216bca40051ee7224e964c93ac74015631331a`
+- `ffmpeg-inventory-direct-v2.log`: `8aecb55ffe0d21b8b152fd2896c919111d9e88e8647e7767093758abf5bad47b`
+- `ffmpeg-inventory-codemode-v2.log`: `b2032c3fe78d637dae1296eb360a2a7173988d6f25740e343fb154747392cb86`
+- `inventory-before-ffmpeg-v1.log`: `ac3f9d046d3a40fc9ade8ae4d061038471be155b37f07a652651f660b6a08de4`
+- `inventory-final-capacity.log`: `b425b8d8d5dc48a507a234624c83134377c601c0ab10378ee2dbbf8a4a5cf311`

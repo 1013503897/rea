@@ -48,7 +48,11 @@ in-program recovery. In the frozen model pair, Code Mode passes; Direct reports
 17-byte prefixes as 16 despite correct provider data. Preserve that failure;
 the pair cannot rank efficiency at matched correctness. Native capture still
 reads the complete bounded inventory, so small replies alone do not establish
-scalable producer work.
+scalable producer work. The [streamed inventory experiment](streamed-inventory-study.md)
+restores FFmpeg queries over a 16.8 MB source with bounded files and the production
+parser. Both corrected real-model answers pass with all sources checked; setup
+failures remain in the ledger. Costs are mixed, and LLVM/Node still exceed the
+unchanged 64 MiB retained-source ceiling.
 
 Selection, projection, batching, paging and bounded traversal compose those
 facts. The analysis owner derives/validates relations; Code Mode selects and
