@@ -161,3 +161,74 @@ under `.cache/atomic-codemode`, not committed. Key artifacts and SHA-256:
 The model question and oracle are committed before either new model run. Real
 model outcomes and full task costs will be added after reviewing original answers
 and all cited sources; no model result is inferred from scripted preflight.
+
+## Actual model outcomes
+
+Both runs use frozen `6bc4ea283967d59196061f354a127e7aff53c010`, requested alias
+`gpt-6.1-sol` / high reasoning, Codex CLI codex-cli 0.161.0, the same committed
+question/oracle, pinned native engine and isolated empty profiles under `/tmp`.
+The real server name is `rea-codemode`. Direct exposes the complete 22-tool
+experiment catalog; Code Mode exposes its four tools and discovers the same
+19 fact methods. Both clients retain the common JavaScript dispatch surface;
+this is not an executor-free Direct comparison. Actual per-response usage agrees
+with cumulative runner usage. Resolved remote model builds/caches/compute remain
+unmeasured. One original run per lane was retained, with no answer repair or
+winning retry.
+
+Both full original answers pass the frozen semantic oracle and retained-source
+review. They preserve all five exact texts (including the leading space), the
+4+1 object/occurrence counts, 602,544 examined candidates, encodings, lengths,
+NUL, inclusive ends and all ten exact 16/8-byte windows with truthful counts.
+Both read the two distinct selected-report sources and preserve unknown artifact
+discovery, not-computed references and unobserved runtime/live memory. All twelve
+cited raw sources per lane match their retained byte size, hash, target and engine.
+Direct actually reads 256 source code units each; Code Mode reads 384 each. Those
+windows and Code Mode's quoted excerpts were checked against the complete source,
+not inferred from source metadata. Both close successfully; target and runtime
+fingerprints remain unchanged, copied-auth profiles are removed, payload cleanup
+is verified and all observed OOM counters are zero.
+
+| Whole completed model task   |     Direct |  Code Mode |
+| ---------------------------- | ---------: | ---------: |
+| Cumulative input tokens      |    196,382 |    147,758 |
+| Cached input (included)      |    169,600 |    132,992 |
+| Uncached input               |     26,782 |     14,766 |
+| Output tokens                |      3,418 |      3,575 |
+| Reasoning output (included)  |        435 |        557 |
+| Unique model responses       |         10 |          9 |
+| Client exec / wait calls     |      6 / 3 |      6 / 2 |
+| Outer MCP attempts           |          8 |          6 |
+| Actual fact reads            |          5 |          5 |
+| Server JavaScript executions |          0 |          2 |
+| Retained native captures     |         12 |         12 |
+| Model wall s                 |    161.771 |    156.334 |
+| Family wall s                |    162.389 |    156.836 |
+| Local family CPU s           | 105.982324 | 102.318402 |
+| Kernel family peak MiB       |     1186.1 |     1189.4 |
+
+Code Mode actually invokes two MCP JavaScript programs; its five inner reads
+are the same two string searches, one ten-window byte batch and two Evidence
+reads as Direct. Both independently choose ten direct byte windows instead of
+covering reads, so all ten native engine initializations remain. Code Mode's
+second program reconstructs prior selected facts as literals; it does not gain
+persistent guest state or avoid the native work.
+
+This pair observes less cumulative and uncached input for Code Mode, slightly
+more output, one fewer model response and modestly lower wall/local CPU, with
+slightly higher peak family memory. It does not establish a general speedup:
+native byte work still dominates, this is one stochastic static inventory task,
+and no matched successful traditional/Ghidra/IDA or broader complex-program
+reasoning comparison was run. The large-artifact query is now answerable within
+resource bounds; the next shared-work experiment should remove repeated native
+byte initialization while preserving loaded-image semantics and provenance.
+
+Additional local anchors (SHA-256):
+
+- `native-query-model-costs.json`: `511523064ca4c5b4988e65fec402b0dddc35391873b45c4699d0b9fffadc8985`.
+- `native-query-model-review-final.json`: `af43ab9c36818a4f08d2833a17d7b9d9f68bd0e9c7ae23590d04f7f5d3ef160a`.
+- `llvm-native-query-direct-v1/answer.txt`: `77ed84bbd5d684ee2aeab84aa72e9a4208fb7fc4bfd12ef8844f6b7b9dd0e0e8`.
+- `llvm-native-query-direct-v1/summary.json`: `efca9021c4f5548c7b59be95b4e537f1c4a62d13a53a9578fadc2f408bef05ee`.
+- `llvm-native-query-codemode-v1/answer.txt`: `18df33d3d98f9f3e42f6f9d2cefea0f880be94c5a3197168a87145e266433b2a`.
+- `llvm-native-query-codemode-v1/summary.json`: `cf4ceed764ca57a2ec6d6532b2b5958c7702500b29e02d775656fe5f338dcc2f`.
+- `native-string-query-question.txt`: `2738574ab764afa95ddb0678f51c6b8cfa67946989f7270d7b13d77a6090eccf`.
+- `native-string-query-oracle.md`: `a3e18a3fe512c5bf1a809ac9b12c1f17beb85786925d8bd887d86ab58c63b76b`.
