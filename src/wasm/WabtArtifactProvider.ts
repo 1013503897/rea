@@ -11,6 +11,11 @@ import type {
 import { readStableArtifact } from "../artifacts/readStableArtifact.js";
 import { ArtifactResourceScope } from "../artifacts/ArtifactResourceScope.js";
 import { ArtifactReaderFailure } from "../artifacts/ArtifactReader.js";
+import {
+  AnalysisCleanupLease,
+  AnalysisCleanupLeaseGroup,
+} from "../artifacts/AnalysisCleanupLease.js";
+import { bindArtifactFileCleanup } from "../artifacts/ArtifactFileOperation.js";
 import type {
   AnalysisError,
   AnalysisCapturedOutput,
@@ -23,8 +28,8 @@ import {
   AnalysisOutputError,
 } from "../domain/analysisErrorCore.js";
 import { ProviderCleanupError } from "../domain/providerCleanupError.js";
+import { analysisErrorWithCleanupFailure } from "../domain/analysisErrorCleanup.js";
 import { createEvidence } from "../domain/evidence.js";
-import { projectAnalysisError } from "../domain/analysisErrorProjection.js";
 import {
   wasmArtifactSchema,
   type InspectWasmArtifactInput,
@@ -59,7 +64,7 @@ export class WabtArtifactProvider implements WasmArtifactPort {
     } catch (cause: unknown) {
       const cleanup =
         cause instanceof ArtifactReaderFailure ? cause.cleanup : undefined;
-      throw new ProviderCleanupError(
+      const failure = new ProviderCleanupError(
         WABT_PROVIDER_IDENTITY.id,
         cleanup?.resources ?? ["artifact-resources"],
         {
@@ -69,6 +74,8 @@ export class WabtArtifactProvider implements WasmArtifactPort {
         },
         { operation: OPERATION, cause },
       );
+      bindArtifactFileCleanup(cause, failure);
+      throw failure;
     }
   }
   async inspect(
@@ -84,7 +91,9 @@ export class WabtArtifactProvider implements WasmArtifactPort {
         cause.cleanup === undefined
       )
         return err(this.#closedError());
-      return err(wabtFailure(cause, "artifact", input.path));
+      const failure = wabtFailure(cause, "artifact", input.path);
+      bindArtifactFileCleanup(cause, failure);
+      return err(failure);
     }
   }
 
@@ -443,10 +452,15 @@ export class WabtArtifactProvider implements WasmArtifactPort {
       );
     }
     if (root !== undefined) {
+      const runtime = root;
+      const rootLease = new AnalysisCleanupLease(
+        () => runtime.close(),
+        [runtime.path],
+      );
       const cleanup = await this.#resources.release({
-        kind: "private-runtime-root",
-        resource: root.path,
-        root,
+        kind: "lease",
+        resource: runtime.path,
+        lease: rootLease,
       });
       let partialObservation = result.ok
         ? undefined
@@ -480,27 +494,28 @@ export class WabtArtifactProvider implements WasmArtifactPort {
       }
       if (cleanup.kind === "failed") {
         const cause = cleanup.cause;
-        const retainedObservation = result.ok
-          ? partialObservation
-          : result.error.partialObservation;
+        const failure = new ProviderCleanupError(
+          WABT_PROVIDER_IDENTITY.id,
+          [root.path],
+          { reason: cause instanceof Error ? cause.message : String(cause) },
+          {
+            operation: OPERATION,
+            cause,
+            ...(result.ok && partialObservation !== undefined
+              ? { partialObservation }
+              : {}),
+          },
+        );
+        // The retained lease resolves this error when its retry removes the root.
+        new AnalysisCleanupLeaseGroup(failure, [rootLease]);
         result = err(
-          new ProviderCleanupError(
-            WABT_PROVIDER_IDENTITY.id,
-            [root.path],
-            {
-              reason: cause instanceof Error ? cause.message : String(cause),
-              previous_error: result.ok
-                ? null
-                : projectAnalysisError(result.error),
-            },
-            {
-              operation: OPERATION,
-              cause,
-              ...(retainedObservation === undefined
-                ? {}
-                : { partialObservation: retainedObservation }),
-            },
-          ),
+          result.ok
+            ? failure
+            : analysisErrorWithCleanupFailure(
+                result.error,
+                failure,
+                OPERATION,
+              ).bindCleanupDependencies([result.error, failure]),
         );
       }
     }

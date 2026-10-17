@@ -105,6 +105,17 @@ const assertCleanupRecovery = async (options: {
   await expect(access(options.runtimePath)).rejects.toMatchObject({
     code: "ENOENT",
   });
+  // The root's own successful retry resolves both returned errors.
+  for (const returned of [options.result, blocked])
+    expect(returned).toMatchObject({
+      ok: false,
+      error: { cleanupIncomplete: false, cleanupResources: [] },
+    });
+  expect(options.result).toMatchObject({
+    error: {
+      partialObservation: { normalized_result: { validation: "valid" } },
+    },
+  });
 };
 
 const assertCancellationDuringRootRelease = async (options: {
@@ -132,13 +143,24 @@ const assertCancellationDuringRootRelease = async (options: {
       cleanupIncomplete: true,
       cleanupResources: [options.runtimePath],
       partialObservation: { normalized_result: { validation: "valid" } },
-      diagnostics: { previous_error: { code: "cancelled" } },
+      diagnostics: { primary_error: { code: "cancelled" } },
     },
   });
   expect(options.cleanupAttempts()).toBe(1);
   await expect(access(options.runtimePath)).resolves.toBeUndefined();
   await options.provider.close();
   expect(options.cleanupAttempts()).toBe(2);
+  if (options.result.ok) throw new Error("Cancellation must remain an error");
+  expect(options.result.error).toMatchObject({
+    cleanupIncomplete: false,
+    cleanupResources: [],
+  });
+  expect(projectAnalysisError(options.result.error)).toMatchObject({
+    code: "cancelled",
+    details: {
+      partial_observation: { normalized_result: { validation: "valid" } },
+    },
+  });
 };
 
 const createWabtArtifactFixture = async () => {
