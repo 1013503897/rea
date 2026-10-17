@@ -112,6 +112,8 @@ try {
     assert(r.ok);
     assert.equal(r.context.lease, context.lease);
     assert.equal(r.data.total, 1);
+    assert.equal(r.data.coverage.source_scope, "whole native inventory");
+    assert.equal(r.data.coverage.examined, 60601);
     assert.equal(r.data.items.length, 1);
     const row = r.data.items[0];
     assert.equal(row.address, fixture.address);

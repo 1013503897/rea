@@ -9,6 +9,9 @@ export const selectStringFacts = (inventory, input) => ({
   coverage: {
     scope: "native string inventory, minimum 5",
     scanned: inventory.scanned,
+    examined: inventory.items.length,
+    matching: "literal_utf16",
+    source_scope: "whole native inventory",
     artifact_discovery: "unknown",
     reference_attribution: "not-computed",
   },

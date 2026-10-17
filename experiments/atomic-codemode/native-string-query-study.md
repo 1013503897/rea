@@ -232,3 +232,24 @@ Additional local anchors (SHA-256):
 - `llvm-native-query-codemode-v1/summary.json`: `cf4ceed764ca57a2ec6d6532b2b5958c7702500b29e02d775656fe5f338dcc2f`.
 - `native-string-query-question.txt`: `2738574ab764afa95ddb0678f51c6b8cfa67946989f7270d7b13d77a6090eccf`.
 - `native-string-query-oracle.md`: `a3e18a3fe512c5bf1a809ac9b12c1f17beb85786925d8bd887d86ab58c63b76b`.
+
+## Source-scope consistency follow-up
+
+Final contract review found that the legacy inventory selector omitted
+`coverage.source_scope`, while the new query owner reported it explicitly. The
+shared legacy selector now emits `whole native inventory`, examined row count
+and `literal_utf16` matching, so callers do not have to infer report scope from
+acquisition mode or an absent field. Artifact discovery remains unknown. The
+native query path and the frozen model outcomes above are unchanged.
+
+The existing real FFmpeg verifier now asserts this source scope and all 60,601
+examined rows. SDK, Direct MCP and Code Mode all pass, including complete raw
+Evidence, selected values/bytes, repeated reads and stale handles. Changed-file
+lint and formatting pass. This small additive metadata follow-up has no new
+model-token measurement; the table records complete real verifier costs.
+
+| Scope follow-up verifier | Wall s | Family CPU s | Kernel family peak MiB |
+| ------------------------ | -----: | -----------: | ---------------------: |
+| sdk                      |  7.068 |     6.751094 |                  347.1 |
+| direct                   |  7.168 |     6.977332 |                  417.6 |
+| codemode                 |  7.468 |     7.185083 |                  435.9 |
