@@ -1,0 +1,17 @@
+Analyze {{artifact_path}} statically. Find all native candidate string objects
+containing either exact literal text: "undefined symbol" or
+"Invalid bitcode signature". Preserve every matching object and distinguish
+object counts from substring occurrence counts.
+
+For each object report its address, text, encoding, encoded byte length,
+inclusive end and provider-reported NUL termination. Corroborate exactly the
+first 16 and final 8 bytes with focused loaded-image windows, preserving the
+returned byte counts when reporting hex. Derived subwindows from a focused
+covering read are acceptable if capture lengths and derived lengths are distinct.
+Report the examined native candidate
+count and whether the source is a whole inventory or a selected query report.
+Establish whether the two queries share a raw source; read a small Evidence
+window from each query's retained source. Cite real Evidence IDs plus the target
+and engine identity. Keep discovery, references, runtime use and live memory
+coverage explicit. Use compact selections and avoid pulling a whole inventory
+into context. No target execution. Close the target lease.

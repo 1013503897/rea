@@ -2,8 +2,9 @@
 import { parseFunctionFacts, selectFunctionFacts } from "./function-facts.mjs";
 import { selectStringFacts } from "./string-facts.mjs";
 import { parseNativeStorageMap } from "./native-storage-map.mjs";
-import { freezeFacts, sourceSummary } from "./fact-reads.mjs";
-import { FactFailure, requireResult } from "./fact-error.mjs";
+import { sourceSummary } from "./fact-reads.mjs";
+import { FactFailure } from "./fact-error.mjs";
+import { requireNativeCaptureFacts } from "./native-capture-facts.mjs";
 import { KunaStringInventoryReader } from "../../dist/kuna/KunaStringInventory.js";
 
 const catalogs = {
@@ -48,39 +49,30 @@ export class NativeCatalogReads {
           signal,
           definition.reader,
         );
-      try {
-        const facts = definition.reader
-          ? freezeFacts(
-              requireResult(capture.parsed, "invalid_provider_output"),
-            )
-          : await definition.parse(
-              await this.readSource(capture.source.evidence_id),
-              capture.input,
-            );
-        if (
-          definition.reader &&
-          (facts.sha256 !== capture.source.sha256 ||
-            facts.bytes !== capture.source.bytes)
-        )
-          throw new FactFailure(
-            "invalid_provider_output",
-            "Parsed inventory and retained source identities disagree",
+      let facts;
+      if (definition.reader) facts = requireNativeCaptureFacts(capture);
+      else {
+        try {
+          facts = await definition.parse(
+            await this.readSource(capture.source.evidence_id),
+            capture.input,
           );
-        this.#loaded.set(name, {
-          facts,
-          source: Object.freeze(sourceSummary(capture.source)),
-        });
-      } catch (error) {
-        throw new FactFailure(
-          error.code ?? "invalid_provider_output",
-          error.message,
-          {
-            ...error.details,
-            evidence_id: capture.source.evidence_id,
-            source_retained: true,
-          },
-        );
+        } catch (error) {
+          throw new FactFailure(
+            error.code ?? "invalid_provider_output",
+            error.message,
+            {
+              ...error.details,
+              evidence_id: capture.source.evidence_id,
+              source_retained: true,
+            },
+          );
+        }
       }
+      this.#loaded.set(name, {
+        facts,
+        source: Object.freeze(sourceSummary(capture.source)),
+      });
     }
     return this.#loaded.get(name);
   }

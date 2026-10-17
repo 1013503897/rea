@@ -24,7 +24,7 @@ const returns = {
   instructions:
     "data:{results:[{ok,address,source:{evidence_id,sha256},items:[{address,size,status,bytes?,text?,mnemonic?,operands?}],resume_address,coverage}|{ok:false,address,error}]}; decoded rows describe selected machine bytes, not optimized IR branches. Partial batches retain successful windows.",
   strings:
-    "data:{source:{evidence_id,sha256},items:[{address,value,string:{encoding,byte_length}}],total,next_offset,coverage}",
+    "data:{source:{evidence_id,sha256,bytes,capture_complete},items:[{address,value?,source_row?,string:{encoding,byte_length,nul_terminated?}}],total,next_offset,coverage}. Artifact + address + encoding identify a candidate; source_row is its ordinal under the declared scan settings, not a global ID. source_scope distinguishes whole inventory from selected query reports. Different queries/pages/detail views may have distinct retained sources. Selection completeness is relative to examined native candidates; artifact discovery remains unknown.",
   references:
     "data:{results:[{ok,address,source:{evidence_id},items:[{source_row,from,to,kind,fromFunction:{address,name}|null,toFunction:{address,name}|null,instruction}],total,next_offset,coverage}|{ok:false,address,error}]}. source_row is the zero-based row in retained native xrefs; Evidence identity plus source_row identifies an occurrence. Coverage preserves examined/excluded/unattributed counts and unknown function scope/discovery. fields projects optional columns; endpoints/kind/source_row stay.",
   snapshot:

@@ -15,10 +15,10 @@ import type { KunaInstallation } from "./KunaInstallation.js";
 import type { KunaPendingQuery, KunaQueryWork } from "./KunaQueryWork.js";
 import { kunaQueryFailureForCaller } from "./KunaQueryErrors.js";
 import { KUNA_STRING_MIN_LENGTH } from "./KunaLimits.js";
+import type { KunaStringItem } from "./KunaStringFacts.js";
 import {
   KunaStringInventoryReader,
   type KunaStringInventory,
-  type KunaStringItem,
 } from "./KunaStringInventory.js";
 
 /** One validated scan shared by literal, regex and exact-address queries. */

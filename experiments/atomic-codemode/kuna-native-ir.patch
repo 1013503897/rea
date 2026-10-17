@@ -5,7 +5,7 @@ index 157e7bd2..6caa4604 100644
 @@ -23,6 +23,12 @@ version = "0.7.8"
  source = "registry+https://github.com/rust-lang/crates.io-index"
  checksum = "d3fb67a6e08acf24fdeccbac2cb6ac4305825bd1f117462e0e6f2f193345ad56"
- 
+
 +[[package]]
 +name = "base64"
 +version = "0.22.1"
@@ -2800,7 +2800,7 @@ index 06231a77..db79599c 100644
 +++ b/decompiler/crates/kuna-cli/Cargo.toml
 @@ -9,6 +9,8 @@ license.workspace = true
  publish.workspace = true
- 
+
  [dependencies]
 +base64 = "=0.22.1"
 +flate2 = "=1.1.9"
@@ -3468,7 +3468,7 @@ index ad249b04..62074996 100644
 @@ -979,7 +988,13 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
          return Err("--base requires --raw-image".into());
      }
- 
+
 +    if atomic_output_bytes.is_some() && !atomic_facts {
 +        return Err("--atomic-output-bytes requires --atomic-facts".into());
 +    }
@@ -3491,7 +3491,7 @@ index ad249b04..62074996 100644
 @@ -1007,6 +1024,10 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
          }));
      }
- 
+
 +    if atomic_facts {
 +        return Err("--atomic-facts requires --json".into());
 +    }
@@ -3548,7 +3548,7 @@ index ad249b04..62074996 100644
 @@ -1217,7 +1252,7 @@ fn decompile_json(args: &AllArgs, target: &str) -> Result<(String, Option<String
          });
      }
- 
+
 -    let funcs = decompile_all::decompile_entries(&mut prog, args, targets, false);
 +    let funcs = decompile_all::decompile_entries(&mut prog, args, targets, false, atomic_limit.is_some());
      let assertions = prog.assertion_outcomes();
@@ -3615,7 +3615,7 @@ index 698c7243..c1dceab2 100644
 @@ -2003,6 +2006,19 @@ pub(crate) fn render_result_json(
      render_selected_json(binary, funcs, options, error, None, assertions, interior)
  }
- 
+
 +pub(crate) fn render_atomic_result_json(
 +    binary: &str,
 +    funcs: &[FuncResult],
@@ -3648,7 +3648,7 @@ index 698c7243..c1dceab2 100644
                          f.stack_objects.iter().map(stack_object_json).collect(),
 @@ -3519,3 +3542,16 @@ mod triage_tests {
      }
- 
+
  }
 +
 +// Named independent facets share serialization/failure semantics; a bad facet
@@ -3676,7 +3676,7 @@ index 3eb2a6e4..2b951ba2 100644
      };
      decompile_callee_first(prog, args, targets, explicit, base)
 diff --git a/decompiler/crates/kuna-cli/src/jsonfmt.rs b/decompiler/crates/kuna-cli/src/jsonfmt.rs
-index 198b85a6..299e4a09 100644
+index 198b85a6..cf995841 100644
 --- a/decompiler/crates/kuna-cli/src/jsonfmt.rs
 +++ b/decompiler/crates/kuna-cli/src/jsonfmt.rs
 @@ -28,6 +28,26 @@ pub enum Json {
@@ -3706,7 +3706,7 @@ index 198b85a6..299e4a09 100644
  /// Render `v` exactly as CPython's `json.dumps(v, indent=2)` would (ASCII-safe
  /// string escaping, `", "`/`": "` item/key separators collapsed to the indent
  /// form: items separated by `,\n`, keys by `": "`).
-@@ -50,6 +70,35 @@ pub fn dumps_compact(v: &Json) -> String {
+@@ -50,6 +70,38 @@ pub fn dumps_compact(v: &Json) -> String {
      writer::render(v, Format::Compact)
  }
 
@@ -3729,6 +3729,9 @@ index 198b85a6..299e4a09 100644
 +    pub fn value(&mut self, value: &Json) -> std::fmt::Result {
 +        writer::write_value(&mut self.0, value, 0, Format::Compact)
 +    }
++    pub fn string(&mut self, value: &str) -> std::fmt::Result {
++        writer::write_string(&mut self.0, value)
++    }
 +    pub fn finish(self) -> String {
 +        self.0.finish()
 +    }
@@ -3743,7 +3746,7 @@ index 198b85a6..299e4a09 100644
  ///
  /// Port of `kuna/catalog.py::_extract_json`: drop the fixed `[decomp]>` prompt
 diff --git a/decompiler/crates/kuna-cli/src/jsonfmt/writer.rs b/decompiler/crates/kuna-cli/src/jsonfmt/writer.rs
-index c4eca1db..6a76bd3f 100644
+index c4eca1db..5af8bd75 100644
 --- a/decompiler/crates/kuna-cli/src/jsonfmt/writer.rs
 +++ b/decompiler/crates/kuna-cli/src/jsonfmt/writer.rs
 @@ -1,7 +1,7 @@
@@ -3914,7 +3917,7 @@ index c4eca1db..6a76bd3f 100644
 
 -fn write_string(out: &mut String, s: &str) {
 -    out.push('"');
-+fn write_string(out: &mut impl Write, s: &str) -> fmt::Result {
++pub(super) fn write_string(out: &mut impl Write, s: &str) -> fmt::Result {
 +    out.write_char('"')?;
      for ch in s.chars() {
          match ch {
@@ -4020,7 +4023,7 @@ index 2345743c..a16abb71 100644
 +++ b/decompiler/crates/kuna-cli/src/main.rs
 @@ -1,6 +1,8 @@
  //! Command dispatch for the kuna CLI.
- 
+
  mod args;
 +mod atomic_json;
 +mod atomic_compression;
@@ -4054,7 +4057,7 @@ index e40b18c9..b8cae233 100644
 +        want_atomic_facts: false,
          want_pointer_arguments: false,
      };
- 
+
 diff --git a/decompiler/crates/kuna-cli/src/storage_map.rs b/decompiler/crates/kuna-cli/src/storage_map.rs
 new file mode 100644
 index 00000000..b2a30345
@@ -4294,10 +4297,14 @@ index 00000000..b2a30345
 +    }
 +}
 diff --git a/decompiler/crates/kuna-cli/src/strings.rs b/decompiler/crates/kuna-cli/src/strings.rs
-index ffe33667..d2412227 100644
+index ffe33667..2ad548fd 100644
 --- a/decompiler/crates/kuna-cli/src/strings.rs
 +++ b/decompiler/crates/kuna-cli/src/strings.rs
-@@ -52,7 +52,7 @@ mod filter;
+@@ -49,10 +49,11 @@
+ //! pass-faithful view, and every row says which ending it had.
+
+ mod filter;
++mod kuna_query;
 
  use filter::Regex;
 
@@ -4306,7 +4313,15 @@ index ffe33667..d2412227 100644
 
  use kuna_analysis::strings::kuna_stringinv::{self, FoundString, Termination};
 
-@@ -132,12 +132,19 @@ pub(crate) fn query(args: &StringsArgs) -> Result<String, String> {
+@@ -63,6 +64,7 @@ use crate::jsonfmt::{dumps_indent2, Json};
+
+ /// The parsed command line.
+ pub(crate) struct StringsArgs {
++    atomic: Option<kuna_query::Query>,
+     binary: String,
+     json: bool,
+     min_length: usize,
+@@ -132,12 +134,19 @@ pub(crate) fn query(args: &StringsArgs) -> Result<String, String> {
          section: args.section.clone(),
          termination: args.termination,
      };
@@ -4328,7 +4343,17 @@ index ffe33667..d2412227 100644
              let mut have: Vec<&str> = inv.regions.iter().map(String::as_str).collect();
              have.dedup();
              let have = if have.is_empty() {
-@@ -168,7 +175,11 @@ pub(crate) fn query(args: &StringsArgs) -> Result<String, String> {
+@@ -149,6 +158,9 @@ pub(crate) fn query(args: &StringsArgs) -> Result<String, String> {
+         }
+     }
+
++    if args.atomic.is_some() {
++        return kuna_query::render(args, inv);
++    }
+     let mut truncated_filter = false;
+     let found: Vec<FoundString> = inv
+         .strings
+@@ -168,7 +180,11 @@ pub(crate) fn query(args: &StringsArgs) -> Result<String, String> {
      let rows = if args.no_xrefs || found.is_empty() {
          found
              .into_iter()
@@ -4341,7 +4366,7 @@ index ffe33667..d2412227 100644
              .collect()
      } else {
          attribute(args, options, &file, found)?
-@@ -181,7 +192,10 @@ pub(crate) fn query(args: &StringsArgs) -> Result<String, String> {
+@@ -181,7 +197,10 @@ pub(crate) fn query(args: &StringsArgs) -> Result<String, String> {
          );
      }
      Ok(if args.json {
@@ -4353,7 +4378,7 @@ index ffe33667..d2412227 100644
      } else {
          render_text(args, inv.from_segments, &rows)
      })
-@@ -226,43 +240,53 @@ fn attribute(
+@@ -226,43 +245,53 @@ fn attribute(
          .map(|e| (e.addr.get_offset(), e.name))
          .collect();
      let seeds: Vec<u64> = inventory.keys().copied().collect();
@@ -4432,7 +4457,7 @@ index ffe33667..d2412227 100644
  }
 
  // --- rendering ---------------------------------------------------------------
-@@ -294,14 +318,32 @@ fn result_json(args: &StringsArgs, from_segments: bool, rows: &[Row]) -> Json {
+@@ -294,14 +323,32 @@ fn result_json(args: &StringsArgs, from_segments: bool, rows: &[Row]) -> Json {
              .map(|row| {
                  Json::Object(vec![
                      ("address".into(), Json::Number(row.found.addr.to_string())),
@@ -4471,7 +4496,7 @@ index ffe33667..d2412227 100644
                      (
                          "functions".into(),
                          Json::Array(
-@@ -318,11 +360,23 @@ fn result_json(args: &StringsArgs, from_segments: bool, rows: &[Row]) -> Json {
+@@ -318,11 +365,23 @@ fn result_json(args: &StringsArgs, from_segments: bool, rows: &[Row]) -> Json {
      Json::Object(vec![
          ("binary".into(), Json::Str(args.binary.clone())),
          ("encoding".into(), Json::Str(args.encoding_label.clone())),
@@ -4499,7 +4524,7 @@ index ffe33667..d2412227 100644
          ("xrefs".into(), Json::Bool(!args.no_xrefs)),
          ("count".into(), Json::Number(rows.len().to_string())),
          ("strings".into(), strings),
-@@ -367,7 +421,11 @@ fn render_text(args: &StringsArgs, from_segments: bool, rows: &[Row]) -> String
+@@ -367,7 +426,11 @@ fn render_text(args: &StringsArgs, from_segments: bool, rows: &[Row]) -> String
          let functions = if row.functions.is_empty() {
              "-".to_string()
          } else {
@@ -4512,7 +4537,15 @@ index ffe33667..d2412227 100644
          };
          let _ = writeln!(
              out,
-@@ -409,8 +467,9 @@ pub(crate) fn parse_args(argv: &[String]) -> Result<StringsArgs, String> {
+@@ -387,6 +450,7 @@ fn render_text(args: &StringsArgs, from_segments: bool, rows: &[Row]) -> String
+ // --- argument parsing --------------------------------------------------------
+
+ pub(crate) fn parse_args(argv: &[String]) -> Result<StringsArgs, String> {
++    let mut atomic_options = kuna_query::Options::default();
+     let mut binary: Option<String> = None;
+     let mut json = false;
+     let mut min_length: Option<usize> = None;
+@@ -409,8 +473,9 @@ pub(crate) fn parse_args(argv: &[String]) -> Result<StringsArgs, String> {
              "--json" => json = true,
              "--min-length" => {
                  let v = take(argv, &mut i, "--min-length")?;
@@ -4524,7 +4557,15 @@ index ffe33667..d2412227 100644
                  if n == 0 {
                      return Err("--min-length must be at least 1".into());
                  }
-@@ -470,7 +529,9 @@ pub(crate) fn parse_args(argv: &[String]) -> Result<StringsArgs, String> {
+@@ -444,6 +509,7 @@ pub(crate) fn parse_args(argv: &[String]) -> Result<StringsArgs, String> {
+                 usage();
+                 std::process::exit(0);
+             }
++            s if kuna_query::Options::accepts(s) => atomic_options.take(argv, &mut i)?,
+             s if s.starts_with("--") => return Err(format!("unknown option {s}")),
+             _ => {
+                 if binary.is_none() {
+@@ -470,10 +536,19 @@ pub(crate) fn parse_args(argv: &[String]) -> Result<StringsArgs, String> {
          "utf16" => (false, false, true),
          "all" => (true, true, true),
          other => {
@@ -4534,7 +4575,478 @@ index ffe33667..d2412227 100644
 +            ))
          }
      };
++    let atomic = atomic_options.finish()?;
++    if atomic.is_some() && (!json || !no_xrefs || filter.is_some()) {
++        return Err(
++            "atomic string queries require --json --no-xrefs and cannot combine --filter".into(),
++        );
++    }
      Ok(StringsArgs {
++        atomic,
+         binary,
+         json,
+         // The analyzer's own `MinStringLen.LEN_5`, so an unflagged run reports
+@@ -523,6 +598,11 @@ fn usage() {
+          ^ $ \\\\d \\\\w \\\\s and their negations, plus a leading (?i)), matched anywhere\n\
+          in the text.\n\
+          --no-xrefs skips the reference walk (xrefs_count 0, no functions).\n\
++         Experimental --atomic-literal-utf16le-hex HEX selects literal UTF16 units,\n\
++         requiring --json --no-xrefs without --filter. Optional --atomic-offset N,\n\
++         --atomic-limit 1..128, --atomic-output-bytes 1..67108864 and\n\
++         --atomic-metadata-only select a bounded query report before JSON rendering.\n\
++         Fresh queries still scan all candidates; this does not expand recognition.\n\
+          \n\
+          --json emits {{binary,encoding,min_length,termination,count,strings:[{{address,\n\
+          address_hex,text,length,byte_length,nul_terminated,encoding,section,xrefs_count,\n\
+diff --git a/decompiler/crates/kuna-cli/src/strings/kuna_query.rs b/decompiler/crates/kuna-cli/src/strings/kuna_query.rs
+new file mode 100644
+index 00000000..2f25b903
+--- /dev/null
++++ b/decompiler/crates/kuna-cli/src/strings/kuna_query.rs
+@@ -0,0 +1,443 @@
++//! Explicit literal/page projection before JSON construction; no regex or target mutation.
++use std::fmt::Write;
++
++use kuna_analysis::strings::kuna_stringinv::{FoundString, Inventory};
++
++use crate::args::take_value;
++use crate::jsonfmt::BoundedJsonWriter;
++
++const MAX_OUTPUT_BYTES: usize = 64 * 1024 * 1024;
++
++#[derive(Default)]
++pub(super) struct Options {
++    hex: Option<String>,
++    offset: Option<usize>,
++    limit: Option<usize>,
++    output_bytes: Option<usize>,
++    metadata_only: bool,
++}
++impl Options {
++    pub fn accepts(name: &str) -> bool {
++        matches!(
++            name,
++            "--atomic-literal-utf16le-hex"
++                | "--atomic-offset"
++                | "--atomic-limit"
++                | "--atomic-output-bytes"
++                | "--atomic-metadata-only"
++        )
++    }
++    pub fn take(&mut self, argv: &[String], index: &mut usize) -> Result<(), String> {
++        let name = argv[*index].as_str();
++        if name == "--atomic-metadata-only" {
++            if self.metadata_only {
++                return Err(format!("duplicate {name}"));
++            }
++            self.metadata_only = true;
++            return Ok(());
++        }
++        let value = take_value(argv, index, name)?;
++        if name == "--atomic-literal-utf16le-hex" {
++            if self.hex.replace(value).is_some() {
++                return Err(format!("duplicate {name}"));
++            }
++        } else {
++            let number = value
++                .parse::<usize>()
++                .map_err(|_| format!("{name} requires a nonnegative integer"))?;
++            let slot = match name {
++                "--atomic-offset" => &mut self.offset,
++                "--atomic-limit" => &mut self.limit,
++                "--atomic-output-bytes" => &mut self.output_bytes,
++                _ => return Err(format!("unknown atomic query option {name}")),
++            };
++            if slot.replace(number).is_some() {
++                return Err(format!("duplicate {name}"));
++            }
++        }
++        Ok(())
++    }
++    pub fn finish(self) -> Result<Option<Query>, String> {
++        let Some(hex) = self.hex else {
++            if self.offset.is_some()
++                || self.limit.is_some()
++                || self.output_bytes.is_some()
++                || self.metadata_only
++            {
++                return Err("atomic string selectors require --atomic-literal-utf16le-hex".into());
++            }
++            return Ok(None);
++        };
++        let literal = Literal::from_hex(&hex)?;
++        let limit = self.limit.unwrap_or(128);
++        if !(1..=128).contains(&limit) {
++            return Err("atomic string page limit must be 1..128".into());
++        }
++        let output_bytes = self.output_bytes.unwrap_or(8 * 1024 * 1024);
++        if !(1..=MAX_OUTPUT_BYTES).contains(&output_bytes) {
++            return Err("atomic output budget must be 1..67108864 bytes".into());
++        }
++        Ok(Some(Query {
++            hex,
++            literal,
++            offset: self.offset.unwrap_or(0),
++            limit,
++            output_bytes,
++            text_requested: !self.metadata_only,
++        }))
++    }
++}
++
++pub(super) struct Query {
++    hex: String,
++    literal: Literal,
++    offset: usize,
++    limit: usize,
++    output_bytes: usize,
++    text_requested: bool,
++}
++enum Literal {
++    Text(String),
++    Units {
++        pattern: Vec<u16>,
++        prefix: Vec<usize>,
++    },
++}
++impl Literal {
++    fn from_hex(hex: &str) -> Result<Self, String> {
++        if hex.len() % 4 != 0 || !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
++            return Err("literal must be hexadecimal UTF-16LE code units".into());
++        }
++        let units: Vec<u16> = hex
++            .as_bytes()
++            .chunks_exact(4)
++            .map(|part| {
++                let low = u8::from_str_radix(std::str::from_utf8(&part[..2]).unwrap(), 16).unwrap();
++                let high =
++                    u8::from_str_radix(std::str::from_utf8(&part[2..]).unwrap(), 16).unwrap();
++                u16::from_le_bytes([low, high])
++            })
++            .collect();
++        if let Ok(text) = String::from_utf16(&units) {
++            return Ok(Self::Text(text));
++        }
++        let mut prefix = vec![0; units.len()];
++        for i in 1..units.len() {
++            let mut matched = prefix[i - 1];
++            while matched > 0 && units[i] != units[matched] {
++                matched = prefix[matched - 1];
++            }
++            if units[i] == units[matched] {
++                matched += 1;
++            }
++            prefix[i] = matched;
++        }
++        Ok(Self::Units {
++            pattern: units,
++            prefix,
++        })
++    }
++    fn matches(&self, value: &str) -> bool {
++        match self {
++            Self::Text(text) => value.contains(text.as_str()),
++            Self::Units { pattern, prefix } => {
++                let mut matched = 0;
++                for unit in value.encode_utf16() {
++                    while matched > 0 && unit != pattern[matched] {
++                        matched = prefix[matched - 1];
++                    }
++                    if unit == pattern[matched] {
++                        matched += 1;
++                    }
++                    if matched == pattern.len() {
++                        return true;
++                    }
++                }
++                false
++            }
++        }
++    }
++}
++
++pub(super) fn render(
++    args: &super::StringsArgs,
++    mut inventory: Inventory,
++) -> Result<String, String> {
++    let query = args
++        .atomic
++        .as_ref()
++        .ok_or("atomic query was not selected")?;
++    inventory.strings.sort_by(|a, b| {
++        a.addr
++            .cmp(&b.addr)
++            .then_with(|| a.encoding.as_str().cmp(b.encoding.as_str()))
++    });
++    let mut total = 0;
++    let mut selected = Vec::new();
++    for (source_row, row) in inventory.strings.iter().enumerate() {
++        if !query.literal.matches(&row.text) {
++            continue;
++        }
++        if total >= query.offset && selected.len() < query.limit {
++            selected.push((source_row, row));
++        }
++        total += 1;
++    }
++    let first = encode(args, &inventory, &selected, total, query.text_requested);
++    let result = if query.text_requested {
++        first.or_else(|_| encode(args, &inventory, &selected, total, false))
++    } else {
++        first
++    };
++    result.map_err(|_| {
++        format!(
++            "atomic string query metadata exceeds the {} byte output budget",
++            query.output_bytes
++        )
++    })
++}
++
++fn encode(
++    args: &super::StringsArgs,
++    inv: &Inventory,
++    rows: &[(usize, &FoundString)],
++    total: usize,
++    text_included: bool,
++) -> Result<String, std::fmt::Error> {
++    let query = args.atomic.as_ref().unwrap();
++    let mut out = BoundedJsonWriter::new(query.output_bytes);
++    write!(out, "{{\"schema_version\":1,\"binary\":")?;
++    out.string(&args.binary)?;
++    write!(out, ",\"query_utf16le_hex\":")?;
++    out.string(&query.hex)?;
++    write!(out, ",\"encoding\":")?;
++    out.string(&args.encoding_label)?;
++    write!(out, ",\"min_length\":{},\"section\":", args.min_length)?;
++    match &args.section {
++        Some(section) => out.string(section)?,
++        None => write!(out, "null")?,
++    }
++    write!(out, ",\"termination\":")?;
++    out.string(super::termination_label(args.termination))?;
++    write!(out, ",\"scanned\":")?;
++    out.string(super::scanned_label(inv.from_segments))?;
++    write!(out, ",\"xrefs\":false,\"examined_rows\":{},\"total\":{total},\"offset\":{},\"limit\":{},\"next_offset\":", inv.strings.len(), query.offset, query.limit)?;
++    if query.offset < total && rows.len() < total - query.offset {
++        write!(out, "{}", query.offset + rows.len())?;
++    } else {
++        write!(out, "null")?;
++    }
++    write!(
++        out,
++        ",\"text_requested\":{},\"text_included\":{text_included},\"output_bytes\":{},\"status\":",
++        query.text_requested, query.output_bytes
++    )?;
++    let omitted = query.text_requested && !text_included;
++    out.string(if omitted { "text-omitted" } else { "complete" })?;
++    write!(out, ",\"required_encoded_bytes_at_least\":")?;
++    if omitted {
++        write!(out, "{}", query.output_bytes + 1)?;
++    } else {
++        write!(out, "null")?;
++    }
++    write!(out, ",\"items\":[")?;
++    for (i, (source_row, row)) in rows.iter().enumerate() {
++        if i > 0 {
++            write!(out, ",")?;
++        }
++        write!(out, "{{\"source_row\":{source_row},\"address_hex\":")?;
++        out.string(&format!("0x{:x}", row.addr))?;
++        write!(
++            out,
++            ",\"length\":{},\"byte_length\":{},\"nul_terminated\":{},\"encoding\":",
++            row.char_len, row.byte_len, row.nul_terminated
++        )?;
++        out.string(row.encoding.as_str())?;
++        write!(out, ",\"section\":")?;
++        match &row.section {
++            Some(section) => out.string(section)?,
++            None => write!(out, "null")?,
++        }
++        if text_included {
++            write!(out, ",\"text\":")?;
++            out.string(&row.text)?;
++        }
++        write!(out, "}}")?;
++    }
++    write!(out, "]}}\n")?;
++    Ok(out.finish())
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use kuna_analysis::strings::kuna_stringinv::Encoding;
++    fn hex(units: &[u16]) -> String {
++        units
++            .iter()
++            .flat_map(|u| u.to_le_bytes())
++            .map(|b| format!("{b:02x}"))
++            .collect()
++    }
++    #[test]
++    fn literal_matches_utf16_units_without_regex_or_backtracking_omissions() {
++        let text = "prefix a.b+ 😀 suffix abababc";
++        for units in [
++            vec![],
++            "a.b+".encode_utf16().collect(),
++            "😀".encode_utf16().collect(),
++            vec![0xd83d],
++            vec![0xde00],
++            "ababc".encode_utf16().collect(),
++        ] {
++            assert!(Literal::from_hex(&hex(&units)).unwrap().matches(text));
++        }
++        for units in [
++            vec![0],
++            vec![0xd800],
++            "a.*suffix".encode_utf16().collect(),
++            vec![0xde00, 0xd83d],
++        ] {
++            assert!(!Literal::from_hex(&hex(&units)).unwrap().matches(text));
++        }
++        assert!(Literal::from_hex(&hex(&[0xd83d]))
++            .unwrap()
++            .matches(&format!("{}😀", "x".repeat(2_000_000))));
++        for invalid in ["0", "000", "zzzz", "😀"] {
++            assert!(Literal::from_hex(invalid).is_err());
++        }
++    }
++    fn row(addr: u64, text: &str) -> FoundString {
++        FoundString {
++            addr,
++            text: text.into(),
++            char_len: text.chars().count(),
++            byte_len: (text.len() + 1) as u32,
++            nul_terminated: true,
++            encoding: Encoding::Ascii,
++            section: Some(".rodata".into()),
++        }
++    }
++    fn query(extra: &[&str]) -> super::super::StringsArgs {
++        let mut args = vec![
++            "/input",
++            "--json",
++            "--no-xrefs",
++            "--encoding",
++            "all",
++            "--atomic-literal-utf16le-hex",
++            "6100",
++        ];
++        args.extend_from_slice(extra);
++        super::super::parse_args(&args.iter().map(|s| s.to_string()).collect::<Vec<_>>()).unwrap()
++    }
++    #[test]
++    fn explicit_profile_rejects_ambiguous_or_out_of_contract_arguments() {
++        let parse = |parts: &[&str]| {
++            super::super::parse_args(
++                &parts
++                    .iter()
++                    .map(|part| part.to_string())
++                    .collect::<Vec<_>>(),
++            )
++        };
++        for invalid in [
++            vec!["/input", "--json", "--atomic-offset", "0"],
++            vec!["/input", "--json", "--atomic-metadata-only"],
++            vec!["/input", "--no-xrefs", "--atomic-literal-utf16le-hex", ""],
++            vec!["/input", "--json", "--atomic-literal-utf16le-hex", ""],
++        ] {
++            assert!(parse(&invalid).is_err(), "{invalid:?}");
++        }
++        let base = [
++            "/input",
++            "--json",
++            "--no-xrefs",
++            "--atomic-literal-utf16le-hex",
++            "6100",
++        ];
++        for extra in [
++            vec!["--filter", "a"],
++            vec!["--atomic-literal-utf16le-hex", "6200"],
++            vec!["--atomic-limit", "0"],
++            vec!["--atomic-limit", "129"],
++            vec!["--atomic-limit", "1", "--atomic-limit", "2"],
++            vec!["--atomic-offset", "-1"],
++            vec!["--atomic-offset", "1.5"],
++            vec!["--atomic-output-bytes", "0"],
++            vec!["--atomic-output-bytes", "67108865"],
++            vec!["--atomic-metadata-only", "--atomic-metadata-only"],
++        ] {
++            assert!(
++                parse(&[base.to_vec(), extra.clone()].concat()).is_err(),
++                "{extra:?}"
++            );
++        }
++        for literal in ["0", "zzzz", "😀"] {
++            let mut args = base.to_vec();
++            args[4] = literal;
++            assert!(parse(&args).is_err());
++        }
++        assert!(parse(
++            &[
++                base.to_vec(),
++                vec![
++                    "--atomic-offset",
++                    "18446744073709551615",
++                    "--atomic-limit",
++                    "128"
++                ]
++            ]
++            .concat()
++        )
++        .is_ok());
++        assert!(parse(&["/input", "--json", "--no-xrefs"])
++            .unwrap()
++            .atomic
++            .is_none());
++    }
++    #[test]
++    fn paging_counts_complete_matches_and_keeps_original_candidate_ordinals() {
++        let args = query(&[
++            "--atomic-offset",
++            "1",
++            "--atomic-limit",
++            "1",
++            "--atomic-metadata-only",
++        ]);
++        let inv = Inventory {
++            strings: vec![
++                row(0x3000, "bravo"),
++                row(0x1000, "alpha"),
++                row(0x2000, "xxxxx"),
++            ],
++            regions: vec![],
++            from_segments: false,
++        };
++        let doc: serde_json::Value = serde_json::from_str(&render(&args, inv).unwrap()).unwrap();
++        assert_eq!(doc["total"], 2);
++        assert_eq!(doc["examined_rows"], 3);
++        assert!(doc["next_offset"].is_null());
++        assert_eq!(doc["items"][0]["source_row"], 2);
++        assert_eq!(doc["items"][0]["address_hex"], "0x3000");
++        assert!(doc["items"][0].get("text").is_none());
++    }
++    #[test]
++    fn escaped_text_budget_preserves_metadata_with_an_explicit_primary_omission() {
++        let args = query(&["--atomic-output-bytes", "2048"]);
++        let inv = Inventory {
++            strings: vec![row(0x1000, &format!("a{}", "\\".repeat(10000)))],
++            regions: vec![],
++            from_segments: false,
++        };
++        let output = render(&args, inv).unwrap();
++        assert!(output.len() <= 2048);
++        let doc: serde_json::Value = serde_json::from_str(&output).unwrap();
++        assert_eq!(doc["status"], "text-omitted");
++        assert_eq!(doc["total"], 1);
++        assert_eq!(doc["items"][0]["byte_length"], 10002);
++        assert!(doc["items"][0].get("text").is_none());
++        assert_eq!(doc["text_requested"], true);
++        assert_eq!(doc["text_included"], false);
++    }
++}
 diff --git a/decompiler/crates/kuna-cli/src/xrefs.rs b/decompiler/crates/kuna-cli/src/xrefs.rs
 index c351a097..ec20198c 100644
 --- a/decompiler/crates/kuna-cli/src/xrefs.rs
@@ -5049,7 +5561,7 @@ index 74024b10..9e36d55f 100644
 +    pub atomic_switches: Option<Result<kuna_decomp::atomic_switches::SwitchFacts, String>>,
 +    pub atomic_projection: Option<Result<kuna_decomp::atomic_projection::Projection, String>>,
  }
- 
+
  impl FuncDetail {
 @@ -40,13 +45,13 @@ impl FuncDetail {
      ) -> Self {
@@ -5066,7 +5578,7 @@ index 74024b10..9e36d55f 100644
 +        FuncDetail { tokens, tokens_error: None, ..Default::default() }
      }
  }
- 
+
 diff --git a/decompiler/crates/kuna-console/src/project.rs b/decompiler/crates/kuna-console/src/project.rs
 index bc401db2..2ef18e27 100644
 --- a/decompiler/crates/kuna-console/src/project.rs
@@ -5139,13 +5651,13 @@ index 40b093b6..8f03b654 100644
  smallvec.workspace = true
  slotmap.workspace = true
 +serde = { version = "1", features = ["derive"] }
- 
+
  [dev-dependencies]
  # Verifier-only: the datatest <stringmatch> engine (item w10-structure-printbody).
  regex = { workspace = true }
 -serde = { version = "1", features = ["derive"] }
  toml = { version = "1.1", default-features = false, features = ["parse", "serde", "std"] }
- 
+
  [build-dependencies]
 diff --git a/decompiler/crates/kuna-decomp/src/p2_lift/jumptable.rs b/decompiler/crates/kuna-decomp/src/p2_lift/jumptable.rs
 index b2677f6c..5e913130 100644
@@ -5154,7 +5666,7 @@ index b2677f6c..5e913130 100644
 @@ -5481,6 +5481,22 @@ impl JumpTable {
          self.label[index as usize]
      }
- 
+
 +    /// Borrow observed rows for read-only analysis without indexing absent labels.
 +    /// Row order, labels and recovered out-edge positions are separate identities.
 +    pub fn case_rows(&self) -> KunaResult<impl ExactSizeIterator<Item = (usize, &Address, Option<uintb>)>> {
@@ -6407,11 +6919,33 @@ index 00528cb5..4330ff1c 100644
  pub mod funcdata_varnode;
  pub mod dtype;
  pub mod context;
+diff --git a/docs/cli.md b/docs/cli.md
+index 2bdf122e..97070358 100644
+--- a/docs/cli.md
++++ b/docs/cli.md
+@@ -2553,6 +2553,17 @@ no emitted C changes.
+
+ ### Flags
+
++Experimental `--atomic-literal-utf16le-hex HEX` selects literal JavaScript UTF16
++code-unit matching (little-endian hexadecimal, no regex) before JSON rendering.
++It requires `--json --no-xrefs` and rejects `--filter`. `--atomic-offset N` and
++`--atomic-limit 1..128` select a canonical address/encoding page;
++`--atomic-metadata-only` omits text. `--atomic-output-bytes 1..67108864`
++(default 8388608) bounds encoded JSON. If text cannot fit, the report keeps
++metadata with explicit `status:"text-omitted"`; if metadata cannot fit, it fails.
++Fresh queries still construct and scan the native candidate inventory. Scan and
++encoding recognition are unchanged; these are selected candidate reports, not
++artifact-wide discovery or reference completeness. The default mode is unchanged.
++
+ `--encoding ascii\|utf8\|utf16\|all` (default `ascii`). `ascii` is the analyzer's
+ own 1-byte width. **`utf16` is not a convenience** — a UTF-16LE literal read at
+ 1-byte width ends at the NUL after its first character, which is exactly why a
 diff --git a/docs/spec/00-overview.md b/docs/spec/00-overview.md
-index ce499c4f..9d927aa5 100644
+index ce499c4f..234650dd 100644
 --- a/docs/spec/00-overview.md
 +++ b/docs/spec/00-overview.md
-@@ -3431,3 +3431,98 @@ Reserving it creates no analysis varnode and changes no physical mapping or
+@@ -3431,3 +3431,125 @@ Reserving it creates no analysis varnode and changes no physical mapping or
  emitted C. Ghidra receives temporary storage for the logical local, rather than
  a persistable ordinary stack-variable location; ordinary symbol storage and
  register-plus-stack parameter JOINs keep their existing encoding.
@@ -6510,3 +7044,30 @@ index ce499c4f..9d927aa5 100644
 +runtime reachability. Collection uses the same live function after C rendering;
 +no second decompilation is performed. Complete source Evidence keeps the native
 +frontier while callers may select a compact summary and individual facts.
++
++### Opt-in string query report
++
++`strings --json --no-xrefs --atomic-literal-utf16le-hex HEX` selects a version-1
++query report. HEX preserves literal JavaScript UTF16 units, including NUL and
++unpaired surrogates, without regex interpretation. Well-formed literals use
++substring search; ill-formed units use linear KMP over UTF16 code units. The
++original native inventory and recognition rules remain unchanged. Fresh queries
++still materialize and scan all candidates; this is output projection, not a
++reusable native index. No target is executed or modified.
++
++The report records binary, query hex, encoding/minimum/section/termination,
++section-or-segment scan, examined candidates, total matches, offset/limit/next,
++requested/included text, output budget and selected items. Canonical ordering is
++address then wire encoding. Each item's `source_row` is its zero-based ordinal
++under those scan settings; address and encoding identify the candidate. The
++report is complete for its selected query only, not the full inventory. Native
++UTF16 recognition remains little-endian Latin units; other omitted strings are
++unknown. References are not computed.
++
++The bounded writer borrows selected text and accounts for escaping before
++allocation. If selected text exceeds its encoded budget, it retries metadata
++with `status:"text-omitted"`, `text_included:false` and
++`required_encoded_bytes_at_least:output_bytes+1`. Otherwise `status:"complete"`
++and a null lower bound apply. Metadata overflow fails rather than clipping rows.
++Limits are 128 selected rows and 64 MiB encoded output. The default command and
++its legacy inventory schema remain unchanged without the explicit selector.

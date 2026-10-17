@@ -3,6 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { NativeSourceStore } from "./native-source-store.mjs";
 import { NativeCaptureCache } from "./native-capture-cache.mjs";
+import { NativeStringQueryReads } from "./native-string-query.mjs";
 import { parseBinaryTarget } from "../../dist/application/BinaryTargetResolver.js";
 import { inspectNativeInstallation } from "./native-installation.mjs";
 import { KunaTargetCommands } from "../../dist/kuna/KunaTargetCommands.js";
@@ -40,6 +41,7 @@ export class KunaFactOwner {
   #loaded = new Map();
   #root;
   #sourceFiles;
+  #stringQueries;
   #commands;
   #target;
   #installation;
@@ -81,6 +83,27 @@ export class KunaFactOwner {
         "Native IR requires the exact caller-pinned experimental engine SHA-256",
       );
     owner.#nativeIR = nativeIRHash !== undefined;
+    const stringMode = environment.REA_ATOMIC_NATIVE_STRING_QUERY;
+    if (stringMode !== undefined && stringMode !== "0" && stringMode !== "1")
+      throw new FactFailure(
+        "invalid_configuration",
+        "REA_ATOMIC_NATIVE_STRING_QUERY must be 0 or 1",
+      );
+    if (stringMode === "1") {
+      if (
+        !owner.#nativeIR ||
+        process.platform !== "linux" ||
+        process.arch !== "x64"
+      )
+        throw new FactFailure(
+          "capability_unavailable",
+          "Native string query experiment requires the pinned engine on Linux x86-64",
+        );
+      owner.#stringQueries = new NativeStringQueryReads((...args) =>
+        owner.#native(...args),
+      );
+    }
+
     if (!owner.#nativeIR && owner.#installation.version !== "1.833")
       throw new FactFailure(
         "unsupported_version",
@@ -109,6 +132,9 @@ export class KunaFactOwner {
       engine_sha256: owner.#installation.sha256,
       engine_version: owner.#installation.version,
       address_space: "native-default",
+      string_acquisition: owner.#stringQueries
+        ? "native-query-v1"
+        : "retained-inventory",
       analysis_model: owner.#nativeIR
         ? "experimental-native-ir-v3"
         : "diagnostic-ssa-1.833",
@@ -130,12 +156,12 @@ export class KunaFactOwner {
   }
   async #capture(arguments_, signal, readerFactory) {
     const start = performance.now();
-    const reader = readerFactory?.();
     const remaining = this.#sourceFiles.remainingBytes;
-    const spool = await this.#sourceFiles.spool(
-      reader ? remaining : Math.min(remaining, NATIVE_OUTPUT_BYTES),
-      reader,
-    );
+    const outputBytes = readerFactory
+      ? remaining
+      : Math.min(remaining, NATIVE_OUTPUT_BYTES);
+    const reader = readerFactory?.(outputBytes);
+    const spool = await this.#sourceFiles.spool(outputBytes, reader);
     let snapshot, actualArguments, captureInput, primary;
     try {
       snapshot = requireResult(
@@ -144,7 +170,7 @@ export class KunaFactOwner {
           operation: "experiment:atomic-facts",
           arguments: (input) => {
             captureInput = input;
-            return (actualArguments = arguments_(input));
+            return (actualArguments = arguments_(input, spool.limit));
           },
           outputBytes: NATIVE_OUTPUT_BYTES,
           stdout: spool,
@@ -204,7 +230,9 @@ export class KunaFactOwner {
     return (await this.#sourceFiles.read(id)).text;
   }
   async strings(input, signal) {
-    return this.#catalogs.strings(input, signal);
+    return this.#stringQueries
+      ? this.#stringQueries.read(input, signal)
+      : this.#catalogs.strings(input, signal);
   }
   async functions(input, signal) {
     return this.#catalogs.functions(input, signal);
@@ -466,6 +494,7 @@ export class KunaFactOwner {
     this.#work.clear();
     this.#snapshots.clear();
     this.#catalogs.clear();
+    this.#stringQueries?.clear();
     this.#references.clear();
     this.#evidence.clear();
   }

@@ -1,3 +1,16 @@
+/** Kept native counters and indices are integer tokens, never rounded fractions. */
+export const kunaSafeIntegerFromJsonNumber = (
+  source: string,
+  key: string,
+): number => {
+  if (!/^-?(?:0|[1-9][0-9]*)$/u.test(source))
+    throw new Error(`invalid integer token in ${key}`);
+  const value = Number(source);
+  if (!Number.isSafeInteger(value))
+    throw new Error(`integer in ${key} exceeds safe numeric precision`);
+  return value;
+};
+
 /** Read a numeric u64 address from its exact JSON token, before rounding. */
 export const kunaAddressFromJsonNumber = (
   source: string | undefined,

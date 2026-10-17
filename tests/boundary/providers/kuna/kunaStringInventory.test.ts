@@ -74,6 +74,15 @@ it("preserves exact u64 string identity, multiline text and typed source facts",
   });
 });
 
+it("rejects noninteger numeric tokens before floating-point rounding loses evidence", async () => {
+  for (const numeric of ["1.00000000000000000001", "1e0", "9007199254740993"]) {
+    const { result } = await read(
+      wire(document()).replace('"count":1', `"count":${numeric}`),
+    );
+    expect(result.ok).toBe(false);
+  }
+});
+
 it("skips members it does not interpret without retaining them", async () => {
   const { result } = await read(
     wire({

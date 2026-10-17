@@ -1,14 +1,17 @@
 import { z } from "zod";
 
 import type { AnalysisError } from "../domain/analysisErrorBase.js";
-import type { analysisStringSchema } from "../domain/hopperValues.js";
 import { err, ok, type Result } from "../domain/result.js";
 import { compareKunaAddresses } from "./KunaAddress.js";
 import { KunaJsonDocumentReader, parseKunaRow } from "./KunaJsonStream.js";
 import { KUNA_STRING_MIN_LENGTH } from "./KunaLimits.js";
+import {
+  kunaStringFactFieldsSchema,
+  normalizeKunaStringFact,
+  type KunaStringItem,
+} from "./KunaStringFacts.js";
 
 const count = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
-const address = z.string().regex(/^0x(?:0|[1-9a-f][0-9a-f]{0,15})$/u);
 const header = z.object({
   binary: z.string(),
   encoding: z.literal("all"),
@@ -20,14 +23,9 @@ const header = z.object({
   xrefs: z.literal(false),
   count,
 });
-const row = z.object({
-  address,
-  address_hex: address,
+const row = kunaStringFactFieldsSchema.extend({
+  address_hex: kunaStringFactFieldsSchema.shape.address,
   text: z.string(),
-  length: count,
-  byte_length: count,
-  nul_terminated: z.boolean(),
-  encoding: z.enum(["ascii", "utf8", "utf16"]),
   section: z.string().nullable(),
   xrefs_count: z.literal(0),
   functions: z.tuple([]),
@@ -54,43 +52,6 @@ const DOCUMENT = {
     ],
   ]),
 } as const;
-
-/** JSON text omits terminators; native lengths describe the encoded source. */
-const validateStringFacts = (entry: z.infer<typeof row>): void => {
-  let characters = 0;
-  for (const character of entry.text) {
-    const point = character.codePointAt(0)!;
-    if (
-      point === 0 ||
-      (point >= 0xd800 && point <= 0xdfff) ||
-      (entry.encoding === "ascii" && point > 0x7f) ||
-      (entry.encoding === "utf16" && point > 0xff)
-    )
-      throw new Error("string text contradicts its reported encoding");
-    characters += 1;
-  }
-  const textBytes =
-    entry.encoding === "utf16"
-      ? entry.text.length * 2
-      : entry.encoding === "ascii"
-        ? entry.text.length
-        : Buffer.byteLength(entry.text);
-  const terminatorBytes = entry.nul_terminated
-    ? entry.encoding === "utf16"
-      ? 2
-      : 1
-    : 0;
-  if (
-    characters < KUNA_STRING_MIN_LENGTH ||
-    entry.length !== characters ||
-    entry.byte_length !== textBytes + terminatorBytes
-  )
-    throw new Error(
-      "string length or termination contradicts its encoded text",
-    );
-};
-
-export type KunaStringItem = z.infer<typeof analysisStringSchema>;
 
 export interface KunaStringInventory {
   readonly items: readonly KunaStringItem[];
@@ -143,26 +104,14 @@ export class KunaStringInventoryReader extends KunaJsonDocumentReader<KunaString
     fields: Readonly<Record<string, unknown>>,
   ): void {
     const entry = parseKunaRow(row, "string", fields);
-    validateStringFacts(entry);
+    const normalized = normalizeKunaStringFact(entry);
     if (entry.address !== entry.address_hex)
       throw new Error("string address disagrees with its hex field");
     const identity = `${entry.address}:${entry.encoding}`;
     if (this.#identities.has(identity))
       throw new Error("string inventory repeats an identity");
     this.#identities.add(identity);
-    this.#items.push({
-      address: entry.address,
-      value: entry.text,
-      string: {
-        encoding: entry.encoding,
-        encoding_status: "observed",
-        termination: entry.nul_terminated
-          ? "present_or_not_required"
-          : "missing",
-        nul_terminated: entry.nul_terminated,
-        byte_length: entry.byte_length,
-      },
-    });
+    this.#items.push(normalized);
   }
 
   protected override discardRows(): void {

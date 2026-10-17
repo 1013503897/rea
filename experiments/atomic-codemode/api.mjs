@@ -109,9 +109,9 @@ export const methods = {
   strings: definition(
     {
       summary:
-        "Search retained encoded strings by literal text; discovery and reference attribution remain unknown.",
+        "Search native string candidates by literal text; discovery and reference attribution remain unknown.",
       description:
-        "Search retained string inventory by literal text. Address and encoded string metadata always preserve object identity; fields:[] omits display text. Select value, provider_value or decoding only when needed. Encoded byte lengths and provider-reported NUL termination are preserved when known; omitted NUL status is unknown. A false NUL status makes no claim about bytes outside that span. Paging does not establish artifact completeness; complete source remains readable through evidence.",
+        "Search native string candidates by literal text (JavaScript UTF16 includes semantics, no regex). Address and encoding identify an object within the artifact; fields:[] omits display text. Select value, provider_value or decoding only when needed. Encoded byte lengths and provider-reported NUL termination are preserved when known; omitted NUL status is unknown. A false NUL status makes no claim about bytes outside that span. Coverage.source_scope distinguishes a retained whole inventory from a selected query report; source IDs need not be shared between queries/pages/detail views. source_row, when present, is the canonical candidate ordinal under the declared native scan settings. Paging and native selection completeness do not establish artifact discovery completeness. Complete captured source remains readable through evidence.",
     },
     {
       query: z.string(),

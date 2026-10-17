@@ -13,7 +13,10 @@ import {
   AnalysisResourceConstraintError,
 } from "../domain/analysisErrorCore.js";
 import { err, ok, type Result } from "../domain/result.js";
-import { kunaAddressFromJsonNumber } from "./KunaJson.js";
+import {
+  kunaAddressFromJsonNumber,
+  kunaSafeIntegerFromJsonNumber,
+} from "./KunaJson.js";
 
 /**
  * stream-json 3's synchronous tokenizer behind `parser`, which its
@@ -410,7 +413,7 @@ export abstract class KunaJsonDocumentReader<Parsed> extends Writable {
     this.#values()[key] = this.#targetIsAddress
       ? kunaAddressFromJsonNumber(value as string, key)
       : kind === "number"
-        ? Number(value)
+        ? kunaSafeIntegerFromJsonNumber(value as string, key)
         : value;
   }
 
