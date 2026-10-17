@@ -1,7 +1,6 @@
 // Shared application admission and lease/file ownership; contracts stay provider-free.
-import { z } from "zod";
 import { methods } from "./api.mjs";
-import { FactFailure } from "./fact-error.mjs";
+import { FactFailure, projectFactFailure } from "./fact-error.mjs";
 import { ArtifactResourceScope } from "../../dist/artifacts/ArtifactResourceScope.js";
 import { ArtifactReaderFailure } from "../../dist/artifacts/ArtifactReader.js";
 
@@ -107,14 +106,7 @@ export class AtomicSession {
         return {
           ok: false,
           context: this.context,
-          error: {
-            code:
-              error instanceof z.ZodError
-                ? "invalid_input"
-                : (error.code ?? "analysis_failed"),
-            message: error.message,
-            details: error.details ?? {},
-          },
+          error: projectFactFailure(error),
         };
       }
     });

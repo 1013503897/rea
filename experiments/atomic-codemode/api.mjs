@@ -111,11 +111,17 @@ export const methods = {
       summary:
         "Search retained encoded strings by literal text; discovery and reference attribution remain unknown.",
       description:
-        "Search retained string inventory by literal text. Encoded byte lengths and provider-reported NUL termination are preserved when known; omitted NUL status is unknown. A false NUL status makes no claim about bytes outside that span. Paging does not establish artifact completeness.",
+        "Search retained string inventory by literal text. Address and encoded string metadata always preserve object identity; fields:[] omits display text. Select value, provider_value or decoding only when needed. Encoded byte lengths and provider-reported NUL termination are preserved when known; omitted NUL status is unknown. A false NUL status makes no claim about bytes outside that span. Paging does not establish artifact completeness; complete source remains readable through evidence.",
     },
-    { query: z.string(), ...page },
+    {
+      query: z.string(),
+      fields: z
+        .array(z.enum(["value", "provider_value", "decoding"]))
+        .optional(),
+      ...page,
+    },
     "strings",
-    'await rea.strings({query:"incorrect header check"})',
+    'await rea.strings({query:"incorrect header check",fields:[]})',
   ),
   references: referencesMethod,
   snapshot: definition(

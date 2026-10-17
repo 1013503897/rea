@@ -6,8 +6,9 @@ import { methods, reference } from "./api.mjs";
 import { AtomicSession } from "./session.mjs";
 import { executeJavaScript } from "./executor.mjs";
 import { referenceInput } from "./reference.mjs";
-import { EXECUTION_LIMITS } from "./limits.mjs";
-import { TARGET_CONTENT_RESULT_META } from "../../dist/server/toolResultEncoding.js";
+import { EXECUTION_LIMITS, MAX_MCP_RESULT_BYTES } from "./limits.mjs";
+import { encodeMcpResult } from "./mcp-result-encoding.mjs";
+import { projectFactFailure } from "./fact-error.mjs";
 import { appendFile } from "node:fs/promises";
 
 const DIRECT_REFERENCE_LANGUAGE =
@@ -21,6 +22,16 @@ const executionInput = z.strictObject({
     .max(EXECUTION_LIMITS.timeout_ms.maximum)
     .default(EXECUTION_LIMITS.timeout_ms.default),
 });
+const mcpPayload = (name, observation) => {
+  if (name !== "execute_javascript") return observation;
+  const { calls, ...answer } = observation;
+  return {
+    ...answer,
+    execution: { host_calls: calls?.length ?? 0 },
+    authority: "script-derived",
+    context: answer.context ?? null,
+  };
+};
 const session = new AtomicSession();
 const createServer = () => {
   const server = new McpServer({ name: "rea-codemode", version: "0.1.0" });
@@ -31,43 +42,33 @@ const createServer = () => {
       direct ? `facts_${name}` : `rea.${name}`,
     ]),
   );
-  const encode = (value) => ({
-    content: [{ type: "text", text: JSON.stringify(value) }],
-    _meta: TARGET_CONTENT_RESULT_META,
-  });
   const register = (name, description, inputSchema, handler) =>
     server.registerTool(
       name,
       { description, inputSchema, annotations: { readOnlyHint: true } },
       async (input, request) => {
         try {
-          const result = await handler(input, request.mcpReq.signal);
+          const observation = await handler(input, request.mcpReq.signal),
+            calls = observation.calls,
+            { result, reply } = encodeMcpResult(mcpPayload(name, observation));
           if (process.env.REA_ATOMIC_TRACE)
             await appendFile(
               process.env.REA_ATOMIC_TRACE,
-              JSON.stringify({ tool: name, input, result }) + "\n",
+              JSON.stringify({
+                tool: name,
+                input,
+                result:
+                  name === "execute_javascript" ? { ...result, calls } : result,
+              }) + "\n",
               { mode: 0o600 },
             );
-          if (name === "execute_javascript") {
-            const { calls, ...answer } = result;
-            return encode({
-              ...answer,
-              execution: { host_calls: calls?.length ?? 0 },
-              authority: "script-derived",
-              context: answer.context ?? null,
-            });
-          }
-          return encode(result);
+          return reply;
         } catch (error) {
-          return encode({
+          return encodeMcpResult({
             ok: false,
             context: session.context,
-            error: {
-              code: error.code ?? "analysis_failed",
-              message: error.message,
-              details: error.details ?? {},
-            },
-          });
+            error: projectFactFailure(error),
+          }).reply;
         }
       },
     );
@@ -87,14 +88,16 @@ const createServer = () => {
     "reference",
     "Discover fact methods with view:index and an empty query: returns names and short intent summaries without schemas. Then request only needed full contracts and semantics with view:contracts and exact displayed names or canonical IDs separated by spaces/commas. One topic query searches full descriptions; empty query with view:contracts returns all contracts. These are static declared methods, not live provider availability.",
     referenceInput,
-    (input) =>
-      reference(input.query, {
+    (input) => ({
+      ...reference(input.query, {
         names: apiNames,
         view: input.view,
         includeExamples: !direct,
         language: direct ? DIRECT_REFERENCE_LANGUAGE : undefined,
         execution: !direct,
       }),
+      transport_limits: { mcp_result_utf8_bytes: MAX_MCP_RESULT_BYTES },
+    }),
   );
   if (direct) {
     for (const [name, contract] of Object.entries(methods))

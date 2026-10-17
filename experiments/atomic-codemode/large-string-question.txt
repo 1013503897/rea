@@ -1,0 +1,14 @@
+Analyze {{artifact_path}} statically. It contains large encoded runs beginning
+with the exact markers REA_CAPACITY_PLAIN: and REA_CAPACITY_ESCAPED:.
+
+For each retained object, establish its address, encoding, encoded byte length,
+inclusive end address and provider-reported NUL termination. Corroborate the
+first 16 and final 8 bytes using focused loaded-image windows. Keep ambiguous
+matches and unknown discovery explicit. Do these selections share a retained
+source? Verify that a small window of that source is readable and cite real
+Evidence IDs with target and engine identity.
+
+The blob contents are irrelevant to the answer: keep full text out of model
+context and return compact metadata/hex windows. Distinguish encoded spans from
+source-level object boundaries, runtime use and live memory. No target execution.
+Close the target lease.

@@ -1,6 +1,9 @@
 import { getQuickJS } from "quickjs-emscripten";
 import { methods } from "./api.mjs";
 import { MAX_BRIDGE_BYTES as MAX_BRIDGE, EXECUTION_LIMITS } from "./limits.mjs";
+import { serializeJson } from "./json-capacity.mjs";
+import { evidenceIds, serializationFailure } from "./fact-provenance.mjs";
+import { projectFactFailure } from "./fact-error.mjs";
 
 const MAX_OUTPUT = EXECUTION_LIMITS.output_utf8_bytes;
 const failure = (code, message) => ({ ok: false, error: { code, message } });
@@ -124,18 +127,19 @@ export const executeJavaScript = async (
   };
 };
 
-const retainEvidence = (response, evidence) => {
-  const observation =
-    response.data ?? response.error?.details?.partial_observation;
-  for (const row of [observation, ...(observation?.results ?? [])]) {
-    const id =
-      row?.source?.evidence_id ??
-      row?.evidence_id ??
-      row?.error?.details?.evidence_id;
-    if (id) evidence.add(id);
-  }
-  if (response.error?.details?.evidence_id)
-    evidence.add(response.error.details.evidence_id);
+const prepareBridgeResponse = (response) => {
+  const encoded = serializeJson(response, MAX_BRIDGE);
+  if (encoded.ok) return { response, text: encoded.text };
+  const delivered = serializationFailure(
+      response,
+      encoded.error,
+      "quickjs_bridge",
+      "bridge_budget",
+    ),
+    bounded = serializeJson(delivered, MAX_BRIDGE);
+  if (!bounded.ok)
+    throw new Error("Bridge capacity diagnostic could not be encoded");
+  return { response: delivered, text: bounded.text };
 };
 
 const installBridge = (
@@ -153,6 +157,7 @@ const installBridge = (
       throw new Error("Host call or argument budget exceeded");
     const promise = vm.newPromise();
     const index = calls.length;
+    const started = performance.now();
     calls.push({
       method: name,
       input: JSON.parse(inputText),
@@ -160,42 +165,36 @@ const installBridge = (
     });
     const work = Promise.resolve()
       .then(async () => {
-        const before = performance.now();
         const response = await session.call(
           name,
           JSON.parse(inputText),
           combined,
           lease,
         );
-        retainEvidence(response, state.evidence);
-        calls[index].status = response.ok ? "ok" : "error";
-        if (!response.ok) calls[index].error = response.error;
-        calls[index].elapsed_ms = performance.now() - before;
-        let serialized = JSON.stringify(response);
-        if (Buffer.byteLength(serialized) > MAX_BRIDGE)
-          serialized = JSON.stringify({
-            ok: false,
-            error: {
-              code: "bridge_budget",
-              message:
-                "Select fewer fields or a smaller page; full source remains available via evidence",
-            },
-          });
+        for (const id of evidenceIds(response)) state.evidence.add(id);
+        const { response: delivered, text } = prepareBridgeResponse(response);
+        calls[index].status = delivered.ok ? "ok" : "error";
+        if (!delivered.ok) calls[index].error = delivered.error;
+        calls[index].elapsed_ms = performance.now() - started;
         if (!state.disposed) {
-          const value = vm.newString(serialized);
+          const value = vm.newString(text);
           promise.resolve(value);
           value.dispose();
           pump();
         }
       })
       .catch((error) => {
+        const { response, text } = prepareBridgeResponse({
+          ok: false,
+          context: session.context,
+          error: projectFactFailure(error, "bridge_failed"),
+        });
+        for (const id of evidenceIds(response)) state.evidence.add(id);
+        calls[index].status = "error";
+        calls[index].error = response.error;
+        calls[index].elapsed_ms = performance.now() - started;
         if (!state.disposed) {
-          const value = vm.newString(
-            JSON.stringify({
-              ok: false,
-              error: { code: "bridge_failed", message: error.message },
-            }),
-          );
+          const value = vm.newString(text);
           promise.resolve(value);
           value.dispose();
           pump();

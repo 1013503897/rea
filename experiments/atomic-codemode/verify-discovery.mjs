@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 import { Client } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import Ajv2020 from "ajv/dist/2020.js";
-import { EXECUTION_LIMITS } from "./limits.mjs";
+import { EXECUTION_LIMITS, MAX_MCP_RESULT_BYTES } from "./limits.mjs";
 import { methods } from "./api.mjs";
 import {
   createVerifierRun,
@@ -51,6 +51,7 @@ for (const direct of [false, true]) {
     );
     const prefix = direct ? "facts_" : "rea.";
     const ids = [
+      "strings",
       "references",
       "spaces",
       "registers",
@@ -72,6 +73,9 @@ for (const direct of [false, true]) {
     );
     assert.deepEqual(selected.unmatched_queries, []);
     assert.equal(selected.coverage.declared_methods, 19);
+    assert.deepEqual(selected.transport_limits, {
+      mcp_result_utf8_bytes: MAX_MCP_RESULT_BYTES,
+    });
     const ajv = new Ajv2020({ strict: false });
     for (const tool of catalog.tools) ajv.compile(tool.inputSchema);
     assert.equal(Object.hasOwn(selected, "limits"), !direct);
@@ -142,6 +146,11 @@ for (const direct of [false, true]) {
           ranges: [{ start: "0x0", end_inclusive: "0x1" }],
           direction: "outgoing",
         },
+      ],
+      [
+        "strings",
+        { query: "fixture", fields: [] },
+        { query: "fixture", fields: ["whole"] },
       ],
       ["spaces", { indices: [3], fields: ["kind"] }, { indices: ["3"] }],
       [

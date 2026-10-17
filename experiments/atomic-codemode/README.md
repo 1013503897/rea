@@ -40,6 +40,13 @@ takes 95.2 seconds, Code Mode 90.9. Code Mode lowers cumulative input and peak
 memory but increases uncached input and CPU. The results do not isolate the
 metadata change's performance effect; all source and usage checks are recorded.
 
+The [large-result study](large-result-study.md) verifies that paging alone does
+not bound a large field. String metadata can now be selected without text, while
+SDK full reads remain available. Shared pre-allocation JSON checks preserve
+context and Evidence on transport refusal, including in-program Code Mode
+recovery. The synthetic fixture tests capacity; it does not establish real-app
+analysis quality. Real SQLite/SSH regressions are reported separately.
+
 The [AArch64 reference study](aarch64-xref-study.md) finds and fixes missing
 ADRP-based string and memory references before the next model comparison.
 Real SDK and traditional MCP preflights now agree with independent machine
@@ -164,6 +171,12 @@ size guarantees. Sources are
 content-digested and retained until close; explicit evaluator copies survive
 close. Capacity failures are explicit, not clipped facts. Leases and snapshot
 handles prevent cross-session joins.
+
+The current experimental MCP profile also caps encoded tool-result bodies at
+1 MiB, including text escaping and metadata; JSON-RPC/client framing is separate.
+`reference.transport_limits` advertises this policy in both modes. The QuickJS
+bridge remains 2 MiB. CLI/SDK transports have their own bounds; SDK full selected
+string values remain available. Prefer `strings({query,fields:[]})` for metadata.
 
 Invocation context and observed source IDs are additional bounded receipt
 metadata; the script payload bound is not a 32 KiB whole-MCP-wire limit. A real
