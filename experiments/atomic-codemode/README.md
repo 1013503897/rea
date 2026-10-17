@@ -46,6 +46,11 @@ SDK full reads remain available. Shared pre-allocation JSON checks preserve
 context and Evidence on transport refusal, including in-program Code Mode
 recovery. The synthetic fixture tests capacity; it does not establish real-app
 analysis quality. Real SQLite/SSH regressions are reported separately.
+The subsequent real Code Mode model passes the frozen capacity task. Direct
+retrieves correct data but labels two 17-byte prefixes as 16, failing the exact
+reporting criterion. Both use metadata selection without sending full blobs.
+Code Mode uses less input but more wall time; the differing correctness and byte
+window choices prevent a matched-quality efficiency ranking. All runs remain.
 
 The [AArch64 reference study](aarch64-xref-study.md) finds and fixes missing
 ADRP-based string and memory references before the next model comparison.

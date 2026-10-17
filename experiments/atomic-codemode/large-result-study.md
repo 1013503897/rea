@@ -104,3 +104,86 @@ counters are unavailable.
 The [question](large-string-question.txt) and [oracle](large-string-oracle.md)
 are frozen before actual model trials. Keep all outcomes/costs separately. The
 old Code Mode refusal is not a successful equivalent timing baseline.
+
+## Frozen actual model trials
+
+Both isolated model runs completed at runtime
+`185bf90c417150904067eb9b3f89e69a06c2dc8e`, using the precommitted question/oracle,
+the same ELF and native engine, serially in fresh profiles/stores. Codex was
+0.161.0; requested model `gpt-6.1-sol`, reasoning `high`. The resolved remote
+model build and server compute remain unmeasured. Both have the common client
+JavaScript executor; Code Mode actually invokes the isolated MCP execution tool.
+
+The Code Mode answer passes every frozen criterion. Direct obtains correct
+metadata, byte counts, source identity and actual bytes, but its final table
+labels two **17-byte** hex prefixes as the requested first 16. It requested
+19/21-byte full-marker windows, which the provider returned correctly with
+explicit `returned_bytes`; the error occurs in answer-level slicing/reporting.
+Therefore Direct fails the exact-window reporting criterion. No model rerun or
+answer repair is substituted for that original failure.
+
+Code Mode requests 16-byte heads and nine-byte tails, then reports the required
+eight tail bytes correctly. The second tail returns only eight, with an explicit
+native note that the segment ends at exclusive `0x704002`; the answer preserves
+that partial read. Independent ELF headers corroborate the boundary. Both use
+`fields:[]` immediately: no large text is returned to model context, no capacity
+retry is needed, and both demonstrate the same retained source through a small
+Evidence read. Scripted tests, rather than these model paths, exercise recovery.
+
+All five cited IDs in each answer match actual traces and retained native records.
+All five raw files per lane pass artifact/engine identity and byte/hash checks.
+Both have one inventory capture and four byte captures. Full source values stay
+in the provider/harness, while selected MCP responses remain small. API handles
+expire on close; explicitly retained harness copies remain on disk. This is
+agent review of complete answers against the frozen oracle, not human readiness.
+
+| Whole-task metric                    |                     Direct |  Code Mode |
+| ------------------------------------ | -------------------------: | ---------: |
+| Frozen semantic result               | fail: 17 bytes labelled 16 |       pass |
+| Cumulative input tokens              |                    128,284 |    105,724 |
+| Cached input, included above         |                    114,432 |     94,464 |
+| Uncached input                       |                     13,852 |     11,260 |
+| Output tokens                        |                      2,141 |      2,602 |
+| Reasoning, included in output        |                        379 |        922 |
+| Unique model responses               |                          7 |          7 |
+| Client exec / wait calls             |                      6 / 0 |      6 / 0 |
+| MCP attempts                         |                          7 |          6 |
+| Rejected requests / capacity retries |                      0 / 0 |      0 / 0 |
+| Reference help calls                 |                          1 |          2 |
+| Fact API reads                       |                          4 |          4 |
+| Native captures                      |                          5 |          5 |
+| Model wall                           |                   51.906 s |   62.413 s |
+| Whole-family wall                    |                   52.485 s |   62.936 s |
+| Local family CPU                     |                 7.003758 s | 7.008494 s |
+| Kernel family peak                   |                  652.2 MiB |  648.8 MiB |
+
+Code Mode makes two actual `execute_javascript` requests containing four API
+reads; Direct makes four fact requests. Unique per-response token sums match
+runner summaries. Cached input and reasoning are included as labeled, not added
+twice. Both verified payload receipts show OOM=0, no abort, complete owned cleanup,
+profiles removed and unchanged artifact/engine/relevant runtime fingerprints.
+These are fresh-lease observations, not cold kernel-cache or warm-model repeats;
+remote cache state and latency remain uncontrolled.
+
+The smaller Code Mode input does not establish faster analysis: it takes longer
+wall time here, CPU is nearly identical, and the byte-window choices differ.
+Because only Code Mode passes the exact reporting criterion, costs cannot rank
+these profiles at matched answer correctness. This synthetic capacity task also
+does not establish superiority on complex applications. It demonstrates actual
+model use of the corrected selective interface and exposes a separate model
+reporting failure; the real SQLite/SSH regressions establish their narrower scopes.
+
+Answer SHA-256:
+
+- Direct: `6dc8454b87c9a0c6e2e579e7f00bc970e92e5b7ef5586378ee1db4ba23e2212d`
+- Code Mode: `ee8386d9d27210d5b862b5d6d9a067c4f6058eb5940415f47e0f5a9dbe9a8d34`
+
+Local artifact SHA-256 (raw provider documents are uncommitted):
+
+- `large-string-model-costs.json`: `6d85d001d5233a92aa3a6efdd3942d4e89c1bfb244eb955adb708a15c194dd6d`
+- `large-string-answer-review.json`: `b7453d6bc77ae85a208aa70340db1b72ad6612606b2e008b9303388bdb59c26f`
+- `large-string-direct-v1.log`: `4673f3f478294925ec8c7c641e55f6e5c631f1ad235d04c2a4dc7383e857f9ce`
+- `large-string-codemode-v1.log`: `8d19907adb44d1a3e7c5d1959e9187f105294c4396b9d550aa60481f848f272a`
+- `capacity-before-sdk.log`: `738424765c116728fbf134b69738023628ff06462525dc67cf509526604017e7`
+- `capacity-before-v2-direct.log`: `0ba462c0d79f90fed6bad1b2116136fb5d54e95420bfbc1abf2c0b53142c574e`
+- `capacity-before-v2-codemode.log`: `fad93da28b481481f7c386b3c7ed7e801da19edb9d541730bce77a9bde1b1ee3`

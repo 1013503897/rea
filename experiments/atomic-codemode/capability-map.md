@@ -41,6 +41,15 @@ operation needs its snapshot and representation. One small JSON row is not
 automatically one independently meaningful fact. Machine instructions and
 normalized operations also cannot substitute for each other.
 
+An identified object may still contain a huge field. The [capacity study](large-result-study.md)
+adds string metadata selection and pre-allocation transport accounting with
+recoverable source handles. Real SDK/MCP checks cover both escaping layers and
+in-program recovery. In the frozen model pair, Code Mode passes; Direct reports
+17-byte prefixes as 16 despite correct provider data. Preserve that failure;
+the pair cannot rank efficiency at matched correctness. Native capture still
+reads the complete bounded inventory, so small replies alone do not establish
+scalable producer work.
+
 Selection, projection, batching, paging and bounded traversal compose those
 facts. The analysis owner derives/validates relations; Code Mode selects and
 combines them. A query can be fine-grained even when its fresh native capture
