@@ -231,10 +231,11 @@ def main():
         )
     if args.guide_enabled_tools:
         instruction += (
-            ' Configured REA tool function names for this trial: '
-            + json.dumps(['mcp__rea__' + name for name in enabled_tools])
-            + '. For discovery select only these exact names from ALL_TOOLS and '
-            'return only their metadata. Preserve the original analyst question, '
+            ' Configured REA server label: ' + json.dumps(args.server_name)
+            + '. Enabled tool base names for this trial: ' + json.dumps(enabled_tools)
+            + '. Discover their actual registered callable names from ALL_TOOLS metadata; '
+            'do not construct a namespace from the server label. Select only matching '
+            'enabled base names and return only their metadata. Preserve the original analyst question, '
             'dependency order and source Evidence.'
         )
     if args.guide_long_waits:
