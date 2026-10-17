@@ -35,6 +35,10 @@ termination as true/false/unknown through the shared domain and public output
 contract. Real canonical MCP, SDK, Direct, Code Mode and CLI checks retain both
 NUL-terminated strings and a nonterminated printable run without length-based
 agent inference. The old coarse descriptor remains compatible.
+Both fresh real models complete the same frozen task after this repair: Direct
+takes 95.2 seconds, Code Mode 90.9. Code Mode lowers cumulative input and peak
+memory but increases uncached input and CPU. The results do not isolate the
+metadata change's performance effect; all source and usage checks are recorded.
 
 The [AArch64 reference study](aarch64-xref-study.md) finds and fixes missing
 ADRP-based string and memory references before the next model comparison.

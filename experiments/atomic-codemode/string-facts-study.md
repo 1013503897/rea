@@ -82,6 +82,77 @@ remains unresolved by this precision fix. Selected lookup and serialization
 bounds still need exploration. Full Evidence remains retained within the lease;
 explicit harness copies remain on disk after close.
 
-The same frozen pooled-string question and oracle will be used for the next
-real Direct/Code Mode check. Record its outcomes separately rather than
-attributing any timing difference to this small metadata change alone.
+## Actual model check after the fix
+
+Both fresh isolated model trials completed at runtime commit
+`04e0959de4b1fe35feec784faa1252ba22e368ea`, using the same frozen
+`sqlite-string-span-question.txt` and `string-span-oracle.md` as before.
+The immutable engine and target remained pinned above. Codex was 0.161.0,
+requested model `gpt-6.1-sol`, reasoning `high`; the resolved remote build and
+server compute remain unmeasured. Direct ran first, then Code Mode, one CPU,
+fresh profiles/stores, default 3 GiB early stop. Both use the common client
+JavaScript executor; the actual catalogs still have 22 / 4 tools over 19 methods.
+
+Every complete answer was reviewed against the frozen semantic criteria. Both
+retain all eleven occurrences/owners and all four offset/count groups, correctly
+separate suffixes from full-string use, and establish the RDX transfer, `R13D & 1`
+selection, alternate text, RSI format and error call with necessary unknowns.
+Both receive the new precise NUL fields in real MCP responses and corroborate
+the selected terminators with loaded bytes. This question still asks for byte
+verification; the new metadata does not eliminate that requirement. No recovered
+IR or target execution was used.
+
+All 12 / 11 cited source IDs were verified against actual traces, target/engine
+identity and all 13 / 14 captured raw hashes respectively. Both cited source sets
+contain the eight essential machine encodings; their complete native xref row
+arrays are identical. API handles expire on close, while explicit harness capture
+files remain on disk. This is an agent review, not human PR readiness.
+
+| Whole-task metric             |      Direct |   Code Mode |
+| ----------------------------- | ----------: | ----------: |
+| Cumulative input tokens       |     224,760 |     189,774 |
+| Cached input, included above  |     202,496 |     158,976 |
+| Uncached input                |      22,264 |      30,798 |
+| Output tokens                 |       4,574 |       4,483 |
+| Reasoning, included in output |       1,037 |       1,022 |
+| Unique model responses        |          10 |          10 |
+| Client exec / wait            |       9 / 0 |       9 / 0 |
+| MCP attempts                  |          12 |           9 |
+| Rejected calls                |           0 |           0 |
+| Reference help calls          |           1 |           2 |
+| Fact API reads                |           9 |           9 |
+| Native captures               |          13 |          14 |
+| Model wall                    |    95.169 s |    90.908 s |
+| Whole family wall             |    95.667 s |    91.442 s |
+| Local family CPU              | 11.331878 s | 11.989352 s |
+| Kernel family peak            |   607.3 MiB |   561.4 MiB |
+
+Unique per-response usage totals match the runner summaries. Cached input and
+reasoning are included as labeled, not additional totals. Both verified
+payload-exit receipts report OOM=0, cleanup complete, no abort, profiles removed,
+and unchanged target, engine and relevant runtime fingerprints. Local memory
+includes file cache; remote cache state and latency are uncontrolled. These are
+fresh-lease tasks, not cold kernel-cache or warm-model repeat measurements.
+
+Code Mode executes nine API reads within five actual `execute_javascript` MCP
+requests. Native work differs: Direct captures six byte windows and four
+instruction windows; Code Mode captures five and six. Code Mode uses 15.6% less
+cumulative input and 4.5% less model wall, but 38.3% more uncached input and 5.8%
+more local CPU, with 7.6% less peak memory. The comparison does not isolate adapter
+overhead or attribute changes from the earlier trial to this metadata fix; main,
+model choices, cache usage and window selections also differ. It establishes
+correct actual model use after the representation repair, not a stable advantage
+or broad complex-software superiority.
+
+Answer SHA-256:
+
+- Direct: `d73e1b743bb3064f4087d4b1b809334bebf9f6263e93530e4b6c5e82bbf6455a`
+- Code Mode: `54173f190e184d0008c781ee96a2a6ddff05dfa580d099c0c87863dba29fa5f4`
+
+Local artifact SHA-256 (raw provider documents remain uncommitted):
+
+- `nul-model-costs.json`: `b64472e78d5c61f4c86d50bd945116752fe2a84b576e747bd488d569e302765e`
+- `nul-answer-review.json`: `5ed65635c31a5dd3bedeb700314424af8fdd08e11657ced00ed59e2bf576358e`
+- `nul-answer-checks.json`: `74a8b1c5012500020eeb44b014c612751cd6191ef2c922a9e25937d5cf22dde9`
+- `sqlite-nul-direct-v1.log`: `85c495754f96cfaaf44f973bec44f2021f35685b11ff01c7c4baf62959ab8fca`
+- `sqlite-nul-codemode-v1.log`: `62be30f49a492c824da128e4157dd4537e99dfa72e2c4ec2e3cae8db4179129e`
