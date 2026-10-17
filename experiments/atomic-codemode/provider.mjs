@@ -2,6 +2,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { NativeSourceStore } from "./native-source-store.mjs";
+import { NativeCaptureCache } from "./native-capture-cache.mjs";
 import { parseBinaryTarget } from "../../dist/application/BinaryTargetResolver.js";
 import { inspectNativeInstallation } from "./native-installation.mjs";
 import { KunaTargetCommands } from "../../dist/kuna/KunaTargetCommands.js";
@@ -35,7 +36,7 @@ const missingNativeFacet = () => ({
 export class KunaFactOwner {
   #lifetime = new AbortController();
   #snapshots = new Map();
-  #work = new Map();
+  #work = new NativeCaptureCache();
   #loaded = new Map();
   #root;
   #sourceFiles;
@@ -122,16 +123,10 @@ export class KunaFactOwner {
     });
     return owner;
   }
-  async #native(key, arguments_, signal, readerFactory) {
-    if (this.#work.has(key)) return this.#work.get(key);
-    const work = this.#capture(arguments_, signal, readerFactory);
-    this.#work.set(key, work);
-    try {
-      return await work;
-    } catch (error) {
-      this.#work.delete(key);
-      throw error;
-    }
+  #native(key, arguments_, signal, readerFactory) {
+    return this.#work.read(key, () =>
+      this.#capture(arguments_, signal, readerFactory),
+    );
   }
   async #capture(arguments_, signal, readerFactory) {
     const start = performance.now();

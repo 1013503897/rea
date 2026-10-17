@@ -59,6 +59,11 @@ Both real models now complete the FFmpeg task with all cited raw captures
 verified. Code Mode uses less cumulative input but more uncached input and time.
 The study also retains two evaluator namespace failures and their full costs;
 the corrected pair uses actual registered tool discovery.
+The [refusal-cache study](capacity-refusal-study.md) then avoids repeated native
+work for proven immutable source-budget failures. Real SDK and both MCP adapters
+verify reuse and readable partial Evidence; cancellation/cleanup uncertainty
+remain uncached. The first Code Mode precondition failure and its cost remain in
+the record. Larger-target inventory coverage is still unresolved.
 
 The [AArch64 reference study](aarch64-xref-study.md) finds and fixes missing
 ADRP-based string and memory references before the next model comparison.

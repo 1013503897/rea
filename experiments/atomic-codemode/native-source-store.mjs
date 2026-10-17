@@ -2,13 +2,13 @@
 import { createHash, randomUUID } from "node:crypto";
 import { open, rm, writeFile, copyFile, mkdir, stat } from "node:fs/promises";
 import { constants } from "node:fs";
-import { MAX_RETAINED_SOURCE_BYTES } from "./limits.mjs";
 import { join } from "node:path";
 import { Writable } from "node:stream";
 import { StringDecoder } from "node:string_decoder";
 import { ArtifactResourceScope } from "../../dist/artifacts/ArtifactResourceScope.js";
 import { OwnedFileHandle } from "../../dist/filesystem/OwnedFileHandle.js";
 import { FactFailure, projectFactFailure } from "./fact-error.mjs";
+import { MAX_RETAINED_SOURCE_BYTES, MAX_NATIVE_SOURCES } from "./limits.mjs";
 
 const cleanupFailure = (cause, primary) => {
   const failure = projectFactFailure(
@@ -129,7 +129,7 @@ export class NativeSourceStore {
   }
   async spool(limit, reader) {
     if (this.#copyFailure) throw this.#copyFailure;
-    if (this.size >= 128)
+    if (this.size >= MAX_NATIVE_SOURCES)
       throw new FactFailure(
         "capacity",
         "Session source capacity reached; close and reopen the target",

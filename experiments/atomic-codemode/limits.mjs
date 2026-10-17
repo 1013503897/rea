@@ -1,4 +1,5 @@
 // Shared application resource policy, independent of native wire formats.
+export const MAX_NATIVE_SOURCES = 128;
 export const MAX_RETAINED_SOURCE_BYTES = 64 * 1024 * 1024;
 export const NATIVE_OUTPUT_BYTES = 8 * 1024 * 1024;
 export const MAX_BRIDGE_BYTES = 2 * 1024 * 1024;
