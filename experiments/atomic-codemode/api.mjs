@@ -111,7 +111,7 @@ export const methods = {
       summary:
         "Search retained encoded strings by literal text; discovery and reference attribution remain unknown.",
       description:
-        "Search retained string inventory by literal text. Paging does not establish artifact completeness.",
+        "Search retained string inventory by literal text. Encoded byte lengths and provider-reported NUL termination are preserved when known; omitted NUL status is unknown. A false NUL status makes no claim about bytes outside that span. Paging does not establish artifact completeness.",
     },
     { query: z.string(), ...page },
     "strings",

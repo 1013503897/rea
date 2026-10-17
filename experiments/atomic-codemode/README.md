@@ -30,6 +30,12 @@ less cumulative input but more uncached input and peak memory than Direct.
 Traditional's full inventory is truncated by the client; one original cited
 payload remains only partially auditable. The study preserves that limitation.
 
+The [string-fact precision study](string-facts-study.md) preserves native NUL
+termination as true/false/unknown through the shared domain and public output
+contract. Real canonical MCP, SDK, Direct, Code Mode and CLI checks retain both
+NUL-terminated strings and a nonterminated printable run without length-based
+agent inference. The old coarse descriptor remains compatible.
+
 The [AArch64 reference study](aarch64-xref-study.md) finds and fixes missing
 ADRP-based string and memory references before the next model comparison.
 Real SDK and traditional MCP preflights now agree with independent machine

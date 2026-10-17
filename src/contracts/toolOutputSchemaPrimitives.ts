@@ -6,6 +6,7 @@ import {
   localVariableSchema,
   functionDossierSchema,
   functionBodySchema,
+  analysisStringSchema,
 } from "../domain/hopperValues.js";
 import { analysisProfileSchema } from "../domain/analysisProfile.js";
 import {
@@ -573,8 +574,7 @@ const availableMemoryPermissions = z.object({
 });
 
 export const addressedValue = z.object({
-  address: z.string(),
-  value: z.string(),
+  ...analysisStringSchema.shape,
   symbol: z
     .object({
       primary: z.boolean(),
@@ -589,13 +589,6 @@ export const addressedValue = z.object({
       external: z.boolean(),
       thunk: z.boolean(),
       thunk_target: z.string().nullable(),
-    })
-    .optional(),
-  string: z
-    .object({
-      encoding: z.string(),
-      termination: z.enum(["missing", "present_or_not_required"]),
-      byte_length: z.number().int().min(0),
     })
     .optional(),
 });

@@ -65,6 +65,7 @@ it("preserves exact u64 string identity, multiline text and typed source facts",
             encoding: "utf8",
             encoding_status: "observed",
             termination: "present_or_not_required",
+            nul_terminated: true,
             byte_length: 9,
           },
         },
@@ -225,7 +226,10 @@ it.each([
     ok: true,
     value: {
       items: [
-        { value: facts.text, string: { byte_length: facts.byte_length } },
+        {
+          value: facts.text,
+          string: { byte_length: facts.byte_length, nul_terminated: true },
+        },
       ],
     },
   });

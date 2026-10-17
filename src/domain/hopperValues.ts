@@ -79,6 +79,12 @@ export const analysisStringSchema = z.object({
           "Whether the provider declares the encoding or REA infers it from the typed bytes and native display. This does not establish the original source's intended encoding.",
         ),
       termination: z.enum(["missing", "present_or_not_required"]),
+      nul_terminated: z
+        .boolean()
+        .exactOptional()
+        .describe(
+          "Whether the provider observed a NUL code unit terminating this encoded span. Omitted means unknown; false makes no claim about bytes outside the span.",
+        ),
       byte_length: z.number().int().min(0),
     })
     .exactOptional(),

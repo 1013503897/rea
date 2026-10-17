@@ -120,6 +120,7 @@ try {
     const string = matches[0];
     assert.equal(string.string.encoding, "ascii");
     assert.equal(string.string.byte_length, 14);
+    assert.equal(string.string.nul_terminated, true);
     ranges.push({
       start: string.address,
       end_inclusive: `0x${(BigInt(string.address) + BigInt(string.string.byte_length) - 1n).toString(16)}`,
@@ -196,6 +197,23 @@ try {
     bytes.results.map((r) => Buffer.from(r.hex, "hex").toString("ascii")),
     ["no such table\0", "sqlite_schema\0"],
   );
+  // A real .rodata printable run is not necessarily a NUL-terminated literal.
+  const runText = "aceinouyyacdeeghijklnorstuuwyzouaiou";
+  const runs = await read("strings", { query: runText, limit: 128 });
+  const selectedRun = runs.items.filter((r) => r.address === "0x11ee21");
+  assert.equal(selectedRun.length, 1);
+  assert.equal(selectedRun[0].value, runText);
+  assert.equal(selectedRun[0].string.nul_terminated, false);
+  assert.equal(selectedRun[0].string.byte_length, runText.length);
+  const runBytes = await read("bytes", {
+    windows: [{ address: "0x11ee21", length: runText.length + 1 }],
+  });
+  const encodedRun = Buffer.from(runBytes.results[0].hex, "hex");
+  assert.equal(
+    encodedRun.subarray(0, runText.length).toString("ascii"),
+    runText,
+  );
+  assert.notEqual(encodedRun.at(-1), 0);
   const machine = await read("instructions", {
     windows: [
       { address: "0x2d706", count: 6 },

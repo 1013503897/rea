@@ -43,11 +43,51 @@ const schemaNode = (
   return { ...record(referenced), ...schema };
 };
 
+const verifyStringOutput = (
+  name: "list_strings" | "search_strings",
+  validate: (value: unknown) => unknown,
+) => {
+  const canonical = toolContract(name).outputSchema.shape.normalized_result;
+  const facts = {
+    address: "0x1000",
+    value: "hello",
+    provider_value: '"hello"',
+    string: {
+      encoding: "ascii",
+      encoding_status: "observed",
+      termination: "present_or_not_required",
+      byte_length: 6,
+    },
+  };
+  for (const status of [true, false, undefined]) {
+    const rows = [
+      {
+        ...facts,
+        string: {
+          ...facts.string,
+          ...(status === undefined ? {} : { nul_terminated: status }),
+        },
+      },
+    ];
+    expect(canonical.parse(rows)).toEqual(rows);
+    expect(validate(rows)).toBe(true);
+  }
+  for (const malformed of [null, "false", 0]) {
+    const rows = [
+      { ...facts, string: { ...facts.string, nul_terminated: malformed } },
+    ];
+    expect(canonical.safeParse(rows).success).toBe(false);
+    expect(validate(rows)).toBe(false);
+  }
+};
+
 it("advertises semantic output invariants and keeps producers aligned with Zod", async () => {
   const contracts = [
     toolContract("capture_native_ui_scenario"),
     toolContract("capture_process_scenario"),
     toolContract("verify_managed_native_boundaries"),
+    toolContract("list_strings"),
+    toolContract("search_strings"),
   ];
   const server = new McpServer({
     name: "output-schema-semantics",
@@ -95,6 +135,9 @@ it("advertises semantic output invariants and keeps producers aligned with Zod",
         }).compile(standaloneResultSchema),
       };
     };
+
+    for (const name of ["list_strings", "search_strings"] as const)
+      verifyStringOutput(name, outputResultSchema(name).validate);
 
     const native = outputResultSchema("capture_native_ui_scenario");
     const initial = native.node(record(native.result.properties).initial);

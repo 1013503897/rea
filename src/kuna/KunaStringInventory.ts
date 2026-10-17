@@ -159,6 +159,7 @@ export class KunaStringInventoryReader extends KunaJsonDocumentReader<KunaString
         termination: entry.nul_terminated
           ? "present_or_not_required"
           : "missing",
+        nul_terminated: entry.nul_terminated,
         byte_length: entry.byte_length,
       },
     });
