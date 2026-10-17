@@ -24,6 +24,11 @@ queries for encoded object spans and independently verifies pooled suffix
 references on real SQLite. The same native sparse range index serves Kuna's
 existing string aggregates. Equivalent cold occurrence retrieval falls from
 48.1 to 1.8 seconds; this is shared analysis reuse, not a Code Mode result.
+The subsequent frozen real-model runs all answer the selected task correctly:
+traditional takes 315.6 seconds, Direct 102.3 and Code Mode 93.6. Code Mode uses
+less cumulative input but more uncached input and peak memory than Direct.
+Traditional's full inventory is truncated by the client; one original cited
+payload remains only partially auditable. The study preserves that limitation.
 
 The [AArch64 reference study](aarch64-xref-study.md) finds and fixes missing
 ADRP-based string and memory references before the next model comparison.

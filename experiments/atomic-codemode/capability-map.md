@@ -28,6 +28,11 @@ SQLite data occurrences, including nine pooled suffix pointers, with individual
 endpoints/owners and raw source rows. Kuna already had aggregate string-span
 counts; the new occurrence query shares its sparse index. Range membership alone
 does not establish whole-string use, access overlap or runtime behavior.
+Three real models complete the pooled-string task. The traditional original
+inventory has a partial source audit after client truncation; atomic source
+captures are fully checked. Code Mode's cumulative input/time improve in this
+sample, while uncached input and memory exceed Direct. This remains task evidence,
+not provider parity or a stable adapter advantage.
 
 The useful grain so far is an identified object plus a relation with its exact
 qualifiers: an operand needs its slot and PHI binding; a case/out-edge pair needs
