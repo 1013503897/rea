@@ -119,18 +119,24 @@ export const inspectDesktopFile = async (
   if (
     prefix.length >= 16 &&
     prefix.toString("latin1", 0, 4) === "FORM" &&
-    prefix.toString("latin1", 8, 12) === "GEN8" &&
-    prefix.readUInt32LE(4) <= size - 8 &&
-    prefix.readUInt32LE(12) <= size - 16
-  )
-    fact({
-      kind: "gamemaker-form-header",
-      offset: 0,
-      value: {
-        container: "FORM",
-        first_chunk: "GEN8",
-      },
-    });
+    prefix.toString("latin1", 8, 12) === "GEN8"
+  ) {
+    const containerBytes = prefix.readUInt32LE(4);
+    const chunkBytes = prefix.readUInt32LE(12);
+    if (
+      containerBytes >= 8 &&
+      containerBytes <= size - 8 &&
+      chunkBytes <= containerBytes - 8
+    )
+      fact({
+        kind: "gamemaker-form-header",
+        offset: 0,
+        value: {
+          container: "FORM",
+          first_chunk: "GEN8",
+        },
+      });
+  }
   if (
     prefix.length >= 16 &&
     prefix.toString("latin1", 0, 16) === "-==--==--==--==-"

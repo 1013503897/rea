@@ -285,37 +285,40 @@ it("retains an entry whose close failed and observes cancellation after final cl
   await cancelled.close();
 });
 
-it("does not classify an ordinary managed assembly as Unity, and reports a metadata budget refusal as partial", async () => {
-  const root = await createTestTempDirectory("rea-desktop-mono-boundary-");
-  await put(
-    root,
-    "Game_Data/Managed/ordinary.dll",
-    buildManagedPeFixture({ references: ["System.Runtime"] }),
-  );
-  const ordinary = await inspect(root);
-  expect(ordinary.report.candidates.map((row) => row.family)).toEqual([
-    "dotnet",
-  ]);
-  await put(
-    root,
-    "Game_Data/Managed/unity.dll",
-    buildManagedPeFixture({
-      references: ["UnityEngine.CoreModule", "System.Runtime"],
-      additionalEmptyTypes: 5000,
-    }),
-  );
-  const bounded = await inspect(root, { max_probe_bytes: 4096 });
-  expect(bounded.report.coverage.status).toBe("partial");
-  expect(bounded.report.coverage.bytes_read).toBeLessThanOrEqual(4096);
-  expect(bounded.report.candidates.map((row) => row.family)).not.toContain(
-    "unity-mono",
-  );
-  expect(
-    bounded.report.files.some((file) =>
-      file.issues.some((issue) => issue.includes("budget")),
-    ),
-  ).toBe(true);
-});
+it.each(["Game_Data/Managed", "Contents/Resources/Data/Managed"])(
+  "requires a Unity reference in %s and reports a metadata budget refusal as partial",
+  async (managedDirectory) => {
+    const root = await createTestTempDirectory("rea-desktop-mono-boundary-");
+    await put(
+      root,
+      `${managedDirectory}/ordinary.dll`,
+      buildManagedPeFixture({ references: ["System.Runtime"] }),
+    );
+    const ordinary = await inspect(root);
+    expect(ordinary.report.candidates.map((row) => row.family)).toEqual([
+      "dotnet",
+    ]);
+    await put(
+      root,
+      `${managedDirectory}/unity.dll`,
+      buildManagedPeFixture({
+        references: ["UnityEngine.CoreModule", "System.Runtime"],
+        additionalEmptyTypes: 5000,
+      }),
+    );
+    const bounded = await inspect(root, { max_probe_bytes: 4096 });
+    expect(bounded.report.coverage.status).toBe("partial");
+    expect(bounded.report.coverage.bytes_read).toBeLessThanOrEqual(4096);
+    expect(bounded.report.candidates.map((row) => row.family)).not.toContain(
+      "unity-mono",
+    );
+    expect(
+      bounded.report.files.some((file) =>
+        file.issues.some((issue) => issue.includes("budget")),
+      ),
+    ).toBe(true);
+  },
+);
 
 it("retains complete observations through cancellation during directory finalization", async () => {
   const root = await createTestTempDirectory("rea-desktop-finalize-cancel-");
@@ -559,44 +562,101 @@ it.each([false, true])(
   },
 );
 
-it("reads AssemblyRef names independently of unrelated key/hash payload validity", async () => {
-  const root = await createTestTempDirectory("rea-desktop-reference-fields-");
-  const image = buildManagedPeFixture({
-    references: ["System.Runtime", "UnityEngine.CoreModule"],
-  });
-  const metadataOffset = image.indexOf(Buffer.from("BSJB"));
-  const layout = readManagedMetadataLayout(
-    image,
-    metadataOffset,
-    image.length - metadataOffset,
+it.each([
+  "Game_Data/Managed",
+  "Contents/Resources/Data/Managed",
+  "Nested/Game.app/Contents/Resources/Data/Managed",
+])(
+  "reads AssemblyRef names in %s independently of unrelated key/hash payload validity",
+  async (managedDirectory) => {
+    const root = await createTestTempDirectory("rea-desktop-reference-fields-");
+    const image = buildManagedPeFixture({
+      references: ["System.Runtime", "UnityEngine.CoreModule"],
+    });
+    const metadataOffset = image.indexOf(Buffer.from("BSJB"));
+    const layout = readManagedMetadataLayout(
+      image,
+      metadataOffset,
+      image.length - metadataOffset,
+    );
+    const reference = layout.table(35)!;
+    // ECMA-335 AssemblyRef: 8 version bytes, 4 flag bytes, then PublicKeyOrToken.
+    // Keep its name valid while making that unrelated blob index invalid.
+    if (layout.blobIndexSize === 2)
+      image.writeUInt16LE(0xffff, reference.offset + 12);
+    else image.writeUInt32LE(0xffff_ffff, reference.offset + 12);
+    expect(() =>
+      readAssemblyReference(image, layout, 1, layout.blob.size),
+    ).toThrow();
+    await put(root, `${managedDirectory}/Assembly-CSharp.dll`, image);
+    const { report } = await inspect(root);
+    expect(report.candidates.map((candidate) => candidate.family)).toEqual([
+      "dotnet",
+      "unity-mono",
+    ]);
+    expect(
+      report.files.find((file) => file.kind === "file")?.facts,
+    ).toContainEqual({
+      kind: "unity-assembly-reference",
+      offset: expect.any(Number),
+      value: {
+        name: "UnityEngine.CoreModule",
+        token: "0x23000002",
+        managed_directory: managedDirectory,
+      },
+    });
+  },
+);
+
+it.each([
+  "Data/Managed",
+  "Other/Resources/Data/Managed",
+  "Contents/Resource/Data/Managed",
+])("does not infer Unity from an unrelated layout %s", async (directory) => {
+  const root = await createTestTempDirectory("rea-desktop-unity-layout-");
+  await put(
+    root,
+    `${directory}/Assembly-CSharp.dll`,
+    buildManagedPeFixture({ references: ["UnityEngine.CoreModule"] }),
   );
-  const reference = layout.table(35)!;
-  // ECMA-335 AssemblyRef: 8 version bytes, 4 flag bytes, then PublicKeyOrToken.
-  // Keep its name valid while making that unrelated blob index invalid.
-  if (layout.blobIndexSize === 2)
-    image.writeUInt16LE(0xffff, reference.offset + 12);
-  else image.writeUInt32LE(0xffff_ffff, reference.offset + 12);
-  expect(() =>
-    readAssemblyReference(image, layout, 1, layout.blob.size),
-  ).toThrow();
-  await put(root, "Game_Data/Managed/Assembly-CSharp.dll", image);
   const { report } = await inspect(root);
   expect(report.candidates.map((candidate) => candidate.family)).toEqual([
     "dotnet",
-    "unity-mono",
   ]);
-  expect(
-    report.files.find((file) => file.kind === "file")?.facts,
-  ).toContainEqual({
-    kind: "unity-assembly-reference",
-    offset: expect.any(Number),
-    value: {
-      name: "UnityEngine.CoreModule",
-      token: "0x23000002",
-      managed_directory: "Game_Data/Managed",
-    },
-  });
 });
+
+it.each([
+  { container: 8, chunk: 0, bytes: 16, valid: true },
+  { container: 16, chunk: 8, bytes: 32, valid: true },
+  { container: 0, chunk: 0, bytes: 16, valid: false },
+  { container: 7, chunk: 0, bytes: 16, valid: false },
+  { container: 8, chunk: 1, bytes: 17, valid: false },
+  { container: 12, chunk: 8, bytes: 24, valid: false },
+  { container: 17, chunk: 8, bytes: 24, valid: false },
+  { container: 16, chunk: 9, bytes: 25, valid: false },
+  { container: 8, chunk: 0xffff_ffff, bytes: 16, valid: false },
+])(
+  "requires GEN8 within FORM and the file: $container/$chunk/$bytes (valid=$valid)",
+  async ({ container, chunk, bytes, valid }) => {
+    const root = await createTestTempDirectory("rea-desktop-form-extents-");
+    const form = Buffer.alloc(bytes);
+    form.write("FORM");
+    form.writeUInt32LE(container, 4);
+    form.write("GEN8", 8);
+    form.writeUInt32LE(chunk, 12);
+    await put(root, "data.win", form);
+    const { report } = await inspect(root);
+    expect(report.candidates.map((candidate) => candidate.family)).toEqual(
+      valid ? ["gamemaker"] : [],
+    );
+    expect(
+      report.files
+        .find((file) => file.path === "data.win")
+        ?.facts.some((fact) => fact.kind === "gamemaker-form-header"),
+    ).toBe(valid);
+    expect(report.coverage.status).toBe("complete-within-scan");
+  },
+);
 
 it("compares exact signature bytes without masking high bits in engine headers or trailers", async () => {
   const root = await createTestTempDirectory("rea-desktop-exact-signatures-");

@@ -52,10 +52,14 @@ export const desktopPathConventions = (path: string) => {
   let unityManagedDirectory: string | null = null;
   for (let index = 0; index + 2 < folded.length; index++) {
     const segment = folded[index];
+    const namedDataDirectory =
+      segment !== undefined && segment.length > 5 && segment.endsWith("_data");
+    const bundleDataDirectory =
+      segment === "data" &&
+      folded[index - 1] === "resources" &&
+      folded[index - 2] === "contents";
     if (
-      segment !== undefined &&
-      segment.length > 5 &&
-      segment.endsWith("_data") &&
+      (namedDataDirectory || bundleDataDirectory) &&
       folded[index + 1] === "managed"
     )
       unityManagedDirectory = segments.slice(0, index + 2).join("/");
