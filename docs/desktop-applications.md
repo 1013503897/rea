@@ -67,15 +67,15 @@ same bundle. Export writes only the caller-selected output file.
 
 ## Facts and uncertainty
 
-| Family       | Evidence used                                                                                                                             |
-| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| .NET         | A PE optional header declares a nonempty CLI directory.                                                                                   |
-| Unity Mono   | A managed assembly below `*_Data/Managed` has an exact UnityEngine assembly reference.                                                    |
-| Unity IL2CPP | An IL2CPP metadata header coexists with a conventionally named native GameAssembly/libil2cpp image. Build correspondence remains unknown. |
-| Godot        | A `GDPC` header at file start or a validated executable trailer offset.                                                                   |
-| GameMaker    | A bounded `FORM` container starts with a `GEN8` chunk.                                                                                    |
-| Unreal       | `Content/Paks` path conventions or an IoStore TOC signature; arbitrary `.pak` filenames are insufficient.                                 |
-| Electron     | A `resources/app.asar` or `resources/default_app.asar` path convention; archive validity is unverified.                                   |
+| Family       | Evidence used                                                                                                                                                                                    |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| .NET         | A PE optional header declares a nonempty CLI directory.                                                                                                                                          |
+| Unity Mono   | A managed assembly below `*_Data/Managed` has an exact UnityEngine assembly reference.                                                                                                           |
+| Unity IL2CPP | An IL2CPP metadata header coexists with a conventionally named native `GameAssembly.dll`, `GameAssembly.so`, `GameAssembly.dylib` or `libil2cpp.so` image. Build correspondence remains unknown. |
+| Godot        | A `GDPC` header at file start or a validated executable trailer offset.                                                                                                                          |
+| GameMaker    | A bounded `FORM` container starts with a `GEN8` chunk.                                                                                                                                           |
+| Unreal       | `Content/Paks` path conventions or an IoStore TOC signature; arbitrary `.pak` filenames are insufficient.                                                                                        |
+| Electron     | A `resources/app.asar` or `resources/default_app.asar` path convention; archive validity is unverified.                                                                                          |
 
 Candidates are derived or inferred from these facts and do not prove loading or
 execution. BepInEx, MelonLoader, Easy Anti-Cheat and BattlEye labels identify

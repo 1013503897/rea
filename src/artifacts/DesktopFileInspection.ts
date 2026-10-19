@@ -1,5 +1,6 @@
 import type { FileHandle } from "node:fs/promises";
 import { createHash } from "node:crypto";
+import { setImmediate } from "node:timers/promises";
 import type { DesktopFile, DesktopFact } from "../domain/desktopApplication.js";
 import { parsePeRecord, peRvaToFileOffset } from "../domain/binaryTarget.js";
 import { readManagedMetadataLayout } from "../dotnet/ManagedMetadataLayout.js";
@@ -101,7 +102,7 @@ export const inspectDesktopFile = async (
         raw_version: prefix.readUInt32LE(4),
       },
     });
-  if (prefix.length >= 20 && prefix.toString("ascii", 0, 4) === "GDPC")
+  if (prefix.length >= 20 && prefix.toString("latin1", 0, 4) === "GDPC")
     fact({
       kind: "godot-pck-header",
       offset: 0,
@@ -117,8 +118,8 @@ export const inspectDesktopFile = async (
     });
   if (
     prefix.length >= 16 &&
-    prefix.toString("ascii", 0, 4) === "FORM" &&
-    prefix.toString("ascii", 8, 12) === "GEN8" &&
+    prefix.toString("latin1", 0, 4) === "FORM" &&
+    prefix.toString("latin1", 8, 12) === "GEN8" &&
     prefix.readUInt32LE(4) <= size - 8 &&
     prefix.readUInt32LE(12) <= size - 16
   )
@@ -132,7 +133,7 @@ export const inspectDesktopFile = async (
     });
   if (
     prefix.length >= 16 &&
-    prefix.toString("ascii", 0, 16) === "-==--==--==--==-"
+    prefix.toString("latin1", 0, 16) === "-==--==--==--==-"
   )
     fact({
       kind: "unreal-container-convention",
@@ -168,7 +169,7 @@ export const inspectDesktopFile = async (
   };
   if (prefix.length === 64 && prefix.readUInt16LE(0) === 0x5a4d)
     await observe(() =>
-      inspectPeFile(prefix, row, read, fact, unityManagedDirectory),
+      inspectPeFile(prefix, row, read, fact, unityManagedDirectory, signal),
     );
   if (
     (native || (prefix.length >= 2 && prefix.readUInt16LE(0) === 0x5a4d)) &&
@@ -186,10 +187,11 @@ const inspectPeFile = async (
   read: DesktopByteRead,
   fact: RecordDesktopFact,
   unityManagedDirectory: string | null,
+  signal?: AbortSignal,
 ): Promise<void> => {
   const peOffset = prefix.readUInt32LE(0x3c);
   const coff = await read(peOffset, 24);
-  if (coff.toString("binary", 0, 4) !== "PE\0\0") return;
+  if (coff.toString("latin1", 0, 4) !== "PE\0\0") return;
   const optionalSize = coff.readUInt16LE(20);
   if (optionalSize > 4096)
     throw new ArtifactReaderFailure(
@@ -252,6 +254,11 @@ const inspectPeFile = async (
     const layout = readManagedMetadataLayout(bytes, 0, bytes.length);
     const refs = layout.table(35);
     for (let index = 1; index <= (refs?.rowCount ?? 0); index++) {
+      // Yield between bounded batches so metadata names cannot monopolize MCP.
+      if ((index - 1) % 256 === 0) {
+        await setImmediate();
+        abortIfNeeded(signal);
+      }
       const reference = readAssemblyReferenceName(
         bytes,
         layout,
@@ -295,7 +302,7 @@ const inspectPckTrailer = async (
   fact: RecordDesktopFact,
 ): Promise<void> => {
   const trailer = await read(size - 12, 12);
-  if (trailer.toString("ascii", 8, 12) === "GDPC") {
+  if (trailer.toString("latin1", 8, 12) === "GDPC") {
     const packSize = trailer.readBigUInt64LE(0);
     if (packSize < 20n || packSize > BigInt(size - 12))
       throw new ArtifactReaderFailure(
@@ -304,7 +311,7 @@ const inspectPckTrailer = async (
       );
     const offset = size - 12 - Number(packSize);
     const header = await read(offset, 20);
-    if (header.toString("ascii", 0, 4) !== "GDPC")
+    if (header.toString("latin1", 0, 4) !== "GDPC")
       throw new ArtifactReaderFailure(
         "format",
         "Embedded PCK trailer does not locate a pack header",

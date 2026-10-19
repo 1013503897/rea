@@ -32,8 +32,21 @@ export const registerDesktopApplicationCommands = (
       path: z.string().describe("Local installation directory"),
     }),
     options: z.object({
-      max_entries: z.number().int().positive().max(100_000).default(20_000),
-      detail: z.enum(["complete", "summary"]).default("complete"),
+      max_entries: z
+        .number()
+        .int()
+        .positive()
+        .max(100_000)
+        .default(20_000)
+        .describe(
+          "Maximum directory entries to examine; exhaustion leaves partial coverage",
+        ),
+      detail: z
+        .enum(["complete", "summary"])
+        .default("complete")
+        .describe(
+          "Deliver complete Evidence, or a summary with --evidence_output",
+        ),
       evidence_output: z
         .string()
         .min(1)
@@ -46,27 +59,32 @@ export const registerDesktopApplicationCommands = (
         .int()
         .min(4096)
         .max(64 * 1024 * 1024)
-        .default(8 * 1024 * 1024),
+        .default(8 * 1024 * 1024)
+        .describe("Maximum total bytes read from selected file ranges"),
     }),
     run: ({ args, options }) =>
-      withCommandCancellation(async (signal) => {
-        const { detail, evidence_output, ...limits } = options;
-        if (detail === "summary" && evidence_output === undefined)
-          return projectAnalysisError(
-            new AnalysisInputError("inspect_desktop_application", undefined, [
-              {
-                path: ["evidence_output"],
-                reason: "invalid_value",
-                message:
-                  "Summary delivery requires --evidence_output so complete source Evidence remains available.",
-              },
-            ]),
-          );
-        const service = createDesktopApplicationService();
-        return logCliCommand(
+      withCommandCancellation((signal) =>
+        logCliCommand(
           logger,
           CLI_COMMANDS.inspectDesktopApplication,
           async () => {
+            const { detail, evidence_output, ...limits } = options;
+            if (detail === "summary" && evidence_output === undefined)
+              return projectAnalysisError(
+                new AnalysisInputError(
+                  "inspect_desktop_application",
+                  undefined,
+                  [
+                    {
+                      path: ["evidence_output"],
+                      reason: "invalid_value",
+                      message:
+                        "Summary delivery requires --evidence_output so complete source Evidence remains available.",
+                    },
+                  ],
+                ),
+              );
+            const service = createDesktopApplicationService();
             const complete = await finishAnalysisCommand(
               () =>
                 service.inspect(
@@ -111,7 +129,7 @@ export const registerDesktopApplicationCommands = (
               ? { summary: delivered, evidence_bundle: receipt }
               : delivered;
           },
-        );
-      }),
+        ),
+      ),
   });
 };

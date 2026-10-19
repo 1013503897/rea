@@ -16,6 +16,12 @@ const REACT_NATIVE_SEGMENTS = new Set([
 ]);
 const FLUTTER_SEGMENTS = new Set(["libflutter.so", "flutter.framework"]);
 const UNITY_SEGMENTS = new Set(["libunity.so", "unityframework.framework"]);
+const DESKTOP_IL2CPP_LIBRARIES = new Set([
+  "gameassembly.dll",
+  "gameassembly.so",
+  "gameassembly.dylib",
+  "libil2cpp.so",
+]);
 
 /**
  * A runtime family named by one filename or directory segment.
@@ -57,7 +63,7 @@ export const desktopPathConventions = (path: string) => {
   const name = folded.at(-1) ?? "";
   return {
     unityManagedDirectory,
-    il2cppLibrary: name === "gameassembly.dll" || name === "libil2cpp.so",
+    il2cppLibrary: DESKTOP_IL2CPP_LIBRARIES.has(name),
     electronArchive:
       folded.at(-2) === "resources" &&
       (name === "app.asar" || name === "default_app.asar"),

@@ -17,6 +17,24 @@ cliTest(
       join(installation, "resources/app.asar"),
       "path convention",
     );
+    const refused = await cli.run({
+      arguments: [
+        "inspect-desktop-application",
+        join(root, "must-not-be-read"),
+        "--detail",
+        "summary",
+        "--json",
+      ],
+    });
+    expect(refused.exitCode).not.toBe(0);
+    expect(refused.json).toMatchObject({
+      code: "invalid_request",
+      category: "invalid_input",
+      details: {
+        operation: "inspect_desktop_application",
+        issues: [{ path: ["evidence_output"] }],
+      },
+    });
     const response = await cli.run({
       arguments: ["inspect-desktop-application", installation, "--json"],
     });

@@ -597,3 +597,152 @@ it("reads AssemblyRef names independently of unrelated key/hash payload validity
     },
   });
 });
+
+it("compares exact signature bytes without masking high bits in engine headers or trailers", async () => {
+  const root = await createTestTempDirectory("rea-desktop-exact-signatures-");
+  const pck = Buffer.alloc(20);
+  pck.write("GDPC");
+  const form = Buffer.alloc(16);
+  form.write("FORM");
+  form.writeUInt32LE(8, 4);
+  form.write("GEN8", 8);
+  const toc = Buffer.from("-==-".repeat(4));
+  for (const [path, source, offset] of [
+    ["invalid.pck", pck, 0],
+    ["bad-form/data.win", form, 0],
+    ["bad-chunk/data.win", form, 8],
+    ["invalid.utoc", toc, 0],
+  ] as const) {
+    const bytes = Buffer.from(source);
+    bytes[offset] = bytes[offset]! | 0x80;
+    await put(root, path, bytes);
+  }
+  const elf = Buffer.alloc(64);
+  elf.set([0x7f, 0x45, 0x4c, 0x46]);
+  const trailer = Buffer.alloc(12);
+  trailer.writeBigUInt64LE(BigInt(pck.length));
+  trailer.write("GDPC", 8);
+  const badTrailer = Buffer.from(trailer);
+  badTrailer[8] = badTrailer[8]! | 0x80;
+  await put(root, "bad-trailer.exe", Buffer.concat([elf, pck, badTrailer]));
+  const badHeader = Buffer.from(pck);
+  badHeader[0] = badHeader[0]! | 0x80;
+  await put(root, "bad-header.exe", Buffer.concat([elf, badHeader, trailer]));
+  const { report } = await inspect(root);
+  expect(report.candidates).toEqual([]);
+  expect(report.files.flatMap((file) => file.facts)).not.toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ kind: "godot-pck-header" }),
+    ]),
+  );
+});
+
+it("yields between reference-name batches so accepted cancellation precedes inspection completion", async () => {
+  const root = await createTestTempDirectory("rea-desktop-reference-cancel-");
+  await put(
+    root,
+    "Game_Data/Managed/Assembly-CSharp.dll",
+    buildManagedPeFixture({
+      references: Array.from({ length: 2048 }, (_, index) => `Library${index}`),
+    }),
+  );
+  const controller = new AbortController();
+  const reason = new Error("cancel while references are being examined");
+  let completed = false;
+  let completedWhenCancelled: boolean | undefined;
+  let scheduled = false;
+  const service = new DesktopApplicationService(
+    new DesktopApplicationReader((path) => {
+      const reader = new DirectoryArtifactReader(path);
+      const inspectFile = reader.inspectFile.bind(reader);
+      reader.inspectFile = (entry, inspection, signal) =>
+        inspectFile(
+          entry,
+          async (file) => {
+            const observed = new Proxy(file, {
+              get(target, property, receiver) {
+                if (property !== "read")
+                  return Reflect.get(target, property, receiver);
+                return async (...args: unknown[]) => {
+                  const result: unknown = await Reflect.apply(
+                    target.read,
+                    target,
+                    args,
+                  );
+                  const buffer = args[0];
+                  if (
+                    !scheduled &&
+                    Buffer.isBuffer(buffer) &&
+                    buffer.subarray(0, 4).equals(Buffer.from("BSJB"))
+                  ) {
+                    scheduled = true;
+                    // Let the first batch start, then cancel on the following turn.
+                    setImmediate(() =>
+                      setImmediate(() => {
+                        completedWhenCancelled = completed;
+                        controller.abort(reason);
+                      }),
+                    );
+                  }
+                  return result;
+                };
+              },
+            });
+            try {
+              return await inspection(observed);
+            } finally {
+              completed = true;
+            }
+          },
+          signal,
+        );
+      return reader;
+    }),
+  );
+  try {
+    const result = await service.inspect(
+      { path: root },
+      { signal: controller.signal },
+    );
+    if (result.ok)
+      throw new Error("Expected cancellation while examining references");
+    expect(scheduled).toBe(true);
+    expect(completedWhenCancelled).toBe(false);
+    expect(result.error).toMatchObject({ reason: "cancelled", cause: reason });
+  } finally {
+    await service.close();
+  }
+});
+
+it.each([
+  ["GameAssembly.so", Buffer.from([0x7f, 0x45, 0x4c, 0x46, 2, 1, 1, 0])],
+  [
+    "Contents/Frameworks/GameAssembly.dylib",
+    Buffer.from([0xcf, 0xfa, 0xed, 0xfe, 7, 0, 0, 1]),
+  ],
+] as const)(
+  "joins IL2CPP metadata with Unix library %s",
+  async (path, image) => {
+    const root = await createTestTempDirectory("rea-desktop-unix-il2cpp-");
+    await put(root, path, image);
+    const metadata = Buffer.alloc(8);
+    metadata.writeUInt32LE(0xfab11baf);
+    metadata.writeUInt32LE(31, 4);
+    await put(
+      root,
+      "Game_Data/il2cpp_data/Metadata/global-metadata.dat",
+      metadata,
+    );
+    const { report } = await inspect(root);
+    expect(report.candidates.map((candidate) => candidate.family)).toEqual([
+      "unity-il2cpp",
+    ]);
+    expect(report.next_probes).toEqual([
+      expect.objectContaining({
+        operation: "open_binary",
+        path: join(await realpath(root), path),
+        file_id: expect.any(String),
+      }),
+    ]);
+  },
+);
