@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import type { DesktopFile, DesktopFact } from "../domain/desktopApplication.js";
 import { parsePeRecord, peRvaToFileOffset } from "../domain/binaryTarget.js";
 import { readManagedMetadataLayout } from "../dotnet/ManagedMetadataLayout.js";
-import { readAssemblyReference } from "../dotnet/ManagedMetadataInventoryRows.js";
+import { readAssemblyReferenceName } from "../dotnet/ManagedMetadataInventoryRows.js";
 import { ManagedReaderFailure } from "../dotnet/ManagedReaderFailure.js";
 import { ArtifactReaderFailure } from "./ArtifactReader.js";
 import { abortIfNeeded } from "./ArtifactHash.js";
@@ -252,11 +252,11 @@ const inspectPeFile = async (
     const layout = readManagedMetadataLayout(bytes, 0, bytes.length);
     const refs = layout.table(35);
     for (let index = 1; index <= (refs?.rowCount ?? 0); index++) {
-      const reference = readAssemblyReference(
+      const reference = readAssemblyReferenceName(
         bytes,
         layout,
         index,
-        Math.max(layout.strings.size, layout.blob.size),
+        layout.strings.size,
       );
       if (
         reference.name !== "UnityEngine" &&

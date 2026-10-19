@@ -18,6 +18,8 @@ import {
   buildManagedPeFixture,
   buildNativePeFixture,
 } from "../../../src/dotnet/ManagedPe.fixture.js";
+import { readManagedMetadataLayout } from "../../../src/dotnet/ManagedMetadataLayout.js";
+import { readAssemblyReference } from "../../../src/dotnet/ManagedMetadataInventoryRows.js";
 import { DirectoryArtifactReader } from "../../../src/artifacts/DirectoryArtifactReader.js";
 import { ArtifactReaderFailure } from "../../../src/artifacts/ArtifactReader.js";
 import { DesktopApplicationReader } from "../../../src/artifacts/DesktopApplicationReader.js";
@@ -556,3 +558,42 @@ it.each([false, true])(
     }
   },
 );
+
+it("reads AssemblyRef names independently of unrelated key/hash payload validity", async () => {
+  const root = await createTestTempDirectory("rea-desktop-reference-fields-");
+  const image = buildManagedPeFixture({
+    references: ["System.Runtime", "UnityEngine.CoreModule"],
+  });
+  const metadataOffset = image.indexOf(Buffer.from("BSJB"));
+  const layout = readManagedMetadataLayout(
+    image,
+    metadataOffset,
+    image.length - metadataOffset,
+  );
+  const reference = layout.table(35)!;
+  // ECMA-335 AssemblyRef: 8 version bytes, 4 flag bytes, then PublicKeyOrToken.
+  // Keep its name valid while making that unrelated blob index invalid.
+  if (layout.blobIndexSize === 2)
+    image.writeUInt16LE(0xffff, reference.offset + 12);
+  else image.writeUInt32LE(0xffff_ffff, reference.offset + 12);
+  expect(() =>
+    readAssemblyReference(image, layout, 1, layout.blob.size),
+  ).toThrow();
+  await put(root, "Game_Data/Managed/Assembly-CSharp.dll", image);
+  const { report } = await inspect(root);
+  expect(report.candidates.map((candidate) => candidate.family)).toEqual([
+    "dotnet",
+    "unity-mono",
+  ]);
+  expect(
+    report.files.find((file) => file.kind === "file")?.facts,
+  ).toContainEqual({
+    kind: "unity-assembly-reference",
+    offset: expect.any(Number),
+    value: {
+      name: "UnityEngine.CoreModule",
+      token: "0x23000002",
+      managed_directory: "Game_Data/Managed",
+    },
+  });
+});

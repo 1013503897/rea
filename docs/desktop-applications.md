@@ -102,7 +102,8 @@ retryable capacity refusal without cancelling the admitted caller.
 
 Unity reference decoding stops after a witness in each `Data/Managed` directory;
 other assemblies' references remain unexamined, while their headers are still
-checked. Pack contents, encrypted data, metadata/address correspondence and
+checked. AssemblyRef facts decode names and tokens only; they do not decode or
+hash unrelated key/culture/hash payloads or establish runtime binding. Pack contents, encrypted data, metadata/address correspondence and
 section-embedded PCKs without a trailer are separate capabilities.
 
 Filesystem results are not cached across calls. Retained views reuse validated
