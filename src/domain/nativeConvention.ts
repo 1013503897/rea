@@ -38,3 +38,36 @@ export const isSwiftRuntimeLibrary = (path: string): boolean =>
   path
     .split("/")
     .some((segment) => /^libswift.+\.dylib$/u.test(foldSegment(segment)));
+
+/** Parse desktop layout conventions once while preserving original path segments. */
+export const desktopPathConventions = (path: string) => {
+  const segments = path.split("/");
+  const folded = segments.map(foldSegment);
+  let unityManagedDirectory: string | null = null;
+  for (let index = 0; index + 2 < folded.length; index++) {
+    const segment = folded[index];
+    if (
+      segment !== undefined &&
+      segment.length > 5 &&
+      segment.endsWith("_data") &&
+      folded[index + 1] === "managed"
+    )
+      unityManagedDirectory = segments.slice(0, index + 2).join("/");
+  }
+  const name = folded.at(-1) ?? "";
+  return {
+    unityManagedDirectory,
+    il2cppLibrary: name === "gameassembly.dll" || name === "libil2cpp.so",
+    electronArchive:
+      folded.at(-2) === "resources" &&
+      (name === "app.asar" || name === "default_app.asar"),
+    unrealContainer:
+      (name.endsWith(".pak") || name.endsWith(".utoc")) &&
+      folded.some(
+        (segment, index) =>
+          segment === "content" &&
+          folded[index + 1] === "paks" &&
+          index + 2 < folded.length,
+      ),
+  };
+};
