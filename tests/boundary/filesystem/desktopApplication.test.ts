@@ -483,3 +483,76 @@ it("preserves the selected root alias and directs follow-ups to the admitted phy
     await service.close();
   }
 });
+
+it.each([false, true])(
+  "retains verified header facts and exact release authority when file close fails (late cancellation: %s)",
+  async (cancelDuringClose) => {
+    const root = await createTestTempDirectory("rea-desktop-probe-close-");
+    const header = Buffer.alloc(20);
+    header.write("GDPC");
+    header.writeUInt32LE(2, 4);
+    header.writeUInt32LE(4, 8);
+    await put(root, "game.pck", header);
+    const controller = new AbortController();
+    const reason = new Error("cancel accepted while file close failed");
+    let restore: (() => void) | undefined;
+    const service = new DesktopApplicationService(
+      new DesktopApplicationReader((path) => {
+        const reader = new DirectoryArtifactReader(path);
+        const inspectFile = reader.inspectFile.bind(reader);
+        reader.inspectFile = (entry, inspect, signal) =>
+          inspectFile(
+            entry,
+            async (file) => {
+              const close = file.close.bind(file);
+              restore = () => {
+                file.close = close;
+              };
+              file.close = async () => {
+                if (cancelDuringClose) controller.abort(reason);
+                throw new Error("descriptor close denied");
+              };
+              return inspect(file);
+            },
+            signal,
+          );
+        return reader;
+      }),
+    );
+    try {
+      const result = await service.inspect(
+        { path: root },
+        { signal: controller.signal },
+      );
+      if (result.ok) throw new Error("Expected incomplete descriptor cleanup");
+      expect(result.error.cleanupIncomplete).toBe(true);
+      if (cancelDuringClose)
+        expect(result.error).toMatchObject({
+          reason: "cancelled",
+          cause: reason,
+        });
+      const report = desktopApplicationSchema.parse(
+        parseEvidence(result.error.partialObservation).normalized_result,
+      );
+      expect(report.coverage.status).toBe("partial");
+      expect(report.files[0]).toMatchObject({
+        read_status: "examined",
+        ranges: [{ offset: 0, bytes: 20, sha256: expect.any(String) }],
+        facts: [{ kind: "godot-pck-header", offset: 0 }],
+      });
+      expect(report.candidates.map((candidate) => candidate.family)).toEqual([
+        "godot",
+      ]);
+      await expect(service.close()).rejects.toMatchObject({
+        cleanup: expect.any(Object),
+      });
+      expect(result.error.cleanupIncomplete).toBe(true);
+      restore?.();
+      await service.close();
+      expect(result.error.cleanupIncomplete).toBe(false);
+    } finally {
+      restore?.();
+      await service.close();
+    }
+  },
+);

@@ -27,7 +27,11 @@ import {
   RegularFileCancelled,
 } from "../filesystem/OwnedRegularFile.js";
 import { RegularFileOperationCancelled } from "../filesystem/RegularFile.js";
-import { ArtifactFileCancelled } from "./ArtifactFileOperation.js";
+import {
+  ArtifactFileCancelled,
+  ArtifactFileCleanupFailure,
+} from "./ArtifactFileOperation.js";
+import { AnalysisCleanupLease } from "./AnalysisCleanupLease.js";
 
 export type DirectoryArtifactEntry = ArtifactEntry & {
   readonly kind: "file" | "directory" | "symlink";
@@ -63,6 +67,7 @@ export class DirectoryArtifactReader implements ArtifactReader {
   readonly #rootPath: string;
   readonly #directories = new Set<OwnedDirectoryHandle>();
   readonly #files = new Map<OwnedFileHandle, string>();
+  readonly #fileCleanup = new WeakMap<OwnedFileHandle, AnalysisCleanupLease>();
 
   constructor(root: string) {
     this.#rootPath = root;
@@ -331,28 +336,12 @@ export class DirectoryArtifactReader implements ArtifactReader {
       return value;
     } catch (cause: unknown) {
       if (cause instanceof RegularFileCleanupFailure) {
-        const primary =
-          cause.outcome.kind === "failed"
-            ? cause.outcome.cause
-            : cause.completionCancellation === undefined
-              ? cause.cleanupCause
-              : new ArtifactFileCancelled({
-                  reason: cause.completionCancellation.reason,
-                  outcome: cause.outcome,
-                });
-        throw ArtifactReaderFailure.withCleanup(
-          primary instanceof RegularFileOperationCancelled
-            ? new ArtifactReaderFailure(
-                "cancelled",
-                "Directory inspection cancelled",
-                { cause: primary.reason },
-              )
-            : primary,
-          ArtifactReaderFailure.cleanupObservation(
-            cause.cleanupCause,
-            entry.adapterKey,
-          ),
+        const lease = new AnalysisCleanupLease(
+          () => this.#closeFile(owner),
+          [entry.adapterKey],
         );
+        this.#fileCleanup.set(owner, lease);
+        throw new ArtifactFileCleanupFailure(cause, lease);
       }
       this.#files.delete(owner);
       if (cause instanceof RegularFileCancelled)
@@ -383,7 +372,9 @@ export class DirectoryArtifactReader implements ArtifactReader {
     const failures: unknown[] = [];
     for (const [owner, path] of this.#files) {
       try {
-        await this.#closeFile(owner);
+        const lease = this.#fileCleanup.get(owner);
+        if (lease === undefined) await this.#closeFile(owner);
+        else await lease.release();
       } catch (cause: unknown) {
         failures.push(directoryIoFailure("close opened entry", path, cause));
       }
@@ -420,6 +411,7 @@ export class DirectoryArtifactReader implements ArtifactReader {
   async #closeFile(owner: OwnedFileHandle<FileHandle>): Promise<void> {
     await owner.close();
     this.#files.delete(owner);
+    this.#fileCleanup.delete(owner);
   }
 
   provenance(): readonly [] {

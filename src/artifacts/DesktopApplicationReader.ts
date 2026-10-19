@@ -6,7 +6,10 @@ import {
   type DirectoryArtifactEntry,
 } from "./DirectoryArtifactReader.js";
 import { ArtifactReaderFailure } from "./ArtifactReader.js";
-import { ArtifactFileCancelled } from "./ArtifactFileOperation.js";
+import {
+  ArtifactFileCancelled,
+  ArtifactFileCleanupFailure,
+} from "./ArtifactFileOperation.js";
 import {
   ArtifactResourceScope,
   type ArtifactResourceOwner,
@@ -260,13 +263,15 @@ const scanDirectory = async (
         partial = true;
         const completedRead =
           cause instanceof ArtifactFileCancelled ||
-          cause.cause instanceof ArtifactFileCancelled;
+          (cause instanceof ArtifactFileCleanupFailure &&
+            cause.fileCleanupFailure.outcome.kind === "completed");
         if (completedRead)
           row.read_status = probeIssueCount === 0 ? "examined" : "partial";
         if (
-          cause.reason === "integrity" ||
-          cause.reason === "io" ||
-          (cause.reason === "cancelled" && !completedRead)
+          !completedRead &&
+          (cause.reason === "integrity" ||
+            cause.reason === "io" ||
+            cause.reason === "cancelled")
         ) {
           row.facts = row.facts.filter((fact) => fact.offset === null);
           row.ranges = [];
